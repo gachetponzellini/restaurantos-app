@@ -345,7 +345,14 @@ implementar B.**
    corte hacia adelante? **Sigue abierta, y bloquea el deploy tranquilo.**
 5. **D3 (`received_cents`)** — sigue sin confirmar. Está implementado; si no era
    eso, se saca sin tocar nada más.
-6. **La propina sin dueño.** Un pago sin `attributed_mozo_id` («Sin mozo») nunca
+6. **Corregir la propina de un cobro no ajusta la orden.** `corregir_pago_tx`
+   cambia `payments.tip_cents` y **nunca toca `orders.tip_cents`** (migración
+   `0032`). Es una asimetría preexistente —la propina de la cuenta y la etiqueta
+   del pago siempre vivieron aparte— pero con el excedente se vuelve visible:
+   corregir hacia abajo una propina que subió el total deja la orden cerrada con
+   `total > total_paid`. Y si la rendición ya la pagó, al mozo se le pagó de más
+   y nada lo rebalancea. Hay que decidir si la corrección debe sincronizar.
+7. **La propina sin dueño.** Un pago sin `attributed_mozo_id` («Sin mozo») nunca
    genera pago de propina, así que esa plata se queda en el cajón. Es lo honesto
    —nadie la reclamó— pero conviene decidir si el local quiere sacarla por
    sangría o dejarla.
