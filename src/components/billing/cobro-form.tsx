@@ -6,7 +6,13 @@ import { toast } from "sonner";
 
 import type { ActionResult } from "@/lib/actions";
 import { calculateAdjustment } from "@/lib/billing/adjustment";
-import { cashCharge, isCashShortPayment } from "@/lib/billing/totals";
+import {
+  admiteVuelto,
+  destinoPorDefecto,
+  isCashShortPayment,
+  repartoDelCobro,
+  type DestinoDelExcedente,
+} from "@/lib/billing/totals";
 import type {
   Caja,
   PaymentMethod,
@@ -43,9 +49,18 @@ import { cn } from "@/lib/utils";
 
 export type CobroSubmit = {
   method: PaymentMethod;
-  /** Con el ajuste del método ya aplicado — es lo que paga el cliente. */
+  /**
+   * **Lo que el cliente entregó**, con el ajuste del método ya aplicado.
+   *
+   * Spec 177 · Parte A — antes viajaba ya acotado a lo que faltaba cobrar. Ahora
+   * va crudo y el server lo parte con `repartoDelCobro`: es plata, y el reparto
+   * entre lo cobrado, el vuelto y la propina tiene que decidirlo un solo lado.
+   */
   amountCents: number;
+  /** La propina que ya venía en la cuenta. El excedente lo suma el server. */
   tipCents: number;
+  /** Qué hacer con lo que se cobró de más (spec 177 · D2). */
+  destinoExcedente: DestinoDelExcedente;
   cajaId: string;
   lastFour?: string;
   cardBrand?: "visa" | "mastercard" | "amex" | "otro";
@@ -193,6 +208,15 @@ export function CobroForm<T = unknown>({
 
   const [amount, setAmount] = useState(amountDueCents);
   const [hasSetAmount, setHasSetAmount] = useState(false);
+  /**
+   * Qué pasa con lo que se cobró de más (spec 177 · D2). Se deriva del método
+   * en vez de guardarse aparte: elegir «propina» y después cambiar a tarjeta no
+   * puede dejar un destino colgado del método anterior. Sólo el tilde explícito
+   * del cajero lo pisa, y se limpia con cada cambio de método.
+   */
+  const [destinoElegido, setDestinoElegido] =
+    useState<DestinoDelExcedente | null>(null);
+  const destino = destinoElegido ?? destinoPorDefecto(method ?? "");
   const [tip, setTip] = useState(
     tipConfig.mode === "editable" ? (tipConfig.initialCents ?? 0) : 0,
   );
@@ -215,15 +239,17 @@ export function CobroForm<T = unknown>({
     remaining_cents: amountDueCents,
   });
 
-  // De más es vuelto, y el vuelto no se cobra: lo que se registra —y lo que
-  // dice el botón— es `chargeCents`, no el billete que entró (issue #188). El
-  // server vuelve a acotarlo; acá es para que el cajero vea lo mismo que la
-  // caja va a contar.
-  const { chargeCents, changeCents } = cashCharge({
+  // De más es vuelto **o propina**, y ninguna de las dos es venta del negocio
+  // (spec 177 · Parte A). Lo que se registra como cobrado —y lo que dice el
+  // botón— es `chargeCents`, no el billete que entró (issue #188). El server
+  // vuelve a hacer el mismo reparto; acá es para que el cajero vea lo mismo que
+  // la caja va a contar.
+  const { chargeCents, changeCents, extraTipCents } = repartoDelCobro({
     method: method ?? "",
     amount_cents: amount,
     adjustment_cents: adjustmentCents,
     remaining_cents: amountDueCents,
+    destino,
   });
 
   // Selector de método navegable con flechas (grilla de 2 columnas) — spec 075.
@@ -270,6 +296,12 @@ export function CobroForm<T = unknown>({
   useEffect(() => {
     if (method && !hasSetAmount) setAmount(finalCents);
   }, [method, finalCents, hasSetAmount]);
+
+  // El destino del excedente vuelve al default del método nuevo: «quedátelo» en
+  // efectivo no puede sobrevivir a un cambio a tarjeta (spec 177 · D2).
+  useEffect(() => {
+    setDestinoElegido(null);
+  }, [method]);
 
   useEffect(() => {
     if (!mpPaymentId || !mp) return;
@@ -347,8 +379,10 @@ export function CobroForm<T = unknown>({
     startTransition(async () => {
       const r = await onSubmit({
         method,
-        amountCents: chargeCents,
+        // Crudo: el reparto entre cobrado / vuelto / propina lo hace el server.
+        amountCents: amount,
         tipCents: effectiveTip,
+        destinoExcedente: destino,
         cajaId,
         lastFour:
           method === "card_manual" && lastFour.length === 4
@@ -378,6 +412,7 @@ export function CobroForm<T = unknown>({
         setNotes("");
         setCliente(null);
         setCreditCustomerId(null);
+        setDestinoElegido(null);
         setTip(
           tipConfig.mode === "editable" ? (tipConfig.initialCents ?? 0) : 0,
         );
@@ -581,12 +616,40 @@ export function CobroForm<T = unknown>({
             </span>
           </p>
         )}
+        {/* spec 177 · Parte A — lo que se cobró de más es vuelto o propina, y
+            ninguna de las dos es venta del negocio. En efectivo arranca en
+            vuelto (tipear el billete ES calcular el vuelto); en el resto no hay
+            vuelto que dar, así que es propina y el cartel lo informa. */}
         {changeCents > 0 && (
           <p className="text-xs font-semibold text-emerald-700">
             Vuelto: {formatCurrency(changeCents)}
             <span className="ml-1 font-medium text-zinc-500">
               — se cobra {formatCurrency(chargeCents)}
             </span>
+            <button
+              type="button"
+              onClick={() => setDestinoElegido("propina")}
+              className="ml-2 font-semibold text-zinc-500 underline underline-offset-2 transition hover:text-emerald-700"
+            >
+              se lo dejan de propina
+            </button>
+          </p>
+        )}
+        {extraTipCents > 0 && (
+          <p className="text-xs font-semibold text-emerald-700">
+            Propina: {formatCurrency(extraTipCents)}
+            <span className="ml-1 font-medium text-zinc-500">
+              — para el mozo de la mesa, entra {formatCurrency(chargeCents)}
+            </span>
+            {admiteVuelto(method ?? "") && (
+              <button
+                type="button"
+                onClick={() => setDestinoElegido("vuelto")}
+                className="ml-2 font-semibold text-zinc-500 underline underline-offset-2 transition hover:text-emerald-700"
+              >
+                es vuelto
+              </button>
+            )}
           </p>
         )}
         {cashShort && (

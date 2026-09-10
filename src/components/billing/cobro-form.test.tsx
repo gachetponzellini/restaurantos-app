@@ -102,8 +102,11 @@ describe("<CobroForm /> — las reglas de dinero, una sola vez", () => {
   });
 
   it("en efectivo deja confirmar de más, muestra el vuelto y cobra lo que se debe", async () => {
-    // issue #188 — antes registraba los $150 que entraron a la mano, y la caja
-    // quedaba esperando un vuelto que ya se había ido con el cliente.
+    // issue #188 — el botón dice lo que la caja va a contar, no el billete.
+    //
+    // spec 177 — pero lo que VIAJA es el billete crudo + el destino: el reparto
+    // entre cobrado, vuelto y propina lo hace el server, que es donde vive el
+    // resto de las reglas de plata.
     const { onSubmit } = setup();
     pick(/efectivo/i);
     fireEvent.change(screen.getByLabelText(/monto/i), {
@@ -115,7 +118,65 @@ describe("<CobroForm /> — las reglas de dinero, una sola vez", () => {
     ).toHaveTextContent("100");
     confirm();
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit.mock.calls[0][0].amountCents).toBe(10_000);
+    expect(onSubmit.mock.calls[0][0].amountCents).toBe(15_000);
+    expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("vuelto");
+  });
+
+  // ── Spec 177 · Parte A — el excedente ───────────────────────────────────
+  it("«se lo dejan de propina»: el mismo billete pasa a entrar entero", async () => {
+    const { onSubmit } = setup();
+    pick(/efectivo/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "150" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /se lo dejan de propina/i }),
+    );
+    expect(screen.getByText(/^Propina:/)).toBeInTheDocument();
+    // El botón deja de decir «lo que se debe»: ahora entra todo.
+    expect(
+      screen.getByRole("button", { name: /confirmar/i }),
+    ).toHaveTextContent("150");
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].amountCents).toBe(15_000);
+    expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("propina");
+  });
+
+  it("en tarjeta el excedente es propina sin preguntar: no hay vuelto que dar", async () => {
+    // Lo que estaba mal hasta la 177: esos $50 entraban como VENTA del negocio.
+    const { onSubmit } = setup();
+    pick(/tarjeta/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "150" },
+    });
+    expect(screen.getByText(/^Propina:/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Vuelto:/)).not.toBeInTheDocument();
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("propina");
+  });
+
+  it("cambiar de método vuelve el excedente a su default", async () => {
+    // «Quedátelo» en efectivo no puede sobrevivir a un cambio a tarjeta, ni al
+    // revés: el destino se deriva del método salvo tilde explícito.
+    const { onSubmit } = setup();
+    pick(/efectivo/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "150" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /se lo dejan de propina/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /cambiar/i }));
+    pick(/efectivo/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "150" },
+    });
+    expect(screen.getByText(/^Vuelto:/)).toBeInTheDocument();
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("vuelto");
   });
 
   it("la guarda de efectivo no aplica a los otros métodos", () => {

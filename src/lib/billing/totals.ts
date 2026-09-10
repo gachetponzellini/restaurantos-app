@@ -73,37 +73,96 @@ export function isCashShortPayment(input: {
   return base < input.remaining_cents;
 }
 
+/** Qué hacer con lo que se cobró de más — spec 177 · Parte A. */
+export type DestinoDelExcedente = "vuelto" | "propina";
+
 /**
- * La contracara de `isCashShortPayment`: **el vuelto no es plata del local**.
+ * Los métodos donde el cajero decide el monto, y por lo tanto donde un
+ * excedente significa algo.
  *
- * En efectivo el cajero tipea lo que le dan —es lo natural, y la pantalla se lo
- * pide mostrando el vuelto— pero lo que se registra tiene que ser lo que se
- * cobró. Registrando el billete entero, una cuenta de $42.000 pagada con
- * $50.000 dejaba la caja esperando $8.000 que ya volvieron al bolsillo del
- * cliente: arqueo con faltante fantasma, rendición inflada y `total_paid_cents`
- * por encima del total de la orden (issue #188).
+ * `mp_link` / `mp_qr` quedan afuera porque el importe lo fija la preferencia,
+ * no el que está en la caja. `cuenta_corriente` también: ahí no se cobra, se
+ * anota una deuda — un fiado con propina no existe.
+ */
+const METODOS_CON_EXCEDENTE = new Set([
+  "cash",
+  "card_manual",
+  "transfer",
+  "other",
+]);
+
+/**
+ * Qué pasa por default con el excedente, según el método (spec 177 · D2).
+ *
+ * En efectivo **tipear el billete es la forma normal de calcular el vuelto**:
+ * tomar el excedente como propina por default convertiría cada cálculo de
+ * vuelto en una propina que nadie quiso dar.
+ *
+ * En los demás no hay vuelto que dar: si el posnet cobró de más, es porque
+ * alguien lo quiso.
+ */
+export function destinoPorDefecto(method: string): DestinoDelExcedente {
+  return method === "cash" ? "vuelto" : "propina";
+}
+
+/** Sólo en efectivo se puede devolver plata. */
+export function admiteVuelto(method: string): boolean {
+  return method === "cash";
+}
+
+/**
+ * Cómo se parte lo que el cliente entregó — spec 177 · Parte A.
+ *
+ * Reemplaza a `cashCharge`, que resolvía sólo la mitad del problema:
+ *
+ *  - **El vuelto no es plata del local.** En efectivo el cajero tipea lo que le
+ *    dan —es lo natural, y la pantalla se lo pide mostrando el vuelto— pero lo
+ *    que se registra tiene que ser lo que se cobró. Registrando el billete
+ *    entero, una cuenta de $42.000 pagada con $50.000 dejaba la caja esperando
+ *    $8.000 que ya volvieron al bolsillo del cliente: arqueo con faltante
+ *    fantasma, rendición inflada y `total_paid_cents` por encima del total de
+ *    la orden (issue #188).
+ *
+ *  - **Y el excedente que NO vuelve al bolsillo es del mozo, no del negocio.**
+ *    Los métodos que no son efectivo pasaban derecho: el posnet cobraba $50.000
+ *    sobre una cuenta de $42.000 y esos $8.000 entraban como **venta**. Nadie
+ *    los podía atribuir a nadie y el arqueo los contaba como facturación.
  *
  * `amount_cents` viaja con el ajuste del método ya aplicado, igual que en
  * `isCashShortPayment`, así que el tope es `remaining_cents + adjustment_cents`.
  *
  * De menos no se arregla acá: eso lo rechaza `isCashShortPayment` antes.
- * Los otros métodos pasan derecho — dos tarjetas sobre una cuenta o una
- * transferencia parcial son casos reales, y ahí no hay vuelto que dar.
  */
-export function cashCharge(input: {
+export function repartoDelCobro(input: {
   method: string;
   amount_cents: number;
   adjustment_cents: number;
   remaining_cents: number;
-}): { chargeCents: number; changeCents: number } {
-  if (input.method !== "cash") {
-    return { chargeCents: input.amount_cents, changeCents: 0 };
-  }
+  destino: DestinoDelExcedente;
+}): { chargeCents: number; changeCents: number; extraTipCents: number } {
+  const sinExcedente = {
+    chargeCents: input.amount_cents,
+    changeCents: 0,
+    extraTipCents: 0,
+  };
+  if (!METODOS_CON_EXCEDENTE.has(input.method)) return sinExcedente;
+
   const tope = input.remaining_cents + input.adjustment_cents;
-  if (input.amount_cents <= tope) {
-    return { chargeCents: input.amount_cents, changeCents: 0 };
+  if (input.amount_cents <= tope) return sinExcedente;
+
+  const excedente = input.amount_cents - tope;
+
+  // El vuelto sólo existe donde hay plata física que devolver. Pedirlo en
+  // tarjeta es pedir algo que no se puede hacer, así que ahí el excedente es
+  // propina aunque el caller diga otra cosa.
+  if (input.destino === "vuelto" && admiteVuelto(input.method)) {
+    return { chargeCents: tope, changeCents: excedente, extraTipCents: 0 };
   }
-  return { chargeCents: tope, changeCents: input.amount_cents - tope };
+  return {
+    chargeCents: input.amount_cents,
+    changeCents: 0,
+    extraTipCents: excedente,
+  };
 }
 
 /**

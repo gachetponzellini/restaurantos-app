@@ -3012,6 +3012,7 @@ export type Database = {
           operated_by: string | null;
           order_id: string;
           payment_status: string;
+          received_cents: number | null;
           refunded_at: string | null;
           refunded_reason: string | null;
           request_id: string | null;
@@ -3037,6 +3038,7 @@ export type Database = {
           operated_by?: string | null;
           order_id: string;
           payment_status?: string;
+          received_cents?: number | null;
           refunded_at?: string | null;
           refunded_reason?: string | null;
           request_id?: string | null;
@@ -3062,6 +3064,7 @@ export type Database = {
           operated_by?: string | null;
           order_id?: string;
           payment_status?: string;
+          received_cents?: number | null;
           refunded_at?: string | null;
           refunded_reason?: string | null;
           request_id?: string | null;
@@ -5014,11 +5017,13 @@ export type Database = {
           p_caja_id: string;
           p_card_brand: string;
           p_credit_customer_id?: string;
+          p_extra_tip_cents?: number;
           p_last_four: string;
           p_method: string;
           p_notes: string;
           p_operated_by: string;
           p_order_id: string;
+          p_received_cents?: number;
           p_request_id: string;
           p_split_id: string;
           p_tip_cents: number;

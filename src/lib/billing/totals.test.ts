@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateTotals,
-  cashCharge,
+  destinoPorDefecto,
+  repartoDelCobro,
   expectedByAmounts,
   isCashShortPayment,
   expectedBySplitItems,
@@ -239,53 +240,105 @@ describe("isCashShortPayment (efectivo: nunca de menos)", () => {
   });
 });
 
-describe("cashCharge (el vuelto no es plata del local)", () => {
-  const base = { method: "cash", adjustment_cents: 0, remaining_cents: 10_000 };
+describe("repartoDelCobro · el vuelto no es plata del local (spec 177)", () => {
+  const base = {
+    method: "cash",
+    adjustment_cents: 0,
+    remaining_cents: 10_000,
+    destino: "vuelto" as const,
+  };
 
-  it("con el monto exacto cobra el monto y no hay vuelto", () => {
-    expect(cashCharge({ ...base, amount_cents: 10_000 })).toEqual({
+  it("con el monto exacto cobra el monto y no hay vuelto ni propina", () => {
+    expect(repartoDelCobro({ ...base, amount_cents: 10_000 })).toEqual({
       chargeCents: 10_000,
       changeCents: 0,
+      extraTipCents: 0,
     });
   });
 
   it("con un billete de más cobra lo que se debe y el resto es vuelto", () => {
     // El caso del bug #188: cuenta de $42.000, el cliente da $50.000.
     expect(
-      cashCharge({
+      repartoDelCobro({
         method: "cash",
         adjustment_cents: 0,
         remaining_cents: 4_200_000,
         amount_cents: 5_000_000,
+        destino: "vuelto",
       }),
-    ).toEqual({ chargeCents: 4_200_000, changeCents: 800_000 });
+    ).toEqual({ chargeCents: 4_200_000, changeCents: 800_000, extraTipCents: 0 });
+  });
+
+  it("«quedátelo»: el mismo billete, marcado como propina, entra entero", () => {
+    expect(
+      repartoDelCobro({
+        method: "cash",
+        adjustment_cents: 0,
+        remaining_cents: 4_200_000,
+        amount_cents: 5_000_000,
+        destino: "propina",
+      }),
+    ).toEqual({ chargeCents: 5_000_000, changeCents: 0, extraTipCents: 800_000 });
   });
 
   it("con recargo por método, el tope es lo que se debe + el recargo", () => {
     expect(
-      cashCharge({ ...base, amount_cents: 20_000, adjustment_cents: 1_000 }),
-    ).toEqual({ chargeCents: 11_000, changeCents: 9_000 });
+      repartoDelCobro({ ...base, amount_cents: 20_000, adjustment_cents: 1_000 }),
+    ).toEqual({ chargeCents: 11_000, changeCents: 9_000, extraTipCents: 0 });
   });
 
   it("con descuento por efectivo, el tope es el neto", () => {
     expect(
-      cashCharge({ ...base, amount_cents: 20_000, adjustment_cents: -1_000 }),
-    ).toEqual({ chargeCents: 9_000, changeCents: 11_000 });
+      repartoDelCobro({ ...base, amount_cents: 20_000, adjustment_cents: -1_000 }),
+    ).toEqual({ chargeCents: 9_000, changeCents: 11_000, extraTipCents: 0 });
   });
 
-  it("no toca los otros métodos: dos tarjetas o una transferencia parcial son reales", () => {
-    for (const method of ["card_manual", "transfer", "other", "mp_link"]) {
-      expect(cashCharge({ ...base, method, amount_cents: 20_000 })).toEqual({
-        chargeCents: 20_000,
-        changeCents: 0,
-      });
+  it("en tarjeta el excedente es propina, no venta: no hay vuelto que dar", () => {
+    // Lo que estaba mal hasta la spec 177: el posnet cobraba $50.000 sobre una
+    // cuenta de $42.000 y los $8.000 entraban como VENTA del negocio.
+    for (const method of ["card_manual", "transfer", "other"]) {
+      expect(
+        repartoDelCobro({
+          ...base,
+          method,
+          amount_cents: 12_000,
+          destino: "propina",
+        }),
+      ).toEqual({ chargeCents: 12_000, changeCents: 0, extraTipCents: 2_000 });
+    }
+  });
+
+  it("en tarjeta no se puede pedir vuelto: el excedente sigue siendo propina", () => {
+    expect(
+      repartoDelCobro({
+        ...base,
+        method: "card_manual",
+        amount_cents: 12_000,
+        destino: "vuelto",
+      }),
+    ).toEqual({ chargeCents: 12_000, changeCents: 0, extraTipCents: 2_000 });
+  });
+
+  it("MP y fiado quedan afuera: el monto no lo decide el cajero", () => {
+    for (const method of ["mp_link", "mp_qr", "cuenta_corriente"]) {
+      expect(
+        repartoDelCobro({ ...base, method, amount_cents: 20_000 }),
+      ).toEqual({ chargeCents: 20_000, changeCents: 0, extraTipCents: 0 });
+    }
+  });
+
+  it("el default: en efectivo es vuelto, en el resto es propina", () => {
+    expect(destinoPorDefecto("cash")).toBe("vuelto");
+    for (const method of ["card_manual", "transfer", "other"]) {
+      expect(destinoPorDefecto(method)).toBe("propina");
     }
   });
 
   it("de menos no lo arregla: eso lo rechaza isCashShortPayment", () => {
-    expect(cashCharge({ ...base, amount_cents: 9_000 })).toEqual({
+    expect(repartoDelCobro({ ...base, amount_cents: 9_000 })).toEqual({
       chargeCents: 9_000,
       changeCents: 0,
+      extraTipCents: 0,
     });
   });
 });

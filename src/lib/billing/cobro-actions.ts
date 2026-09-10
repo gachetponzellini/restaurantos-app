@@ -32,7 +32,13 @@ import { formatInvoiceNumber, tipoLabel } from "@/lib/afip/format";
 import type { TipoComprobante } from "@/lib/afip/types";
 
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
-import { cashCharge, isCashShortPayment, sumActiveItems } from "./totals";
+import {
+  destinoPorDefecto,
+  isCashShortPayment,
+  repartoDelCobro,
+  sumActiveItems,
+  type DestinoDelExcedente,
+} from "./totals";
 import type { OrderSplit, Payment } from "./types";
 
 type GenericClient = SupabaseClient;
@@ -496,6 +502,11 @@ export type RegistrarPagoInput = {
    * la orden, así que la aplica el pago que la salda (D7).
    */
   comprobante?: ComprobanteElegido;
+  /**
+   * Qué hacer con lo que se cobró de más (spec 177 · D2). Ausente = el default
+   * del método: vuelto en efectivo, propina en el resto.
+   */
+  destino_excedente?: DestinoDelExcedente;
 };
 
 /**
@@ -664,16 +675,26 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
     );
   }
 
-  // …y de más se registra lo que se cobró, no el billete: el vuelto vuelve al
-  // cliente y no puede quedar contado en la caja (issue #188). El tope lo
-  // decide el server aunque la pantalla ya mande el monto acotado: es plata, y
-  // esta action la llaman tres superficies distintas.
-  const { chargeCents } = cashCharge({
+  // …y de más se reparte: el vuelto vuelve al cliente y no puede quedar contado
+  // en la caja (issue #188), y lo que el cliente deja es propina del mozo y no
+  // venta del negocio (spec 177). El reparto lo decide el server aunque la
+  // pantalla ya lo muestre: es plata, y esta action la llaman tres superficies
+  // distintas.
+  const { chargeCents, extraTipCents } = repartoDelCobro({
     method: input.method,
     amount_cents: input.amount_cents,
     adjustment_cents: input.adjustment_cents ?? 0,
     remaining_cents: remainingCents,
+    destino: input.destino_excedente ?? destinoPorDefecto(input.method),
   });
+
+  // spec 177 · Parte A — el excedente que no vuelve al bolsillo es del mozo.
+  //
+  // La propina que llega en el input es la de la cuenta (la del split, desde la
+  // Parte 0). El excedente se calcula ACÁ y no se confía del cliente: la
+  // pantalla ya lo muestra, pero es plata y el reparto lo decide un solo lado —
+  // el mismo criterio con el que el tope del vuelto vive en el server.
+  const tipCents = input.tip_cents + extraTipCents;
 
   // issue #263 — la forma del comprobante se valida ANTES de tocar la plata.
   //
@@ -710,7 +731,7 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
     p_attributed_mozo_id: attributed,
     p_method: input.method,
     p_amount_cents: chargeCents,
-    p_tip_cents: input.tip_cents,
+    p_tip_cents: tipCents,
     p_last_four: input.last_four ?? null,
     p_card_brand: input.card_brand ?? null,
     p_notes: input.notes?.trim() || null,
@@ -721,6 +742,11 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
     // es `cuenta_corriente`, y lo rechaza cuando no lo es: el saldo no puede
     // quedar colgado de nadie ni pegarse a un cobro normal.
     p_credit_customer_id: creditCustomerId,
+    // spec 177 · Parte A — el billete que entró (para poder reconstruir el
+    // vuelto) y cuánto de la propina es nueva: eso es lo que sube el total de
+    // la orden, y por eso viaja aparte de `p_tip_cents`.
+    p_received_cents: input.amount_cents,
+    p_extra_tip_cents: extraTipCents,
   });
 
   if (error) return actionError(mapRegistrarPagoError(error.message));
