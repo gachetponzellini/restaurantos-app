@@ -12,9 +12,14 @@ import type { MozoRendicion } from "./types";
 type RendicionResult = Awaited<ReturnType<typeof registrarRendicionMozo>>;
 
 describe("registrarRendicionMozo — forma del ActionResult (spec 39, FR-014)", () => {
-  it("el resultado es un ActionResult<{ rendicion: MozoRendicion }>", () => {
+  it("el resultado es un ActionResult con la fila y la propina pagada", () => {
+    // spec 177 · Parte B — la rendición además paga la propina del período, y
+    // devolver cuánto es lo que deja al modal decirlo sin volver a consultar.
     expectTypeOf<RendicionResult>().toEqualTypeOf<
-      ActionResult<{ rendicion: MozoRendicion }>
+      ActionResult<{
+        rendicion: MozoRendicion;
+        propina_pagada_cents: number;
+      }>
     >();
   });
 

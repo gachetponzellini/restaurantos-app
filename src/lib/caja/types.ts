@@ -31,7 +31,13 @@ export type CajaCorte = {
   resumen?: CierreResumenSnapshot | null;
 };
 
-export type CajaMovimientoKind = "sangria" | "ingreso";
+/**
+ * `propina` (spec 177 · Parte B): lo que sale del cajón para pagarle la propina
+ * a un mozo. Es una salida como la sangría, pero con dueño — el reparto del
+ * cierre y el libro necesitan poder separar «se lo llevó el dueño» de «se le
+ * pagó al personal», y una sangría con `reason` libre no lo permite.
+ */
+export type CajaMovimientoKind = "sangria" | "ingreso" | "propina";
 
 export type CajaMovimiento = {
   id: string;
@@ -49,7 +55,7 @@ export type CajaMovimiento = {
 
 // ── Libro de movimientos (spec 070) ─────────────────────────────
 
-export type LibroTipo = "cobro" | "sangria" | "ingreso";
+export type LibroTipo = "cobro" | "sangria" | "ingreso" | "propina";
 
 /**
  * Una línea de caja, sea un cobro o un movimiento. El libro las muestra
@@ -99,6 +105,8 @@ export type LibroTotales = {
   cobros_count: number;
   ingresos_cents: number;
   sangrias_cents: number;
+  /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
+  propinas_pagadas_cents: number;
   por_metodo: Record<PaymentMethod, number>;
 };
 
@@ -193,9 +201,12 @@ export type CajaLiveStats = {
     apertura_cents: number;
     /** Lo que se llevó el cierre anterior, ya descontado de `apertura_cents`. */
     retiro_cierre_cents: number;
+    /** Efectivo cobrado, **con** la propina adentro (spec 177 · D5). */
     efectivo_cents: number;
     ingresos_cents: number;
     sangrias_cents: number;
+    /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
+    propinas_pagadas_cents: number;
   };
 };
 
@@ -338,7 +349,10 @@ export type RendicionMozoPendiente = {
   mozo_name: string;
   /** Rol en el negocio. Decide si tiene que rendir (issue #264). */
   mozo_role?: string;
+  /** Lo que entrega: efectivo neto de propina (spec 151). */
   efectivo_cents: number;
+  /** Lo que tiene encima: el mismo efectivo con la propina adentro (spec 177). */
+  efectivo_bruto_cents: number;
   tickets_cents: number;
   por_metodo: Record<PaymentMethod, number>;
   total_propinas_cents: number;

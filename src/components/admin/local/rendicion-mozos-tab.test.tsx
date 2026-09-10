@@ -44,6 +44,7 @@ function pendienteMixto(
     mozo_id: "m1",
     mozo_name: "Lucía Moza",
     efectivo_cents: 1_850_000,
+    efectivo_bruto_cents: 1_850_000,
     tickets_cents: 3_850_000,
     por_metodo: { ...EMPTY_METODO, cash: 1_850_000, card_manual: 3_850_000 },
     total_propinas_cents: 0,
@@ -102,10 +103,12 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     expect(screen.queryByText(/en tickets/i)).not.toBeInTheDocument();
   });
 
-  it("la propina sigue a la vista: es del mozo, no algo que entregue", () => {
+  // Spec 177 · Parte B — la propina dejó de ser un número informativo: se le
+  // paga en esta misma rendición y sale del cajón.
+  it("la propina se muestra como lo que hay que pagarle", () => {
     renderTab([pendienteMixto({ total_propinas_cents: 420_000 })]);
 
-    expect(screen.getByText(/propinas \(aparte\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/propina a pagarle/i)).toBeInTheDocument();
     expect(screen.getByText("$ 4.200")).toBeInTheDocument();
   });
 

@@ -541,7 +541,7 @@ async function getCajaStatsEnVentana(
     };
   });
   const movimientosDelPeriodo = (movimientosRes.data ?? []) as Array<{
-    kind: "sangria" | "ingreso";
+    kind: CajaMovimientoKind;
     amount_cents: number;
     cancelled_at: string | null;
     corte_id: string | null;
@@ -608,20 +608,25 @@ async function getCajaStatsEnVentana(
   });
 
   // El mismo desglose que usa `calculateExpectedCash`, expuesto para poder
-  // mostrarlo (issue #188). Efectivo **sin** propina: la propina entró al cajón
-  // pero es del mozo, no del negocio (spec 098).
+  // mostrarlo (issue #188). Spec 177 · D5 — el efectivo va **con** la propina
+  // adentro (está en el cajón hasta que se paga) y la propina pagada sale como
+  // su propio renglón. Tiene que espejar la fórmula renglón por renglón o la
+  // pantalla donde se decide si falta plata no cierra.
   const vivos = movimientos.filter((m) => !m.cancelled_at);
   const desglose_esperado = {
     apertura_cents,
     retiro_cierre_cents,
     efectivo_cents: payments
       .filter((p) => p.method === "cash")
-      .reduce((acc, p) => acc + p.amount_cents - p.tip_cents, 0),
+      .reduce((acc, p) => acc + p.amount_cents, 0),
     ingresos_cents: vivos
       .filter((m) => m.kind === "ingreso")
       .reduce((acc, m) => acc + m.amount_cents, 0),
     sangrias_cents: vivos
       .filter((m) => m.kind === "sangria")
+      .reduce((acc, m) => acc + m.amount_cents, 0),
+    propinas_pagadas_cents: vivos
+      .filter((m) => m.kind === "propina")
       .reduce((acc, m) => acc + m.amount_cents, 0),
   };
 
@@ -1014,6 +1019,7 @@ export async function getRendicionPendienteMozo(
     mozo_name: mozoName,
     mozo_role: mozoRole,
     efectivo_cents: rendicion.efectivo_cents,
+    efectivo_bruto_cents: rendicion.efectivo_bruto_cents,
     tickets_cents: rendicion.tickets_cents,
     por_metodo: rendicion.por_metodo,
     total_propinas_cents: rendicion.total_propinas_cents,
@@ -1222,7 +1228,11 @@ export async function getLibroDeMovimientos(
     .order("created_at", { ascending: false })
     .limit(LIBRO_MAX_FILAS);
   if (filtros.cajaId) movsQuery = movsQuery.eq("caja_id", filtros.cajaId);
-  if (filtros.tipo === "sangria" || filtros.tipo === "ingreso") {
+  if (
+    filtros.tipo === "sangria" ||
+    filtros.tipo === "ingreso" ||
+    filtros.tipo === "propina"
+  ) {
     movsQuery = movsQuery.eq("kind", filtros.tipo);
   }
 
@@ -1489,6 +1499,7 @@ export async function getLibroDeMovimientos(
     cobros_count: 0,
     ingresos_cents: 0,
     sangrias_cents: 0,
+    propinas_pagadas_cents: 0,
     por_metodo: { ...EMPTY_BY_METHOD },
   };
   for (const e of filtradas) {
@@ -1505,6 +1516,10 @@ export async function getLibroDeMovimientos(
       }
     } else if (e.tipo === "ingreso") {
       totales.ingresos_cents += e.amount_cents;
+    } else if (e.tipo === "propina") {
+      // Spec 177 — aparte de las sangrías: las dos sacan plata del cajón, pero
+      // una se la lleva el dueño y la otra se le paga al personal.
+      totales.propinas_pagadas_cents += e.amount_cents;
     } else {
       totales.sangrias_cents += e.amount_cents;
     }
@@ -1852,7 +1867,9 @@ export async function getCierreCajaData(
       mozos_sin_rendir: restanDeEsteCajon.map((p) => ({
         mozo_id: p.mozo_id,
         mozo_name: p.mozo_name,
-        efectivo_cents: p.efectivo_cents,
+        // Bruto: es lo que el mozo tiene en la mano, y es lo que hay que
+        // restarle al cajón (spec 177 · D5).
+        efectivo_cents: p.efectivo_bruto_cents,
       })),
     }),
     cuentas_abiertas: cuentas,

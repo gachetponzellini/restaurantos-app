@@ -19,20 +19,35 @@ export type ExpectedCashInput = {
 /**
  * Efectivo que **el negocio** tiene que tener en el cajón.
  *
- * spec 098 — la propina no es plata del negocio: se cobra por el sistema para
- * poder liquidársela al mozo, pero no es una venta ni queda en la caja. El
- * cliente paga $11.000 por una cuenta de $10.000 y esos $1.000 son del mozo, no
- * del local.
+ * > lo que entró − lo que salió.
  *
- * Antes se sumaba `amount_cents` entero, así que el arqueo esperaba también la
- * propina y **cerraba con sobrante todos los días** — un sobrante que el
- * encargado no podía explicar porque la plata sí estaba… en el bolsillo de
- * quien correspondía.
+ * ## La propina (spec 098 · H-09, reimplementada por la spec 177 · D5)
+ *
+ * La propina no es plata del negocio: se cobra por el sistema para poder
+ * liquidársela al mozo. Hasta la 177, eso se implementaba **descontándola de
+ * los pagos en efectivo** acá mismo, o sea asumiendo que el negocio se la
+ * pagaba al mozo por fuera del cajón. Esa fórmula fallaba en los dos bordes:
+ *
+ *  - **Propina de tarjeta pagada del cajón** (que es lo que hace KCC): no se
+ *    descontaba nunca —nunca entró como efectivo— pero la plata sí salía. El
+ *    arqueo cerraba con **faltante todas las noches** y sin una línea que lo
+ *    explicara.
+ *  - **Propina en efectivo cobrada por la caja**: se descontaba en el acto,
+ *    pero el billete se queda en el cajón hasta que alguien se lo da al mozo.
+ *    Sobrante hasta ese momento.
+ *
+ * Ahora el cajón espera lo que entró y la propina sale por donde sale de
+ * verdad: un movimiento `propina`, con el mozo adentro. La misma cuenta cubre
+ * los dos casos físicos, porque el pago se registra igual tanto si el billete
+ * pasó por el cajón como si el mozo ya lo tenía encima: `+bruto − propina` es
+ * el neto que efectivamente llega al cajón.
  */
 export function calculateExpectedCash(input: ExpectedCashInput): number {
+  // Bruto: la propina que viene adentro de un pago en efectivo ESTÁ en el
+  // cajón hasta que se paga. Ver el bloque de arriba.
   const cashPayments = input.payments
     .filter((p) => p.method === "cash")
-    .reduce((acc, p) => acc + p.amount_cents - (p.tip_cents ?? 0), 0);
+    .reduce((acc, p) => acc + p.amount_cents, 0);
 
   const movimientos = input.movimientos.filter((m) => !m.cancelled_at);
 
@@ -40,11 +55,20 @@ export function calculateExpectedCash(input: ExpectedCashInput): number {
     .filter((m) => m.kind === "ingreso")
     .reduce((acc, m) => acc + m.amount_cents, 0);
 
+  // Las dos salidas del cajón. Van separadas y no en un solo `kind` porque el
+  // reparto del cierre y el libro necesitan distinguir «se lo llevó el dueño»
+  // de «se le pagó al personal» (spec 177 · D6).
   const sangrias = movimientos
     .filter((m) => m.kind === "sangria")
     .reduce((acc, m) => acc + m.amount_cents, 0);
 
-  return input.last_closing_cash_cents + cashPayments + ingresos - sangrias;
+  const propinas = movimientos
+    .filter((m) => m.kind === "propina")
+    .reduce((acc, m) => acc + m.amount_cents, 0);
+
+  return (
+    input.last_closing_cash_cents + cashPayments + ingresos - sangrias - propinas
+  );
 }
 
 export type MovimientoConCorte = {

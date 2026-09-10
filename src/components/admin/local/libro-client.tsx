@@ -92,6 +92,9 @@ const CAMPO_LABEL: Record<string, string> = {
 
 function iconoDe(entry: LibroEntry) {
   if (entry.tipo === "sangria") return ArrowDownToLine;
+  // Spec 177 — la propina también sale del cajón: misma flecha que la sangría,
+  // color distinto (es del personal, no del dueño).
+  if (entry.tipo === "propina") return ArrowDownToLine;
   if (entry.tipo === "ingreso") return ArrowUpFromLine;
   switch (entry.method) {
     case "cash":
@@ -228,6 +231,7 @@ export function LibroClient({
             <option value="cobro">Cobros</option>
             <option value="sangria">Sangrías</option>
             <option value="ingreso">Ingresos</option>
+            <option value="propina">Propinas pagadas</option>
           </select>
         </div>
         <div className="grid gap-1">
@@ -297,6 +301,15 @@ export function LibroClient({
           value={formatCurrency(totales.sangrias_cents)}
           hint="fuera de la caja"
         />
+        {/* Spec 177 — sólo si hubo: en un local que todavía no paga propinas
+            por el sistema, un totalizador en $0 es una columna vacía. */}
+        {totales.propinas_pagadas_cents > 0 && (
+          <Totalizador
+            label="Propinas pagadas"
+            value={formatCurrency(totales.propinas_pagadas_cents)}
+            hint="a los mozos"
+          />
+        )}
       </div>
 
       {truncado && (
@@ -316,7 +329,7 @@ export function LibroClient({
           <ul className="divide-y divide-zinc-100">
             {entries.map((e) => {
               const Icon = iconoDe(e);
-              const esSangria = e.tipo === "sangria";
+              const esSangria = e.tipo === "sangria" || e.tipo === "propina";
               return (
                 <li key={`${e.tipo}-${e.id}`}>
                   <button
@@ -329,11 +342,13 @@ export function LibroClient({
                         "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
                         e.anulado
                           ? "bg-zinc-100 text-zinc-400"
-                          : esSangria
-                            ? "bg-rose-50 text-rose-700"
-                            : e.tipo === "ingreso"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-zinc-100 text-zinc-700",
+                          : e.tipo === "propina"
+                            ? "bg-amber-50 text-amber-700"
+                            : esSangria
+                              ? "bg-rose-50 text-rose-700"
+                              : e.tipo === "ingreso"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-zinc-100 text-zinc-700",
                       )}
                     >
                       <Icon className="size-4.5" strokeWidth={2.25} />
@@ -626,7 +641,9 @@ function DetalleSheet({
                 ? METHOD_LABEL[entry.method]
                 : entry.tipo === "sangria"
                   ? "Sangría"
-                  : "Ingreso"}
+                  : entry.tipo === "propina"
+                    ? "Propina pagada"
+                    : "Ingreso"}
               <span className="mx-1 text-zinc-300">·</span>
               {entry.caja_name}
               <span className="mx-1 text-zinc-300">·</span>

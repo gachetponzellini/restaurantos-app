@@ -1145,6 +1145,9 @@ async function buildPrintableCierreTickets(
         efectivo_cents: r.desglose_esperado.efectivo_cents,
         ingresos_cents: r.desglose_esperado.ingresos_cents,
         sangrias_cents: r.desglose_esperado.sangrias_cents,
+        // Los cortes anteriores a la spec 177 no lo tienen en su snapshot.
+        propinas_pagadas_cents:
+          r.desglose_esperado.propinas_pagadas_cents ?? 0,
         esperado_cents: r.expected_cash_cents,
         contado_cents: r.closing_cash_cents,
         diferencia_cents: r.difference_cents,

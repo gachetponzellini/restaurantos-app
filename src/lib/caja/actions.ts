@@ -24,6 +24,7 @@ import { mozosQueDebenRendir } from "./deben-rendir";
 import {
   getCajaLiveStats,
   getCuentasAbiertas,
+  getDefaultCaja,
   getMovimientosPeriodoActual,
   getOperadoresDeCaja,
   getRendicionesPendientesTodosLosMozos,
@@ -458,7 +459,12 @@ export async function cerrarCaja(input: {
     // documento que se firma sumarían confusión, no información.
     movimientos: {
       ingresos: vivos.filter((m) => m.kind === "ingreso").map((m) => linea(m, "Ingreso")),
-      egresos: vivos.filter((m) => m.kind === "sangria").map((m) => linea(m, "Sangria")),
+      // Spec 177 · Parte B — la propina pagada es una salida del cajón y va al
+      // papel como cualquier otra: sin esto, el sobre cerraría con una
+      // diferencia que el resumen no explica.
+      egresos: vivos
+        .filter((m) => m.kind === "sangria" || m.kind === "propina")
+        .map((m) => linea(m, m.kind === "propina" ? "Propina" : "Sangria")),
     },
     ventas_por_origen_lineas: ORIGEN_PAPEL.filter(
       (o) => (stats.ventas_por_origen[o.key] ?? 0) > 0,
@@ -714,7 +720,12 @@ export async function registrarRendicionMozo(
   notes: string | null,
   businessSlug: string,
   estado: RendicionEstado = "rendida",
-): Promise<ActionResult<{ rendicion: MozoRendicion }>> {
+  /**
+   * De qué cajón sale la propina (spec 177 · Parte B). Sin esto, la caja por
+   * defecto — que es de donde sale la plata en un local de una sola caja.
+   */
+  cajaId?: string,
+): Promise<ActionResult<{ rendicion: MozoRendicion; propina_pagada_cents: number }>> {
   const business = await getBusiness(businessSlug);
   if (!business) return actionError("Negocio no encontrado.");
 
@@ -805,6 +816,57 @@ export async function registrarRendicionMozo(
 
   if (error) return actionError(`No se pudo registrar la rendición: ${error.message}`);
 
+  const rendicion = inserted as MozoRendicion;
+
+  // ── Spec 177 · Parte B — la propina se paga acá ──────────────────────────
+  //
+  // Decisión de Juan (2026-09-10): *"la propina que se pague en la misma
+  // rendición"*. Sale del cajón como movimiento propio, con el mozo adentro, y
+  // por eso `calculateExpectedCash` la descuenta sola: el cajón espera lo que
+  // entró menos lo que salió (D5).
+  //
+  // Cubre los dos casos físicos con la misma cuenta. Si el mozo cobró en
+  // efectivo, la propina ya la tiene encima y entrega el neto: el movimiento
+  // deja al esperado en ese neto. Si cobró la caja —o si la propina vino por
+  // tarjeta—, el billete sale del cajón ahora.
+  //
+  // Un `no_entrego` no cobra: declaró que no entregó nada, pagarle la propina
+  // sería sacar plata del cajón contra una deuda abierta.
+  let propina_pagada_cents = 0;
+  if (estado === "rendida" && pendiente.total_propinas_cents > 0) {
+    const caja = cajaId ?? (await getDefaultCaja(business.id))?.id;
+    if (!caja) {
+      await service.from("mozo_rendiciones").delete().eq("id", rendicion.id);
+      return actionError(
+        "El negocio no tiene ninguna caja donde registrar el pago de la propina.",
+      );
+    }
+    const { error: movErr } = await service.from("caja_movimientos").insert({
+      business_id: business.id,
+      caja_id: caja,
+      kind: "propina",
+      mozo_id: mozoId,
+      amount_cents: pendiente.total_propinas_cents,
+      // El nombre va adentro del motivo a propósito: el papel del cierre
+      // (spec 139) arma sus renglones con `reason` y sin esto la línea diría
+      // sólo «Propina», que en una lista de seis es inútil.
+      reason: `Propina · ${(mozoUser as { full_name: string | null }).full_name ?? "Mozo"}`,
+      created_by: ctx.userId,
+      created_at: corteIso,
+    });
+    if (movErr) {
+      // La rendición ya está escrita y define el piso del próximo período: si
+      // el pago no entró, dejarla parada mentiría dos veces —diría que el mozo
+      // ya cobró su propina y cerraría un período que no se liquidó—. Se
+      // deshace, que es seguro porque nada la referencia todavía.
+      await service.from("mozo_rendiciones").delete().eq("id", rendicion.id);
+      return actionError(
+        `No se pudo pagar la propina, así que la rendición no se registró: ${movErr.message}`,
+      );
+    }
+    propina_pagada_cents = pendiente.total_propinas_cents;
+  }
+
   // D6 · no traba el cierre, pero no queda invisible: el dueño se entera de la
   // plata que quedó afuera del cajón. Best-effort, como el resto de la spec 27.
   const faltanteGrande =
@@ -824,7 +886,7 @@ export async function registrarRendicionMozo(
   }
 
   revalidatePath(`/${businessSlug}/admin/operacion`);
-  return actionOk({ rendicion: inserted as MozoRendicion });
+  return actionOk({ rendicion, propina_pagada_cents });
 }
 
 // ── Asignación caja↔usuario ─────────────────────────────────────

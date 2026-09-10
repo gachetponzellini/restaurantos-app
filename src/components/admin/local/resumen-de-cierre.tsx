@@ -204,10 +204,19 @@ export function ResumenDeCierre({
           <Sumando
             label="+ Efectivo cobrado"
             cents={d.efectivo_cents}
-            hint="Sin propinas"
+            hint="Con propinas"
           />
           <Sumando label="+ Ingresos" cents={d.ingresos_cents} />
           <Sumando label="− Sangrías" cents={d.sangrias_cents} />
+          {/* Spec 177 — sólo aparece si hubo: en un local que todavía no paga
+              propinas por el sistema, un renglón en $0 es ruido. */}
+          {d.propinas_pagadas_cents > 0 && (
+            <Sumando
+              label="− Propinas pagadas"
+              cents={d.propinas_pagadas_cents}
+              hint="A los mozos, en la rendición"
+            />
+          )}
           <span className="hidden items-center justify-center text-xl font-semibold text-zinc-400 lg:flex">
             =
           </span>

@@ -47,6 +47,8 @@ export type CierreTicketData = {
     efectivo_cents: number;
     ingresos_cents: number;
     sangrias_cents: number;
+    /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
+    propinas_pagadas_cents: number;
     esperado_cents: number;
     contado_cents: number;
     diferencia_cents: number;
@@ -222,13 +224,19 @@ export function buildCierreLines(d: CierreTicketData): Line[] {
   push(fila("+ Efectivo cobrado", monto(r.efectivo_cents)));
   push(fila("+ Ingresos", monto(r.ingresos_cents)));
   push(fila("- Sangrias", monto(r.sangrias_cents)));
+  // Spec 177 — la propina sale del cajón, así que entra en la cuenta del
+  // esperado. Es el renglón que explicaba el faltante de todas las noches.
+  if (r.propinas_pagadas_cents > 0) {
+    push(fila("- Propinas pagadas", monto(r.propinas_pagadas_cents)));
+  }
   push(RULE_COND);
   push(fila("EFECTIVO ESPERADO", monto(r.esperado_cents)), { bold: true });
   push(fila("CONTADO", monto(r.contado_cents)), { bold: true });
   push(fila("DIFERENCIA", monto(r.diferencia_cents)), { bold: true });
   push(RULE_COND);
-  // La propina va fuera del arqueo: entró al cajón pero es del mozo (spec 098).
-  push(fila("Propinas (del mozo)", monto(r.propinas_cents)));
+  // Lo devengado del período, para contrastarlo con lo que se pagó arriba: si
+  // no coinciden, quedó propina sin liquidar (spec 177).
+  push(fila("Propinas del periodo", monto(r.propinas_cents)));
 
   if (d.notas) {
     push("");

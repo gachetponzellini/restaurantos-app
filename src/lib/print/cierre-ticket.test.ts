@@ -42,6 +42,7 @@ function data(over: Partial<CierreTicketData> = {}): CierreTicketData {
       efectivo_cents: 48_620_000,
       ingresos_cents: 1_500_000,
       sangrias_cents: 14_000_000,
+      propinas_pagadas_cents: 0,
       esperado_cents: 36_120_000,
       contado_cents: 35_970_000,
       diferencia_cents: -150_000,
@@ -160,9 +161,28 @@ describe("el papel del cierre", () => {
     expect(t).toContain("DIFERENCIA");
   });
 
-  it("la propina queda fuera del arqueo, señalada como del mozo", () => {
+  it("el papel dice cuánta propina generó el período", () => {
     const t = texto(data()).join("\n");
-    expect(t).toContain("Propinas (del mozo)");
+    expect(t).toContain("Propinas del periodo");
+  });
+
+  // Spec 177 · Parte B — la propina pagada SALE del cajón, así que entra en la
+  // cuenta del esperado. Es el renglón que explicaba el faltante de todas las
+  // noches en un local que le paga la propina de tarjeta al mozo en efectivo.
+  it("la propina pagada es un renglón del arqueo", () => {
+    const t = texto(
+      data({
+        resumen: {
+          ...data().resumen,
+          propinas_pagadas_cents: 9_630_000,
+        },
+      }),
+    ).join("\n");
+    expect(t).toContain("- Propinas pagadas");
+  });
+
+  it("sin propina pagada, el renglón no aparece", () => {
+    expect(texto(data()).join("\n")).not.toContain("Propinas pagadas");
   });
 
   it("la reimpresión sale marcada arriba de todo", () => {

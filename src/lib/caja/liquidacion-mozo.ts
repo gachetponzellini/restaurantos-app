@@ -7,7 +7,17 @@ export type RendicionPaymentInput = {
 };
 
 export type RendicionResult = {
+  /** Lo que tiene que ENTREGAR: efectivo neto de propina (spec 151). */
   efectivo_cents: number;
+  /**
+   * Lo que tiene ENCIMA: el mismo efectivo, con la propina adentro.
+   *
+   * Spec 177 · D5 — el cajón pasó a esperar el bruto, así que el reparto del
+   * arqueo tiene que restarle al cajón el bruto que el mozo todavía no
+   * entregó. Con el neto, el cajón quedaba "esperando" la propina de un
+   * billete que el mozo tiene en el bolsillo.
+   */
+  efectivo_bruto_cents: number;
   tickets_cents: number;
   por_metodo: Record<PaymentMethod, number>;
   total_propinas_cents: number;
@@ -28,6 +38,7 @@ export function calcularRendicionMozo(
 ): RendicionResult {
   const por_metodo: Record<PaymentMethod, number> = { ...EMPTY_BY_METHOD };
   let efectivo_cents = 0;
+  let efectivo_bruto_cents = 0;
   let tickets_cents = 0;
   let total_propinas_cents = 0;
 
@@ -37,6 +48,7 @@ export function calcularRendicionMozo(
 
     if (p.method === "cash") {
       efectivo_cents += neto;
+      efectivo_bruto_cents += p.amount_cents;
     } else {
       tickets_cents += neto;
     }
@@ -44,7 +56,13 @@ export function calcularRendicionMozo(
     total_propinas_cents += p.tip_cents;
   }
 
-  return { efectivo_cents, tickets_cents, por_metodo, total_propinas_cents };
+  return {
+    efectivo_cents,
+    efectivo_bruto_cents,
+    tickets_cents,
+    por_metodo,
+    total_propinas_cents,
+  };
 }
 
 

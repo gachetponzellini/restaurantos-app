@@ -83,6 +83,7 @@ function data(over: Partial<CierreCajaData> = {}): CierreCajaData {
         efectivo_cents: 312_400,
         ingresos_cents: 0,
         sangrias_cents: 0,
+        propinas_pagadas_cents: 0,
       },
     },
     reparto: { en_cajon_cents: 312_400, mozos: [], descuadre_cents: 0 },
@@ -101,6 +102,7 @@ function pendiente(
 ): RendicionMozoPendiente {
   return {
     efectivo_cents: 71_200,
+    efectivo_bruto_cents: 71_200,
     tickets_cents: 0,
     por_metodo: { ...EMPTY_METODO },
     total_propinas_cents: 0,

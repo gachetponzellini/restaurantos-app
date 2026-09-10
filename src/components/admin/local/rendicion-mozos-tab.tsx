@@ -326,9 +326,11 @@ function MozoPendienteCard({
             {formatCurrency(p.efectivo_cents)}
           </p>
         </div>
+        {/* Spec 177 · Parte B — la propina deja de ser un número informativo:
+            se le paga en esta misma rendición, del cajón. */}
         {p.total_propinas_cents > 0 && (
           <div className="mt-1 flex items-baseline justify-between gap-2">
-            <p className="text-xs text-zinc-500">Propinas (aparte)</p>
+            <p className="text-xs text-zinc-500">Propina a pagarle</p>
             <p className="text-sm text-emerald-700 tabular-nums">
               {formatCurrency(p.total_propinas_cents)}
             </p>
@@ -420,6 +422,18 @@ function RendirModal({
               {formatCurrency(pendiente.efectivo_cents)}
             </p>
           </div>
+        )}
+
+        {/* Spec 177 · Parte B — que salga plata del cajón no puede ser una
+            sorpresa: el encargado lo lee antes de confirmar. */}
+        {pendiente.total_propinas_cents > 0 && !noEntrego && (
+          <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
+            Se le paga{" "}
+            <span className="font-semibold tabular-nums">
+              {formatCurrency(pendiente.total_propinas_cents)}
+            </span>{" "}
+            de propina, y sale del cajón como movimiento de caja.
+          </p>
         )}
 
         {noEntrego && (
@@ -531,12 +545,17 @@ function RendirModal({
                   toast.error(r.error);
                   return;
                 }
+                const base = sinEfectivo
+                  ? `Período de ${pendiente.mozo_name} cerrado`
+                  : noEntrego
+                    ? `${pendiente.mozo_name} quedó como «no entregó»`
+                    : `Rendición de ${pendiente.mozo_name} registrada`;
+                // Spec 177 — el pago sale del cajón: el toast lo confirma con
+                // el monto, que es lo que el encargado acaba de sacar.
                 toast.success(
-                  sinEfectivo
-                    ? `Período de ${pendiente.mozo_name} cerrado`
-                    : noEntrego
-                      ? `${pendiente.mozo_name} quedó como «no entregó»`
-                      : `Rendición de ${pendiente.mozo_name} registrada`,
+                  r.data.propina_pagada_cents > 0
+                    ? `${base} · propina pagada ${formatCurrency(r.data.propina_pagada_cents)}`
+                    : base,
                 );
                 onSuccess();
               })
