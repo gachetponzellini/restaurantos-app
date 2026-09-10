@@ -117,49 +117,169 @@ test.describe("P03 · el arqueo y su guarda", () => {
   });
 });
 
-// ── Spec 177 · Parte B — el desglose del esperado ──────────────────────────
+// ── Spec 177 · D5 — la cuenta del efectivo esperado ───────────────────────
 //
-// El desglose no es decoración: es lo que hace que la diferencia del arqueo ya
-// venga explicada antes de contar (issue #188). Si los renglones no espejan la
-// fórmula, el encargado ve un número que no puede reconstruir.
-test.describe("P03 · el desglose dice de dónde sale el esperado", () => {
-  test("el efectivo cobrado se muestra CON la propina adentro", async ({
-    page,
-  }) => {
-    await page.goto(`/${SLUG}/admin/operacion?tab=caja`);
-    await expect(page.getByText(/EN LA CAJA DEBER[IÍ]AS TENER/i)).toBeVisible({
-      timeout: 20_000,
-    });
+// Lo que se prueba acá es el NÚMERO, no el rótulo: el esperado es
+//   apertura + efectivo cobrado BRUTO + ingresos − sangrías − propinas pagadas
+// y la parte nueva son los dos extremos. Hasta la 177 el efectivo iba «neto de
+// propina», lo que dejaba faltante todas las noches en un local que le paga la
+// propina de tarjeta al mozo con plata del cajón.
 
-    // La bajada del renglón es el contrato: antes decía «Sin propinas» y desde
-    // la 177 dice lo contrario. Un renglón que miente sobre su propia cuenta es
-    // peor que no tenerlo.
-    await expect(page.getByText(/Con propinas/i).first()).toBeVisible();
-    await expect(page.getByText(/Sin propinas/i)).toHaveCount(0);
-  });
+/** El esperado de la caja principal, con la misma cuenta que el server. */
+async function esperadoDeLaPrincipal(bizId: string) {
+  const { data: cajas } = await db
+    .from("cajas")
+    .select("id")
+    .eq("business_id", bizId)
+    .eq("is_default", true)
+    .limit(1);
+  const caja = (cajas ?? [])[0] as { id: string };
+  expect(caja, "el demo tiene que tener una caja principal").toBeTruthy();
 
-  test("el renglón de propinas pagadas aparece sólo si hubo", async ({
+  const { data: cortes } = await db
+    .from("caja_cortes")
+    .select("closing_cash_cents, created_at")
+    .eq("caja_id", caja.id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const ultimo = (cortes ?? [])[0] as
+    | { closing_cash_cents: number; created_at: string }
+    | undefined;
+  const desde = ultimo?.created_at ?? "1970-01-01T00:00:00Z";
+
+  const { data: pagos } = await db
+    .from("payments")
+    .select("amount_cents, tip_cents")
+    .eq("caja_id", caja.id)
+    .eq("payment_status", "paid")
+    .eq("method", "cash")
+    .gt("created_at", desde);
+
+  const { data: movs } = await db
+    .from("caja_movimientos")
+    .select("kind, amount_cents")
+    .eq("caja_id", caja.id)
+    .is("cancelled_at", null)
+    .gt("created_at", desde);
+
+  const suma = (k: string) =>
+    ((movs ?? []) as { kind: string; amount_cents: number }[])
+      .filter((m) => m.kind === k)
+      .reduce((a, m) => a + m.amount_cents, 0);
+
+  const efectivoBruto = ((pagos ?? []) as { amount_cents: number }[]).reduce(
+    (a, p) => a + p.amount_cents,
+    0,
+  );
+  const propinaCobrada = ((pagos ?? []) as { tip_cents: number }[]).reduce(
+    (a, p) => a + (p.tip_cents ?? 0),
+    0,
+  );
+
+  return {
+    cajaId: caja.id,
+    propinaCobrada,
+    esperado:
+      (ultimo?.closing_cash_cents ?? 0) +
+      efectivoBruto +
+      suma("ingreso") -
+      suma("sangria") -
+      suma("propina"),
+  };
+}
+
+test.describe("P03 · el esperado es lo que entró menos lo que salió", () => {
+  test("el número de la pantalla sale de la cuenta nueva, con la propina adentro", async ({
     page,
   }) => {
     const bizId = await businessId(SLUG);
+    const { esperado, propinaCobrada } = await esperadoDeLaPrincipal(bizId);
 
-    // Se DERIVA de la base, igual que el resto de la suite: si el seed no dejó
-    // ninguna propina pagada, el renglón no tiene que estar. Un renglón en $0
-    // en la pantalla del cierre es ruido a la 1 de la mañana.
-    const { data: pagos } = await db
-      .from("caja_movimientos")
-      .select("id")
-      .eq("business_id", bizId)
-      .eq("kind", "propina")
-      .is("cancelled_at", null);
-    const hubo = (pagos ?? []).length > 0;
+    // Sin propina cobrada las dos fórmulas dan igual y el test no probaría nada.
+    test.skip(
+      propinaCobrada === 0,
+      "el seed no dejó propinas en efectivo en el período",
+    );
 
     await page.goto(`/${SLUG}/admin/operacion?tab=caja`);
     await expect(page.getByText(/EN LA CAJA DEBER[IÍ]AS TENER/i)).toBeVisible({
       timeout: 20_000,
     });
 
-    await expect(page.getByText(/Propinas pagadas/i)).toHaveCount(hubo ? 1 : 0);
+    const tarjeta = page
+      .locator("div", { hasText: /^En la caja deberías tener/ })
+      .last();
+    await expect(tarjeta).toContainText(montoAR(esperado));
+
+    // Y la cuenta VIEJA (neto de propina) tiene que dar otro número: si diera
+    // el mismo, este test pasaría con la implementación anterior y no estaría
+    // probando la spec.
+    expect(esperado).not.toBe(esperado - propinaCobrada);
+  });
+
+  test("pagarle la propina a un mozo baja el esperado por ese monto", async ({
+    page,
+  }) => {
+    const bizId = await businessId(SLUG);
+    const { cajaId, esperado } = await esperadoDeLaPrincipal(bizId);
+
+    const { data: mozos } = await db
+      .from("business_users")
+      .select("user_id")
+      .eq("business_id", bizId)
+      .eq("role", "mozo")
+      .limit(1);
+    const mozo = (mozos ?? [])[0] as { user_id: string } | undefined;
+    test.skip(!mozo, "el demo no tiene mozos");
+
+    // Fixture: el movimiento lo crea la rendición, y rendir de verdad cierra el
+    // período del mozo y deja a los otros specs sin datos. Lo que se prueba acá
+    // es la FÓRMULA, así que se inserta el movimiento y se borra al salir.
+    const PAGO = 123_400;
+    let movId: string | null = null;
+    try {
+      const { data: mov } = await db
+        .from("caja_movimientos")
+        .insert({
+          business_id: bizId,
+          caja_id: cajaId,
+          kind: "propina",
+          mozo_id: mozo!.user_id,
+          amount_cents: PAGO,
+          reason: "Propina · E2E",
+        })
+        .select("id")
+        .single();
+      movId = (mov as { id: string } | null)?.id ?? null;
+      expect(movId, "el check de la base tiene que aceptar propina+mozo").toBeTruthy();
+
+      await page.goto(`/${SLUG}/admin/operacion?tab=caja`);
+      await expect(page.getByText(/EN LA CAJA DEBER[IÍ]AS TENER/i)).toBeVisible({
+        timeout: 20_000,
+      });
+
+      const tarjeta = page
+        .locator("div", { hasText: /^En la caja deberías tener/ })
+        .last();
+      await expect(tarjeta).toContainText(montoAR(esperado - PAGO));
+    } finally {
+      if (movId) await db.from("caja_movimientos").delete().eq("id", movId);
+    }
+  });
+
+  test("una propina sin dueño no entra: el check de la base la rechaza", async () => {
+    // D6 — una propina sin mozo es una sangría con otro nombre, y un `mozo_id`
+    // colgado de una sangría haría que el reporte por mozo contara plata ajena.
+    const bizId = await businessId(SLUG);
+    const { cajaId } = await esperadoDeLaPrincipal(bizId);
+
+    const { error } = await db.from("caja_movimientos").insert({
+      business_id: bizId,
+      caja_id: cajaId,
+      kind: "propina",
+      amount_cents: 1000,
+    });
+    expect(error, "la base tiene que rechazar una propina sin mozo").toBeTruthy();
   });
 });
 

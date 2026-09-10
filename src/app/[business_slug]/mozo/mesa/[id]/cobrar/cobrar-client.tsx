@@ -108,6 +108,7 @@ export function CobrarClient({
       cuenta.order.business_id,
       cuenta.order.lifecycle_status,
       cuenta.totals.total_cents,
+      cuenta.order.tip_cents,
     ],
   );
 
@@ -573,6 +574,10 @@ function CobrarSplitSheet({
                 method: input.method,
                 amount_cents: input.amountCents,
                 tip_cents: input.tipCents,
+                // spec 177 · Parte A — sin esto el server acota el excedente
+                // con el default del método y «se lo dejan de propina» no hace
+                // nada: la propina se pierde y la caja registra sólo la cuenta.
+                destino_excedente: input.destinoExcedente,
                 caja_id: input.cajaId,
                 last_four: input.lastFour,
                 card_brand: input.cardBrand,

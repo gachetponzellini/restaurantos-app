@@ -613,6 +613,11 @@ async function main() {
         tip_cents: tipCents,
         payment_status: "paid",
         operated_by: rand([adminUser, sofiaUser].filter(Boolean))?.id ?? null,
+        // Spec 140 · D5 — la atribución es del MOZO DE LA MESA, no de quien
+        // tipeó. Sin esto ninguna propina tenía dueño y toda la superficie de
+        // rendición y de pago de propina (spec 177) quedaba sin datos: el tab
+        // salía vacío y los E2E de P03/P11 no tenían qué mirar.
+        attributed_mozo_id: (orderRow.mozo_id as string | null) ?? null,
         created_at: orderDate.toISOString(),
       });
     }
