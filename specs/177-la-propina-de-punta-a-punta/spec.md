@@ -2,7 +2,8 @@
 
 **Issue:** [#285](https://github.com/gachetponzellini/RestaurantOS-app/issues/285) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 🚧 spec escrita, sin implementar
+**Estado:** ✅ **implementada** (2026-09-10, migraciones `0099`–`0102` aplicadas
+al cloud). **Sin verify por navegador** — ver [Verificación](#verificación).
 
 **Input:** Juan, reunión con KCC del 2026-09-09 y decisiones del 2026-09-10.
 Tres pedidos que son el mismo circuito:
@@ -272,13 +273,51 @@ residuo. Hay que **leerlo del split**, no recalcularlo en el cliente.
 
 ---
 
+## Verificación
+
+**Lo que sí está verificado.**
+
+`pnpm typecheck` en verde, `eslint` limpio, **2768 tests** (0 rojos; el único
+error de lint del repo, `cuenta.integration.test.ts:296`, es preexistente).
+
+Los tres caminos de plata se probaron **contra la base del cloud**, en `DO` con
+`raise` final para revertir — la técnica que ya se usó para el bug de
+`text[] || 'campo'`:
+
+| Escenario | Resultado |
+|---|---|
+| $50.000 sobre una cuenta de $42.000, «quedátelo» | pago `amount=50000 tip=8000 received=50000`, orden `tip=8000 total=50000 paid=50000`, `fully_paid` · **facturable = 42000, sin cambio** |
+| Dividida en 2, una sub-cuenta deja $1.000 | **propina registrada = 1000** (no 2000: el bug de la Parte 0 no revive), `expected_amount_cents` intactos, las dos saldadas, facturable sin cambio |
+| Los checks de `caja_movimientos` | rechaza propina sin mozo, rechaza sangría **con** mozo, acepta la propina con dueño |
+| Cierre con $80.000 contados y fondo de $50.000 | retiro $30.000, el turno siguiente arranca en $50.000 |
+
+**Lo que NO está verificado, y por qué.**
+
+El verify por navegador con el rol real (Sofía, encargada) **no se pudo hacer**:
+`.env.local` apunta al stack local (`127.0.0.1:54321`) y Docker no está
+corriendo, así que ni el dev server ni `scripts/magic-link.mjs` levantan. Las
+migraciones se aplicaron al **cloud**, no a un stack local.
+
+Queda pendiente mirar con los ojos: el tilde «se lo dejan de propina», el cartel
+de propina en tarjeta, el modal de rendición pagando, y la casilla del cierre con
+el fondo.
+
 ## Riesgos
 
-**El más grande es D5.** `calculateExpectedCash` la leen el cierre, la pantalla
-de caja y el resumen del corte. Cambiar la fórmula cambia lo que el local ve
-todas las noches, y los cortes **ya cerrados** se releen con la fórmula nueva
-(spec 149). Hay que decidir si se corrige el histórico o se marca un corte —
-igual que hizo la 098 con el stock: *"de acá en adelante ajusta solo"*.
+⚠️ **El más grande es D5, y sigue abierto.** `calculateExpectedCash` la leen el
+cierre, la pantalla de caja y el resumen del corte. La fórmula nueva **cambia lo
+que golf-jcr y kcc ven todas las noches en cuanto esto se deploye**, y los cortes
+ya cerrados se releen con ella (spec 149).
+
+Concretamente: hasta ahora el esperado descontaba la propina en efectivo. Desde
+el deploy no la descuenta, y sale por el movimiento de la rendición. **En el
+período de transición** —propinas cobradas antes del deploy, rendiciones después—
+el esperado va a subir por esa propina sin que exista el movimiento que la baja.
+El primer cierre después del deploy puede mostrar sobrante por ese monto.
+
+Hay que decidir si se corrige el histórico o se marca un corte hacia adelante,
+igual que hizo la 098 con el stock (*"de acá en adelante ajusta solo"*). **No se
+hizo nada de eso todavía.**
 
 **La rendición del mozo pide plata que en KCC el mozo no tiene.** La D3 de la
 139 excluye de la rendición al operador de la caja y a los encargados, pero la
@@ -293,15 +332,23 @@ implementar B.**
 
 ## Preguntas abiertas
 
-1. **¿La propina se paga en cada rendición, o se acumula?** Si se acumula
-   (semanal, quincenal), el movimiento de caja no alcanza: hace falta un saldo
-   por mozo que arrastre entre cortes. Es la diferencia entre una tarde de
-   trabajo y una tabla nueva. → **para las encargadas de KCC.**
-2. **¿Quién cobra en KCC?** ¿La caja, la terminal, o los mozos? Decide el riesgo
-   de arriba.
-3. **¿Se corrige el histórico de arqueos** al cambiar la fórmula, o se marca un
-   corte hacia adelante?
-4. **D3 (`received_cents`)** — confirmar o descartar.
+1. ~~¿La propina se paga en cada rendición o se acumula?~~ **Respondida** (Juan,
+   2026-09-10): *"la propina que se pague en la misma rendición"*. Por eso
+   alcanza con el movimiento de caja y no hace falta saldo por mozo.
+2. ~~¿Quién cobra en KCC?~~ **Respondida**: *"los 3 roles pueden cobrar,
+   encargado terminal y mozo"*. Eso deja vivo el riesgo de abajo — con la caja
+   cobrando, la rendición le pide plata al mozo que el mozo no tiene.
+3. ~~¿El fondo es realmente fijo?~~ **Respondida**: *"capaz varía, pero va a ser
+   siempre más o menos parecido"* — o sea configurable y estable, que es lo que
+   D7 implementa.
+4. **¿Se corrige el histórico de arqueos** al cambiar la fórmula, o se marca un
+   corte hacia adelante? **Sigue abierta, y bloquea el deploy tranquilo.**
+5. **D3 (`received_cents`)** — sigue sin confirmar. Está implementado; si no era
+   eso, se saca sin tocar nada más.
+6. **La propina sin dueño.** Un pago sin `attributed_mozo_id` («Sin mozo») nunca
+   genera pago de propina, así que esa plata se queda en el cajón. Es lo honesto
+   —nadie la reclamó— pero conviene decidir si el local quiere sacarla por
+   sangría o dejarla.
 
 ---
 
