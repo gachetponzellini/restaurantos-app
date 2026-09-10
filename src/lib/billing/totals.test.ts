@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateTotals,
   destinoPorDefecto,
+  importeDePreferenciaMp,
   repartoDelCobro,
   expectedByAmounts,
   isCashShortPayment,
@@ -381,5 +382,22 @@ describe("prorratearPropina (spec 177)", () => {
 
   it("sub-cuentas en cero no rompen la división", () => {
     expect(prorratearPropina(1000, [0, 0])).toEqual([0, 1000]);
+  });
+});
+
+// ── Issue #286 — MP cobraba la propina dos veces ─────────────────────────
+describe("importeDePreferenciaMp", () => {
+  it("pide lo que falta cobrar, que YA trae la propina adentro", () => {
+    // Cuenta de $10.000 con $1.000 de propina: `remaining` es $11.000.
+    // Sumarle el tip otra vez generaba un link de $12.000.
+    expect(importeDePreferenciaMp(11_000_00)).toBe(11_000);
+  });
+
+  it("sin propina es el mismo número de siempre", () => {
+    expect(importeDePreferenciaMp(10_000_00)).toBe(10_000);
+  });
+
+  it("no redondea los centavos: MP los acepta", () => {
+    expect(importeDePreferenciaMp(3_333_33)).toBeCloseTo(3_333.33, 2);
   });
 });

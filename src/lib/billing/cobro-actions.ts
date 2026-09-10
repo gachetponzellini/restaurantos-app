@@ -34,6 +34,7 @@ import type { TipoComprobante } from "@/lib/afip/types";
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
 import {
   destinoPorDefecto,
+  importeDePreferenciaMp,
   isCashShortPayment,
   repartoDelCobro,
   sumActiveItems,
@@ -910,7 +911,21 @@ export async function iniciarPagoMp(
 
   let pref;
   try {
-    const totalPesos = (input.amount_cents + input.tip_cents) / 100;
+    // issue #286 — NO se le suma la propina.
+    //
+    // `amount_cents` es lo que falta cobrar, y eso **ya la incluye**:
+    // `recomputeOrderTotals` calcula `total = subtotal + tip + fee − discount`,
+    // y las dos pantallas de cobro mandan `amountDueCents = remaining`, que sale
+    // de ese total (o del `expected_amount_cents` del split, que también lleva
+    // su propina prorrateada). Sumarla otra vez le cobraba al cliente el doble
+    // de propina: cuenta de $10.000 con $1.000 → link de MP por $12.000.
+    //
+    // Es el resabio de la convención vieja que unificó la spec 098
+    // (`amount_cents` incluye la propina, `tip_cents` dice cuánto de eso es).
+    // La 098 arregló los tres que escriben y los dos que leen mal, pero éste es
+    // el único camino que arma un importe NUEVO en vez de leer uno existente, y
+    // se le pasó.
+    const totalPesos = importeDePreferenciaMp(input.amount_cents);
     pref = await createPreference({
       accessToken: bizRow.mp_access_token,
       siteUrl: getSiteUrl(),

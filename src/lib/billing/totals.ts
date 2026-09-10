@@ -213,6 +213,23 @@ export function prorratearPropina(
   return out;
 }
 
+/**
+ * Cuántos **pesos** se le piden a Mercado Pago por un cobro (issue #286).
+ *
+ * Existe como función y no como una división suelta porque el error que
+ * arregla es invisible al leer: `amount_cents` es lo que falta cobrar y eso
+ * **ya incluye la propina** (`total = subtotal + tip + fee − discount`,
+ * `recomputeOrderTotals`), así que sumarle `tip_cents` la cobra dos veces. Una
+ * cuenta de $10.000 con $1.000 de propina generaba un link por **$12.000**.
+ *
+ * `tip_cents` no es un parámetro: no entra en la cuenta, y esa es toda la
+ * regla. Si algún día hace falta, que sea un cambio explícito y con un test que
+ * lo diga.
+ */
+export function importeDePreferenciaMp(amount_cents: number): number {
+  return amount_cents / 100;
+}
+
 export type ExpectedByAmountsResult =
   | { ok: true; expecteds: number[] }
   | { ok: false; error: string };
