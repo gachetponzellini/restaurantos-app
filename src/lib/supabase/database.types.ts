@@ -548,6 +548,7 @@ export type Database = {
           created_by: string | null;
           id: string;
           kind: string;
+          mozo_id: string | null;
           reason: string | null;
         };
         Insert: {
@@ -562,6 +563,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           kind: string;
+          mozo_id?: string | null;
           reason?: string | null;
         };
         Update: {
@@ -576,6 +578,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           kind?: string;
+          mozo_id?: string | null;
           reason?: string | null;
         };
         Relationships: [
@@ -610,6 +613,13 @@ export type Database = {
           {
             foreignKeyName: "caja_movimientos_created_by_fkey";
             columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "caja_movimientos_mozo_id_fkey";
+            columns: ["mozo_id"];
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
@@ -662,6 +672,7 @@ export type Database = {
           fiscal_printer_enabled: boolean;
           fiscal_printer_ip: string | null;
           fiscal_printer_port: number;
+          fondo_fijo_cents: number;
           id: string;
           is_active: boolean;
           is_administrative: boolean;
@@ -675,6 +686,7 @@ export type Database = {
           fiscal_printer_enabled?: boolean;
           fiscal_printer_ip?: string | null;
           fiscal_printer_port?: number;
+          fondo_fijo_cents?: number;
           id?: string;
           is_active?: boolean;
           is_administrative?: boolean;
@@ -688,6 +700,7 @@ export type Database = {
           fiscal_printer_enabled?: boolean;
           fiscal_printer_ip?: string | null;
           fiscal_printer_port?: number;
+          fondo_fijo_cents?: number;
           id?: string;
           is_active?: boolean;
           is_administrative?: boolean;

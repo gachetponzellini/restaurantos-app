@@ -104,6 +104,7 @@ function init(cuenta: CuentaState): IniciarCobroResult {
         sort_order: 0,
         is_default: true,
         is_administrative: false,
+  fondo_fijo_cents: 0,
       },
     ],
     methodConfigs: [],

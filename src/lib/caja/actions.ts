@@ -53,10 +53,13 @@ async function loadCajaForBusiness(
   is_active: boolean;
   is_default: boolean;
   is_administrative: boolean;
+  fondo_fijo_cents: number;
 } | null> {
   const { data } = await service
     .from("cajas")
-    .select("id, business_id, name, is_active, is_default, is_administrative")
+    .select(
+      "id, business_id, name, is_active, is_default, is_administrative, fondo_fijo_cents",
+    )
     .eq("id", cajaId)
     .maybeSingle();
   if (!data) return null;
@@ -67,6 +70,7 @@ async function loadCajaForBusiness(
     is_active: boolean;
     is_default: boolean;
     is_administrative: boolean;
+    fondo_fijo_cents: number | null;
   };
   if (row.business_id !== businessId) return null;
   return {
@@ -75,6 +79,7 @@ async function loadCajaForBusiness(
     is_active: row.is_active,
     is_default: row.is_default,
     is_administrative: row.is_administrative,
+    fondo_fijo_cents: row.fondo_fijo_cents ?? 0,
   };
 }
 
@@ -193,6 +198,62 @@ export async function renombrarCaja(
     id: (data as { id: string }).id,
     name: (data as { name: string }).name,
   });
+}
+
+/**
+ * Cuánto efectivo queda en el cajón al cerrar — spec 177 · Parte C.
+ *
+ * La spec 130 · D2 había descartado el fondo de cambio («una decisión menos en
+ * el peor momento del día»), y el argumento se cae cuando el fondo está
+ * configurado: el cierre lo aplica solo, no hay nada que decidir a la 1 de la
+ * mañana. Con la Parte B encima hay una razón más — si la propina se paga en
+ * efectivo del cajón, el cajón necesita tener con qué.
+ *
+ * Cambiarlo cambia lo que el arqueo espera de mañana en adelante; los cortes ya
+ * cerrados no se tocan porque el retiro quedó asentado como sangría con su
+ * monto (spec 130 · D3).
+ */
+export async function setFondoFijoCaja(
+  cajaId: string,
+  fondoFijoCents: number,
+  businessSlug: string,
+): Promise<ActionResult<{ id: string; fondo_fijo_cents: number }>> {
+  const business = await getBusiness(businessSlug);
+  if (!business) return actionError("Negocio no encontrado.");
+
+  const ctxResult = await requireMozoActionContext(business.id);
+  if (!ctxResult.ok) return ctxResult;
+  const ctx = ctxResult.data;
+
+  if (!canManageCajas(ctx.role)) {
+    return actionError("Solo admin puede configurar cajas.");
+  }
+  if (!Number.isInteger(fondoFijoCents) || fondoFijoCents < 0) {
+    return actionError("El fondo no puede ser negativo.");
+  }
+
+  const service = createSupabaseServiceClient() as unknown as GenericClient;
+
+  const caja = await loadCajaForBusiness(service, cajaId, business.id);
+  if (!caja) return actionError("Caja no encontrada.");
+  // La caja mayor no se arquea (spec 160), así que no tiene cierre que le deje
+  // un fondo: un número acá sería una config que no hace nada.
+  if (caja.is_administrative) {
+    return actionError("La caja administrativa no se arquea: no lleva fondo.");
+  }
+
+  const { error } = await service
+    .from("cajas")
+    .update({ fondo_fijo_cents: fondoFijoCents })
+    .eq("id", cajaId);
+
+  if (error) {
+    return actionError(`No se pudo guardar el fondo: ${error.message}`);
+  }
+
+  revalidatePath(`/${businessSlug}/admin/caja`);
+  revalidatePath(`/${businessSlug}/admin/operacion`);
+  return actionOk({ id: cajaId, fondo_fijo_cents: fondoFijoCents });
 }
 
 export async function setCajaActive(
@@ -454,6 +515,10 @@ export async function cerrarCaja(input: {
     expected_cash_cents,
     closing_cash_cents: input.closing_cash_cents,
     difference_cents,
+    // Spec 177 · Parte C — el fondo se congela con el corte. Si mañana lo
+    // cambian, un cierre viejo releído (spec 149) con el fondo de hoy diría que
+    // se retiró otra cosa.
+    fondo_fijo_cents: caja.fondo_fijo_cents,
     desglose_esperado: stats.desglose_esperado,
     // Los anulados no van al papel: no movieron la caja (spec 070) y en un
     // documento que se firma sumarían confusión, no información.

@@ -105,6 +105,12 @@ export function CerrarCajaModal({
       : Math.max(0, Math.round(Number(closing) * 100));
 
   const stats = data?.stats;
+  // Spec 177 · Parte C — el cierre retira lo CONTADO menos el fondo, y nunca
+  // menos de $0: una noche floja puede cerrar por debajo del fondo, y ahí no se
+  // retira nada en vez de inventar una sangría negativa. Es la misma cuenta que
+  // hace `cerrar_caja_tx`; acá es para que el encargado vea lo que va a sacar.
+  const fondo = data?.fondo_fijo_cents ?? 0;
+  const aRetirar = Math.max(0, (cents ?? 0) - fondo);
   const expected = stats?.expected_cash_cents ?? 0;
   const diff = cents === null ? 0 : cents - expected;
   const requiresNotes = cents !== null && diff !== 0;
@@ -451,9 +457,11 @@ export function CerrarCajaModal({
                 </div>
               )}
 
-              {/* D2 · Se retira todo o nada: sin retiro parcial y sin fondo de
-                  cambio configurable. Es una decisión menos a la 1 de la
-                  mañana; si mañana ponen cambio, eso entra como Ingreso. */}
+              {/* D2 de la spec 130 decía «se retira todo o nada, sin fondo de
+                  cambio configurable: es una decisión menos a la 1 de la
+                  mañana». La spec 177 · Parte C lo revierte sin perder ese
+                  argumento: el fondo está CONFIGURADO, así que acá no hay nada
+                  que decidir — el cierre lo aplica solo y el cartel lo dice. */}
               <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-zinc-200">
                 <input
                   type="checkbox"
@@ -463,15 +471,20 @@ export function CerrarCajaModal({
                 />
                 <span>
                   <span className="block text-sm font-semibold text-zinc-900">
-                    Retirar todo el efectivo
+                    {fondo > 0 ? "Retirar el efectivo" : "Retirar todo el efectivo"}
                     {cents !== null && cents > 0 && (
-                      <span className="tabular-nums"> — {formatCurrency(cents)}</span>
+                      <span className="tabular-nums">
+                        {" "}
+                        — {formatCurrency(aRetirar)}
+                      </span>
                     )}
                   </span>
                   <span className="mt-0.5 block text-xs text-zinc-600">
-                    {retirar
-                      ? "Se registra como sangría del cierre y la caja arranca en $0."
-                      : "La caja queda con lo contado — es el arqueo de mitad de turno."}
+                    {!retirar
+                      ? "La caja queda con lo contado — es el arqueo de mitad de turno."
+                      : fondo > 0
+                        ? `Se registra como sangría del cierre y quedan ${formatCurrency(Math.min(fondo, cents ?? 0))} de fondo para el próximo turno.`
+                        : "Se registra como sangría del cierre y la caja arranca en $0."}
                   </span>
                 </span>
               </label>

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import {
   crearCaja,
   renombrarCaja,
+  setFondoFijoCaja,
   setCajaActive,
   setCajaDefault,
 } from "@/lib/caja/actions";
@@ -240,7 +241,7 @@ export function CajasClient({ slug, timezone, cajas, puedeConfigurar }: Props) {
 
       {/* Modal: renombrar */}
       {editing && (
-        <RenombrarCajaModal
+        <EditarCajaModal
           open={editing !== null}
           caja={editing}
           slug={slug}
@@ -539,7 +540,7 @@ function CrearCajaModal({
   );
 }
 
-function RenombrarCajaModal({
+function EditarCajaModal({
   open,
   caja,
   slug,
@@ -554,20 +555,37 @@ function RenombrarCajaModal({
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(caja.name);
+  // Spec 177 · Parte C — en pesos para el que lo tipea, en centavos para todo
+  // lo demás. La caja mayor no se arquea, así que no lleva fondo (spec 160).
+  const [fondo, setFondo] = useState(String(caja.fondo_fijo_cents / 100));
+  const fondoCents = Math.max(0, Math.round(Number(fondo || 0) * 100));
 
   const submit = () => {
     const trimmed = name.trim();
-    if (trimmed === "" || trimmed === caja.name) {
+    if (trimmed === "") {
+      onOpenChange(false);
+      return;
+    }
+    if (trimmed === caja.name && fondoCents === caja.fondo_fijo_cents) {
       onOpenChange(false);
       return;
     }
     startTransition(async () => {
-      const r = await renombrarCaja(caja.id, trimmed, slug);
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
+      if (trimmed !== caja.name) {
+        const r = await renombrarCaja(caja.id, trimmed, slug);
+        if (!r.ok) {
+          toast.error(r.error);
+          return;
+        }
       }
-      toast.success("Caja renombrada");
+      if (fondoCents !== caja.fondo_fijo_cents) {
+        const f = await setFondoFijoCaja(caja.id, fondoCents, slug);
+        if (!f.ok) {
+          toast.error(f.error);
+          return;
+        }
+      }
+      toast.success("Caja guardada");
       onRenamed();
     });
   };
@@ -576,7 +594,7 @@ function RenombrarCajaModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Renombrar caja</DialogTitle>
+          <DialogTitle>Editar caja</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           <Label>Nombre</Label>
@@ -589,6 +607,27 @@ function RenombrarCajaModal({
             }}
           />
         </div>
+        {!caja.is_administrative && (
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="fondo-fijo">Fondo de caja</Label>
+            <Input
+              id="fondo-fijo"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              value={fondo}
+              onChange={(e) => setFondo(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+            />
+            <p className="text-xs text-zinc-500">
+              Lo que queda en el cajón al cerrar, para tener cambio al abrir.
+              El cierre retira lo contado menos este monto.{" "}
+              {fondoCents === 0 && "En $0 se retira todo, como hasta ahora."}
+            </p>
+          </div>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar

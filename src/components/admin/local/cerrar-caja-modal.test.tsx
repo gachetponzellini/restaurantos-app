@@ -86,6 +86,7 @@ function data(over: Partial<CierreCajaData> = {}): CierreCajaData {
         propinas_pagadas_cents: 0,
       },
     },
+    fondo_fijo_cents: 0,
     reparto: { en_cajon_cents: 312_400, mozos: [], descuadre_cents: 0 },
     cuentas_abiertas: [],
     pedidos_abiertos: [],
@@ -363,5 +364,39 @@ describe("CerrarCajaModal", () => {
 
     expect(await screen.findByText(/liberan 12 mesas/i)).toBeInTheDocument();
     expect(screen.getByText(/distribución de 4 mozos/i)).toBeInTheDocument();
+  });
+});
+
+// ── Spec 177 · Parte C — el fondo de caja ────────────────────────────────
+//
+// La spec 130 · D2 había descartado el fondo de cambio por «una decisión menos
+// a la 1 de la mañana». Con el fondo CONFIGURADO no hay decisión que tomar: el
+// cierre lo aplica solo y la casilla dice cuánto queda.
+describe("cerrar caja · el fondo que queda en el cajón (spec 177)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sin fondo, la casilla dice que se retira todo", async () => {
+    DATA = data();
+    abrir();
+    await screen.findByLabelText(/Efectivo contado/i);
+    contar("3124");
+
+    expect(screen.getByText(/Retirar todo el efectivo/i)).toBeInTheDocument();
+  });
+
+  it("con fondo, retira lo contado menos el fondo y lo explica", async () => {
+    DATA = data({ fondo_fijo_cents: 100_000 });
+    abrir();
+    await screen.findByLabelText(/Efectivo contado/i);
+    contar("3124");
+
+    // Contado $3.124, fondo $1.000 → se retiran $2.124 y quedan $1.000.
+    expect(screen.getAllByText(/\$ 2\.124/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/quedan .* de fondo para el próximo turno/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Retirar todo el efectivo/i)).toBeNull();
   });
 });

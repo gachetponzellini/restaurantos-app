@@ -353,8 +353,13 @@ export function ResumenDeCierre({
                   {formatCurrency(resumen.retiro_cents)}
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-zinc-600">
-                  Se sacó del cajón lo contado. La caja arrancó el turno
-                  siguiente en{" "}
+                  {/* Spec 177 · Parte C — con fondo configurado ya no se saca
+                      «lo contado»: se saca lo contado menos el fondo, y decir
+                      lo otro contradiría el número de al lado. */}
+                  {corte.closing_cash_cents - resumen.retiro_cents > 0
+                    ? "Se sacó del cajón lo contado, menos el fondo de caja."
+                    : "Se sacó del cajón lo contado."}{" "}
+                  La caja arrancó el turno siguiente en{" "}
                   <span className="font-semibold tabular-nums text-zinc-900">
                     {formatCurrency(
                       corte.closing_cash_cents - resumen.retiro_cents,

@@ -7,6 +7,12 @@ export type Caja = {
   /** Dónde caen los cobros sin cajero (pago online). Máx 1 por negocio. */
   is_default: boolean;
   /**
+   * Cuánto efectivo queda en el cajón al cerrar, para tener cambio —y con qué
+   * pagar propinas— al abrir (spec 177 · Parte C). 0 = se retira todo, que es
+   * el comportamiento que fijó la spec 130.
+   */
+  fondo_fijo_cents: number;
+  /**
    * Caja mayor (spec 160): **no se arquea y no cobra**. De acá salen los pagos a
    * proveedor, para que una orden de pago no descuadre el cajón del turno.
    * Máx 1 por negocio, y nunca puede ser la default.
@@ -234,6 +240,11 @@ export type CierreResumenSnapshot = {
   expected_cash_cents: number;
   closing_cash_cents: number;
   difference_cents: number;
+  /**
+   * El fondo que quedó en el cajón, congelado (spec 177 · Parte C). Ausente en
+   * los cortes anteriores a la spec.
+   */
+  fondo_fijo_cents?: number;
   desglose_esperado: CajaLiveStats["desglose_esperado"];
   /** Línea por línea, con su motivo — así lo imprime MaxiRest. */
   movimientos: {

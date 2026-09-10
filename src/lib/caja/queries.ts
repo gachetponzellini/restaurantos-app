@@ -67,7 +67,7 @@ export async function getCajasForBusiness(businessId: string): Promise<Caja[]> {
   const service = db();
   const { data } = await service
     .from("cajas")
-    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative")
+    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative, fondo_fijo_cents")
     .eq("business_id", businessId)
     .eq("is_active", true)
     .eq("is_administrative", false)
@@ -84,7 +84,7 @@ export async function getCajasParaLibro(businessId: string): Promise<Caja[]> {
   const service = db();
   const { data } = await service
     .from("cajas")
-    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative")
+    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative, fondo_fijo_cents")
     .eq("business_id", businessId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
@@ -154,7 +154,7 @@ export async function getCajaAdministrativa(
   const service = db();
   const { data } = await service
     .from("cajas")
-    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative")
+    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative, fondo_fijo_cents")
     .eq("business_id", businessId)
     .eq("is_administrative", true)
     .maybeSingle();
@@ -172,7 +172,7 @@ export async function getAllCajasForBusiness(
   const service = db();
   const { data } = await service
     .from("cajas")
-    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative")
+    .select("id, business_id, name, is_active, sort_order, is_default, is_administrative, fondo_fijo_cents")
     .eq("business_id", businessId)
     .eq("is_administrative", false)
     .order("is_active", { ascending: false })
@@ -1761,6 +1761,11 @@ export async function getPedidosAbiertosSinMesa(
 /** Todo lo que el modal de cierre necesita, resuelto en un solo viaje. */
 export type CierreCajaData = {
   stats: CajaLiveStats;
+  /**
+   * Lo que queda en el cajón al retirar (spec 177 · Parte C). El modal lo dice
+   * antes de confirmar: que quede plata adentro no puede ser una sorpresa.
+   */
+  fondo_fijo_cents: number;
   /** El esperado partido por dueño (D5). Sólo la principal reparte (D9). */
   reparto: RepartoEfectivo;
   /** Bloquean el cierre. Vacío en una caja que no barre el salón. */
@@ -1799,7 +1804,7 @@ export async function getCierreCajaData(
   const service = db();
   const { data: cajaRow } = await service
     .from("cajas")
-    .select("id, business_id, is_default, is_administrative")
+    .select("id, business_id, is_default, is_administrative, fondo_fijo_cents")
     .eq("id", cajaId)
     .maybeSingle();
   if (!cajaRow) return null;
@@ -1807,6 +1812,7 @@ export async function getCierreCajaData(
     business_id: string;
     is_default: boolean;
     is_administrative: boolean;
+    fondo_fijo_cents: number | null;
   };
   if (caja.business_id !== businessId) return null;
   // spec 160 · sin esto la pantalla arma un arqueo para una caja que no se
@@ -1821,6 +1827,7 @@ export async function getCierreCajaData(
   if (!caja.is_default) {
     return {
       stats,
+      fondo_fijo_cents: caja.fondo_fijo_cents ?? 0,
       reparto: repartirEfectivoEsperado({
         expected_cash_cents: stats.expected_cash_cents,
         mozos_sin_rendir: [],
@@ -1862,6 +1869,7 @@ export async function getCierreCajaData(
 
   return {
     stats,
+    fondo_fijo_cents: caja.fondo_fijo_cents ?? 0,
     reparto: repartirEfectivoEsperado({
       expected_cash_cents: stats.expected_cash_cents,
       mozos_sin_rendir: restanDeEsteCajon.map((p) => ({
