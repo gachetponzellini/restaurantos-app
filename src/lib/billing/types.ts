@@ -22,6 +22,8 @@ export type OrderSplit = {
   split_mode: SplitMode;
   split_index: number;
   expected_amount_cents: number;
+  /** Cuánto de `expected_amount_cents` es propina (spec 177 · Parte 0). */
+  tip_cents: number;
   paid_amount_cents: number;
   status: SplitStatus;
   label: string | null;

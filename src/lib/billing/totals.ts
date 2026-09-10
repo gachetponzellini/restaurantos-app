@@ -106,6 +106,54 @@ export function cashCharge(input: {
   return { chargeCents: tope, changeCents: input.amount_cents - tope };
 }
 
+/**
+ * Cuánta propina le toca a cada sub-cuenta — spec 177 · Parte 0.
+ *
+ * El bug que cierra: las dos pantallas de cobro le pasaban `orders.tip_cents`
+ * **entero** a cada tarjeta de split (`cobrar-desktop-client.tsx:342` →
+ * `:629`, y su espejo en la del mozo), así que cada pago registraba la propina
+ * completa de la orden. Una cuenta de $10.000 con $1.000 de propina dividida
+ * en 3 dejaba **$3.000 de propina** asentados: la venta bajaba $2.000 en el
+ * arqueo y el mozo aparecía con el triple en la liquidación.
+ *
+ * El reparto es **proporcional a lo que cada sub-cuenta cubre**, y eso vale
+ * para los cuatro modos de división por la misma razón: los tres primeros
+ * prorratean sobre el total (que ya trae la propina adentro), así que
+ * `expected_i / Σexpected` es exactamente la porción de propina que le tocó; y
+ * en «por monto» —donde los importes los tipea una persona— repartir en
+ * proporción a lo que cada uno pone es la regla que cualquiera esperaría.
+ *
+ * El último absorbe el residuo del redondeo, igual que `expectedBySplitItems`:
+ * la suma tiene que dar la propina de la orden, exacta, o el arqueo hereda la
+ * diferencia.
+ *
+ * Se guarda en `order_splits.tip_cents` al crear la división (migración 0099)
+ * y NO se re-deriva al cobrar: un excedente tomado como propina (Parte A) sube
+ * `orders.tip_cents`, y recalcular acá le esparciría esa propina a las
+ * sub-cuentas que todavía no pagaron.
+ */
+export function prorratearPropina(
+  tip_cents: number,
+  expecteds: number[],
+): number[] {
+  if (expecteds.length === 0) return [];
+  const total = expecteds.reduce((a, b) => a + b, 0);
+  const out: number[] = [];
+  let acum = 0;
+  for (let i = 0; i < expecteds.length; i++) {
+    if (i === expecteds.length - 1) {
+      out.push(tip_cents - acum);
+      break;
+    }
+    // Σexpected en cero: no hay proporción que calcular. Todo al último, que
+    // es el que absorbe — así la suma sigue cerrando en vez de dar NaN.
+    const parte = total === 0 ? 0 : Math.round((expecteds[i] * tip_cents) / total);
+    out.push(parte);
+    acum += parte;
+  }
+  return out;
+}
+
 export type ExpectedByAmountsResult =
   | { ok: true; expecteds: number[] }
   | { ok: false; error: string };

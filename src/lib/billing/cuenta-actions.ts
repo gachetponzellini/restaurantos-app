@@ -17,6 +17,7 @@ import {
   expectedBySplitItems,
   groupItemsBySeat,
   prorrateEqualSplits,
+  prorratearPropina,
   sumActiveItems,
 } from "./totals";
 import type { CuentaItem, OrderSplit, SplitMode } from "./types";
@@ -303,15 +304,25 @@ async function persistSplits(
   mode: SplitMode,
   expecteds: Array<{ split_index: number; expected_amount_cents: number; label?: string | null }>,
   itemsByIndex: Map<number, string[]> | null,
+  tipCents: number,
 ): Promise<OrderSplit[]> {
   await deleteSplitsAndItems(service, orderId);
 
-  const rowsToInsert = expecteds.map((e) => ({
+  // Spec 177 · Parte 0 — cuánta propina cubre cada sub-cuenta, congelada acá.
+  // Las pantallas de cobro leían `orders.tip_cents` entero por tarjeta, así que
+  // una cuenta dividida registraba la propina una vez por sub-cuenta.
+  const propinas = prorratearPropina(
+    tipCents,
+    expecteds.map((e) => e.expected_amount_cents),
+  );
+
+  const rowsToInsert = expecteds.map((e, i) => ({
     order_id: orderId,
     business_id: businessId,
     split_mode: mode,
     split_index: e.split_index,
     expected_amount_cents: e.expected_amount_cents,
+    tip_cents: propinas[i] ?? 0,
     paid_amount_cents: 0,
     status: "pending" as const,
     label: e.label ?? null,
@@ -321,7 +332,7 @@ async function persistSplits(
     .from("order_splits")
     .insert(rowsToInsert)
     .select(
-      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, paid_amount_cents, status, label",
+      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, tip_cents, paid_amount_cents, status, label",
     );
   if (error) throw new Error(error.message);
 
@@ -395,6 +406,7 @@ export async function dividirPorPersonas(
       "por_personas",
       expecteds,
       null,
+      order.tip_cents,
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });
@@ -468,6 +480,7 @@ export async function dividirPorItems(
       "por_items",
       expecteds,
       mappingMap,
+      order.tip_cents,
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });
@@ -548,6 +561,7 @@ export async function dividirPorComensal(
       "por_comensal",
       expectedsWithLabels,
       mapping,
+      order.tip_cents,
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });
@@ -614,6 +628,7 @@ export async function dividirPorMonto(
       "por_monto",
       expecteds,
       null,
+      order.tip_cents,
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });

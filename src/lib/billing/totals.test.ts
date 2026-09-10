@@ -7,6 +7,7 @@ import {
   isCashShortPayment,
   expectedBySplitItems,
   prorrateEqualSplits,
+  prorratearPropina,
   sumActiveItems,
 } from "./totals";
 import type { CuentaItem } from "./types";
@@ -286,5 +287,46 @@ describe("cashCharge (el vuelto no es plata del local)", () => {
       chargeCents: 9_000,
       changeCents: 0,
     });
+  });
+});
+
+// ── Spec 177 · Parte 0 — la propina de cada sub-cuenta ────────────────────
+//
+// El bug: las dos pantallas de cobro le pasaban `orders.tip_cents` ENTERO a
+// cada tarjeta de split, así que una cuenta dividida registraba la propina
+// tantas veces como sub-cuentas tuviera.
+describe("prorratearPropina (spec 177)", () => {
+  it("reparte proporcional a lo que cubre cada sub-cuenta", () => {
+    // Cuenta de $10.000 con $1.000 de propina, dividida 60/40.
+    expect(prorratearPropina(1000, [6600, 4400])).toEqual([600, 400]);
+  });
+
+  it("en partes iguales da partes iguales", () => {
+    expect(prorratearPropina(900, [3700, 3700, 3700])).toEqual([300, 300, 300]);
+  });
+
+  it("el residuo del redondeo va al último, y la suma cierra exacta", () => {
+    const partes = prorratearPropina(1000, [3334, 3333, 3333]);
+    expect(partes.reduce((a, b) => a + b, 0)).toBe(1000);
+    expect(partes[partes.length - 1]).toBe(1000 - partes[0] - partes[1]);
+  });
+
+  it("sin propina, nadie lleva propina", () => {
+    expect(prorratearPropina(0, [5000, 5000])).toEqual([0, 0]);
+  });
+
+  it("una sola sub-cuenta se lleva toda la propina", () => {
+    expect(prorratearPropina(1000, [11000])).toEqual([1000]);
+  });
+
+  it("dividido por monto (partes desparejas) sigue cerrando exacto", () => {
+    // «yo pongo $10.000» y el resto es la última: los expecteds no son
+    // proporcionales a nada, pero la suma tiene que dar la propina entera.
+    const partes = prorratearPropina(1500, [10000, 4500, 1000]);
+    expect(partes.reduce((a, b) => a + b, 0)).toBe(1500);
+  });
+
+  it("sub-cuentas en cero no rompen la división", () => {
+    expect(prorratearPropina(1000, [0, 0])).toEqual([0, 1000]);
   });
 });

@@ -139,6 +139,7 @@ export function CobrarDesktopClient({
           cuenta.order.id,
           cuenta.order.business_id,
           cuenta.totals.total_cents,
+          cuenta.order.tip_cents,
         ),
       ]
     : init.splits;
@@ -339,7 +340,6 @@ export function CobrarDesktopClient({
             slug={slug}
             isImplicit={init.hasImplicitSplit}
             methodConfigs={init.methodConfigs}
-            orderTipCents={cuenta.order.tip_cents}
             clientesParaFiar={clientesParaFiar}
             // El comprobante es de la ORDEN, no del split: vive en el padre
             // para que dividir la cuenta no lo reinicie.
@@ -428,6 +428,7 @@ function implicitSplit(
   orderId: string,
   businessId: string,
   totalCents: number,
+  tipCents: number,
 ): OrderSplit {
   return {
     id: "__implicit__",
@@ -436,6 +437,9 @@ function implicitSplit(
     split_mode: "por_personas",
     split_index: 0,
     expected_amount_cents: totalCents,
+    // Sin división, la sub-cuenta implícita ES la orden: se lleva toda la
+    // propina (spec 177 · Parte 0).
+    tip_cents: tipCents,
     paid_amount_cents: 0,
     status: "pending",
     label: null,
@@ -551,7 +555,6 @@ function CobrarSplitPanel({
   slug,
   isImplicit,
   methodConfigs,
-  orderTipCents,
   clientesParaFiar,
   comprobante,
   onComprobanteChange,
@@ -564,7 +567,6 @@ function CobrarSplitPanel({
   slug: string;
   isImplicit: boolean;
   methodConfigs: PaymentMethodConfig[];
-  orderTipCents: number;
   /** spec 141 — con quién se puede fiar; vacío ⇒ el método no se ofrece. */
   clientesParaFiar: {
     id: string;
@@ -624,9 +626,12 @@ function CobrarSplitPanel({
         // Arrancaba `editable` en 0, así que cobrar la misma mesa desde el
         // desktop del encargado guardaba `tip_cents = 0` aunque el cliente
         // hubiera pagado propina: **la propina del mozo dependía de quién
-        // apretaba el botón**. Es el mismo `mode: "fixed"` que usa la pantalla
-        // del mozo.
-        tip={{ mode: "fixed", cents: orderTipCents }}
+        // apretaba el botón**.
+        //
+        // spec 177 · Parte 0 — y es la propina de ESTA sub-cuenta, no la de la
+        // orden: pasando la de la orden, una cuenta dividida en 3 registraba
+        // la propina 3 veces.
+        tip={{ mode: "fixed", cents: split.tip_cents }}
         cuentaCorriente={
           clientesParaFiar.length > 0
             ? { slug, clientes: clientesParaFiar }

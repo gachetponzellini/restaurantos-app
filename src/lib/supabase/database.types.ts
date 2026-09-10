@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -266,10 +266,10 @@ export type Database = {
       businesses: {
         Row: {
           address: string | null;
+          afip_auto_emit: boolean;
           afip_cuit: string | null;
           afip_default_tipo: string | null;
           afip_enabled: boolean;
-          afip_auto_emit: boolean;
           afip_gateway_connected: boolean;
           afip_mode: string;
           afip_provider: string | null;
@@ -312,10 +312,10 @@ export type Database = {
         };
         Insert: {
           address?: string | null;
+          afip_auto_emit?: boolean;
           afip_cuit?: string | null;
           afip_default_tipo?: string | null;
           afip_enabled?: boolean;
-          afip_auto_emit?: boolean;
           afip_gateway_connected?: boolean;
           afip_mode?: string;
           afip_provider?: string | null;
@@ -358,10 +358,10 @@ export type Database = {
         };
         Update: {
           address?: string | null;
+          afip_auto_emit?: boolean;
           afip_cuit?: string | null;
           afip_default_tipo?: string | null;
           afip_enabled?: boolean;
-          afip_auto_emit?: boolean;
           afip_gateway_connected?: boolean;
           afip_mode?: string;
           afip_provider?: string | null;
@@ -480,6 +480,8 @@ export type Database = {
           encargado_id: string;
           expected_cash_cents: number;
           id: string;
+          numero: number | null;
+          resumen: Json | null;
         };
         Insert: {
           business_id: string;
@@ -492,6 +494,8 @@ export type Database = {
           encargado_id: string;
           expected_cash_cents: number;
           id?: string;
+          numero?: number | null;
+          resumen?: Json | null;
         };
         Update: {
           business_id?: string;
@@ -504,6 +508,8 @@ export type Database = {
           encargado_id?: string;
           expected_cash_cents?: number;
           id?: string;
+          numero?: number | null;
+          resumen?: Json | null;
         };
         Relationships: [
           {
@@ -658,6 +664,7 @@ export type Database = {
           fiscal_printer_port: number;
           id: string;
           is_active: boolean;
+          is_administrative: boolean;
           is_default: boolean;
           name: string;
           sort_order: number;
@@ -670,6 +677,7 @@ export type Database = {
           fiscal_printer_port?: number;
           id?: string;
           is_active?: boolean;
+          is_administrative?: boolean;
           is_default?: boolean;
           name: string;
           sort_order?: number;
@@ -682,6 +690,7 @@ export type Database = {
           fiscal_printer_port?: number;
           id?: string;
           is_active?: boolean;
+          is_administrative?: boolean;
           is_default?: boolean;
           name?: string;
           sort_order?: number;
@@ -1100,6 +1109,7 @@ export type Database = {
           id: string;
           ip: string | null;
           pin_masked: string | null;
+          reason: string;
         };
         Insert: {
           attempted_at?: string;
@@ -1107,6 +1117,7 @@ export type Database = {
           id?: string;
           ip?: string | null;
           pin_masked?: string | null;
+          reason?: string;
         };
         Update: {
           attempted_at?: string;
@@ -1114,6 +1125,7 @@ export type Database = {
           id?: string;
           ip?: string | null;
           pin_masked?: string | null;
+          reason?: string;
         };
         Relationships: [
           {
@@ -1313,50 +1325,6 @@ export type Database = {
           },
         ];
       };
-      customer_message_log: {
-        Row: {
-          business_id: string;
-          channel: string;
-          created_at: string;
-          event: string;
-          id: string;
-          reason: string | null;
-          ref_id: string | null;
-          sent_at: string | null;
-          status: string;
-        };
-        Insert: {
-          business_id: string;
-          channel: string;
-          created_at?: string;
-          event: string;
-          id?: string;
-          reason?: string | null;
-          ref_id?: string | null;
-          sent_at?: string | null;
-          status: string;
-        };
-        Update: {
-          business_id?: string;
-          channel?: string;
-          created_at?: string;
-          event?: string;
-          id?: string;
-          reason?: string | null;
-          ref_id?: string | null;
-          sent_at?: string | null;
-          status?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "customer_message_log_business_id_fkey";
-            columns: ["business_id"];
-            isOneToOne: false;
-            referencedRelation: "businesses";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       customer_credit_settlements: {
         Row: {
           amount_cents: number;
@@ -1412,10 +1380,68 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "customer_credit_settlements_caja_id_fkey";
+            columns: ["caja_id"];
+            isOneToOne: false;
+            referencedRelation: "cajas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "customer_credit_settlements_caja_movimiento_id_fkey";
+            columns: ["caja_movimiento_id"];
+            isOneToOne: false;
+            referencedRelation: "caja_movimientos";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "customer_credit_settlements_customer_id_fkey";
             columns: ["customer_id"];
             isOneToOne: false;
             referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      customer_message_log: {
+        Row: {
+          business_id: string;
+          channel: string;
+          created_at: string;
+          event: string;
+          id: string;
+          reason: string | null;
+          ref_id: string | null;
+          sent_at: string | null;
+          status: string;
+        };
+        Insert: {
+          business_id: string;
+          channel: string;
+          created_at?: string;
+          event: string;
+          id?: string;
+          reason?: string | null;
+          ref_id?: string | null;
+          sent_at?: string | null;
+          status: string;
+        };
+        Update: {
+          business_id?: string;
+          channel?: string;
+          created_at?: string;
+          event?: string;
+          id?: string;
+          reason?: string | null;
+          ref_id?: string | null;
+          sent_at?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "customer_message_log_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
             referencedColumns: ["id"];
           },
         ];
@@ -1679,6 +1705,44 @@ export type Database = {
           },
         ];
       };
+      expense_concepts: {
+        Row: {
+          business_id: string;
+          created_at: string;
+          id: string;
+          is_active: boolean;
+          name: string;
+          rubro: string;
+          updated_at: string;
+        };
+        Insert: {
+          business_id: string;
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name: string;
+          rubro: string;
+          updated_at?: string;
+        };
+        Update: {
+          business_id?: string;
+          created_at?: string;
+          id?: string;
+          is_active?: boolean;
+          name?: string;
+          rubro?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "expense_concepts_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       fiscal_entities: {
         Row: {
           business_id: string;
@@ -1809,31 +1873,37 @@ export type Database = {
           business_id: string;
           cost_cents_snapshot: number;
           created_at: string;
+          created_by: string | null;
           id: string;
           ingredient_id: string;
           kind: string;
           order_item_id: string | null;
           quantity: number;
+          reason: string | null;
         };
         Insert: {
           business_id: string;
           cost_cents_snapshot?: number;
           created_at?: string;
+          created_by?: string | null;
           id?: string;
           ingredient_id: string;
           kind?: string;
           order_item_id?: string | null;
           quantity: number;
+          reason?: string | null;
         };
         Update: {
           business_id?: string;
           cost_cents_snapshot?: number;
           created_at?: string;
+          created_by?: string | null;
           id?: string;
           ingredient_id?: string;
           kind?: string;
           order_item_id?: string | null;
           quantity?: number;
+          reason?: string | null;
         };
         Relationships: [
           {
@@ -1841,6 +1911,13 @@ export type Database = {
             columns: ["business_id"];
             isOneToOne: false;
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ingredient_consumptions_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
           {
@@ -2033,18 +2110,18 @@ export type Database = {
       };
       invoices: {
         Row: {
+          auto_emitted: boolean;
           business_id: string;
           cae: string | null;
           cae_vencimiento: string | null;
           cancelled_by: string | null;
           cancelled_reason: string | null;
           cancels_invoice_id: string | null;
-          auto_emitted: boolean;
           condicion_iva_receptor: number | null;
           created_at: string;
           cuit_receptor: string | null;
-          fiscal_entity_id: string | null;
           error_message: string | null;
+          fiscal_entity_id: string | null;
           id: string;
           idempotency_key: string | null;
           iva_cents: number;
@@ -2065,18 +2142,18 @@ export type Database = {
           total_cents: number;
         };
         Insert: {
+          auto_emitted?: boolean;
           business_id: string;
           cae?: string | null;
           cae_vencimiento?: string | null;
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           cancels_invoice_id?: string | null;
-          auto_emitted?: boolean;
           condicion_iva_receptor?: number | null;
           created_at?: string;
           cuit_receptor?: string | null;
-          fiscal_entity_id?: string | null;
           error_message?: string | null;
+          fiscal_entity_id?: string | null;
           id?: string;
           idempotency_key?: string | null;
           iva_cents: number;
@@ -2097,18 +2174,18 @@ export type Database = {
           total_cents: number;
         };
         Update: {
+          auto_emitted?: boolean;
           business_id?: string;
           cae?: string | null;
           cae_vencimiento?: string | null;
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           cancels_invoice_id?: string | null;
-          auto_emitted?: boolean;
           condicion_iva_receptor?: number | null;
           created_at?: string;
           cuit_receptor?: string | null;
-          fiscal_entity_id?: string | null;
           error_message?: string | null;
+          fiscal_entity_id?: string | null;
           id?: string;
           idempotency_key?: string | null;
           iva_cents?: number;
@@ -2144,6 +2221,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "invoices_fiscal_entity_id_fkey";
+            columns: ["fiscal_entity_id"];
+            isOneToOne: false;
+            referencedRelation: "fiscal_entities";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "invoices_order_id_fkey";
             columns: ["order_id"];
             isOneToOne: false;
@@ -2155,13 +2239,6 @@ export type Database = {
             columns: ["payment_id"];
             isOneToOne: false;
             referencedRelation: "payments";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "invoices_fiscal_entity_id_fkey";
-            columns: ["fiscal_entity_id"];
-            isOneToOne: false;
-            referencedRelation: "fiscal_entities";
             referencedColumns: ["id"];
           },
         ];
@@ -2206,11 +2283,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "modifier_groups_product_id_fkey";
-            columns: ["product_id"];
+            foreignKeyName: "modifier_groups_product_business_fkey";
+            columns: ["product_id", "business_id"];
             isOneToOne: false;
             referencedRelation: "products";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "business_id"];
           },
         ];
       };
@@ -2610,6 +2687,7 @@ export type Database = {
           split_index: number;
           split_mode: string;
           status: string;
+          tip_cents: number;
         };
         Insert: {
           business_id: string;
@@ -2622,6 +2700,7 @@ export type Database = {
           split_index: number;
           split_mode: string;
           status?: string;
+          tip_cents?: number;
         };
         Update: {
           business_id?: string;
@@ -2634,6 +2713,7 @@ export type Database = {
           split_index?: number;
           split_mode?: string;
           status?: string;
+          tip_cents?: number;
         };
         Relationships: [
           {
@@ -2703,6 +2783,7 @@ export type Database = {
           cancelled_by: string | null;
           cancelled_reason: string | null;
           closed_at: string | null;
+          comprobante_elegido: Json | null;
           created_at: string;
           customer_email: string | null;
           customer_id: string | null;
@@ -2748,6 +2829,7 @@ export type Database = {
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           closed_at?: string | null;
+          comprobante_elegido?: Json | null;
           created_at?: string;
           customer_email?: string | null;
           customer_id?: string | null;
@@ -2793,6 +2875,7 @@ export type Database = {
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           closed_at?: string | null;
+          comprobante_elegido?: Json | null;
           created_at?: string;
           customer_email?: string | null;
           customer_id?: string | null;
@@ -3008,6 +3091,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "payments_credit_customer_id_fkey";
+            columns: ["credit_customer_id"];
+            isOneToOne: false;
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "payments_operated_by_fkey";
             columns: ["operated_by"];
             isOneToOne: false;
@@ -3151,54 +3241,54 @@ export type Database = {
       print_jobs: {
         Row: {
           business_id: string;
+          corte_id: string | null;
           emitted_at: string;
           id: string;
           invoice_id: string | null;
           kind: string;
+          last_error: string | null;
           order_id: string | null;
           print_failed_at: string | null;
           printed_at: string | null;
           reprint_requested_at: string | null;
           requested_by: string | null;
           status: string;
-          corte_id: string | null;
-          last_error: string | null;
           test_label: string | null;
           test_printer_ip: string | null;
           test_printer_port: number | null;
         };
         Insert: {
           business_id: string;
+          corte_id?: string | null;
           emitted_at?: string;
           id?: string;
           invoice_id?: string | null;
           kind: string;
+          last_error?: string | null;
           order_id?: string | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
           reprint_requested_at?: string | null;
           requested_by?: string | null;
           status?: string;
-          corte_id?: string | null;
-          last_error?: string | null;
           test_label?: string | null;
           test_printer_ip?: string | null;
           test_printer_port?: number | null;
         };
         Update: {
           business_id?: string;
+          corte_id?: string | null;
           emitted_at?: string;
           id?: string;
           invoice_id?: string | null;
           kind?: string;
+          last_error?: string | null;
           order_id?: string | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
           reprint_requested_at?: string | null;
           requested_by?: string | null;
           status?: string;
-          corte_id?: string | null;
-          last_error?: string | null;
           test_label?: string | null;
           test_printer_ip?: string | null;
           test_printer_port?: number | null;
@@ -3209,6 +3299,13 @@ export type Database = {
             columns: ["business_id"];
             isOneToOne: false;
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "print_jobs_corte_id_fkey";
+            columns: ["corte_id"];
+            isOneToOne: false;
+            referencedRelation: "caja_cortes";
             referencedColumns: ["id"];
           },
           {
@@ -3230,6 +3327,51 @@ export type Database = {
             columns: ["requested_by"];
             isOneToOne: false;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      product_price_log: {
+        Row: {
+          business_id: string;
+          id: string;
+          new_price_cents: number;
+          old_price_cents: number;
+          product_id: string;
+          recorded_at: string;
+          recorded_by: string | null;
+        };
+        Insert: {
+          business_id: string;
+          id?: string;
+          new_price_cents: number;
+          old_price_cents: number;
+          product_id: string;
+          recorded_at?: string;
+          recorded_by?: string | null;
+        };
+        Update: {
+          business_id?: string;
+          id?: string;
+          new_price_cents?: number;
+          old_price_cents?: number;
+          product_id?: string;
+          recorded_at?: string;
+          recorded_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "product_price_log_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_price_log_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
             referencedColumns: ["id"];
           },
         ];
@@ -3751,6 +3893,7 @@ export type Database = {
           min_qty: number;
           product_id: string;
           unit: string;
+          unit_cost_cents: number;
           updated_at: string;
         };
         Insert: {
@@ -3761,6 +3904,7 @@ export type Database = {
           min_qty?: number;
           product_id: string;
           unit?: string;
+          unit_cost_cents?: number;
           updated_at?: string;
         };
         Update: {
@@ -3771,6 +3915,7 @@ export type Database = {
           min_qty?: number;
           product_id?: string;
           unit?: string;
+          unit_cost_cents?: number;
           updated_at?: string;
         };
         Relationships: [
@@ -3793,6 +3938,7 @@ export type Database = {
       stock_movimientos: {
         Row: {
           business_id: string;
+          cost_cents_snapshot: number | null;
           created_at: string;
           created_by: string | null;
           id: string;
@@ -3804,6 +3950,7 @@ export type Database = {
         };
         Insert: {
           business_id: string;
+          cost_cents_snapshot?: number | null;
           created_at?: string;
           created_by?: string | null;
           id?: string;
@@ -3815,6 +3962,7 @@ export type Database = {
         };
         Update: {
           business_id?: string;
+          cost_cents_snapshot?: number | null;
           created_at?: string;
           created_by?: string | null;
           id?: string;
@@ -3899,6 +4047,80 @@ export type Database = {
           },
         ];
       };
+      supplier_ingredient_aliases: {
+        Row: {
+          alias_norm: string;
+          alias_raw: string;
+          business_id: string;
+          confirmations: number;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          ingredient_id: string;
+          last_confirmed_at: string;
+          origen: string;
+          presentation_id: string | null;
+          supplier_id: string;
+        };
+        Insert: {
+          alias_norm: string;
+          alias_raw: string;
+          business_id: string;
+          confirmations?: number;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          ingredient_id: string;
+          last_confirmed_at?: string;
+          origen: string;
+          presentation_id?: string | null;
+          supplier_id: string;
+        };
+        Update: {
+          alias_norm?: string;
+          alias_raw?: string;
+          business_id?: string;
+          confirmations?: number;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          ingredient_id?: string;
+          last_confirmed_at?: string;
+          origen?: string;
+          presentation_id?: string | null;
+          supplier_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_ingredient_aliases_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_ingredient_aliases_ingredient_id_fkey";
+            columns: ["ingredient_id"];
+            isOneToOne: false;
+            referencedRelation: "ingredients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_ingredient_aliases_presentation_id_fkey";
+            columns: ["presentation_id"];
+            isOneToOne: false;
+            referencedRelation: "ingredient_presentations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_ingredient_aliases_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       supplier_ingredients: {
         Row: {
           business_id: string;
@@ -3942,40 +4164,135 @@ export type Database = {
           },
         ];
       };
-      supplier_invoices: {
+      supplier_invoice_items: {
         Row: {
           business_id: string;
           created_at: string;
           created_by: string | null;
           id: string;
-          invoice_date: string;
-          invoice_number: string | null;
-          notes: string | null;
-          photo_url: string | null;
-          supplier_id: string;
-          total_cents: number;
+          ingredient_id: string;
+          invoice_id: string;
+          match_source: string | null;
+          presentation_id: string | null;
+          quantity_base: number;
+          source_text: string | null;
+          unit_cost_cents: number;
+          units: number;
         };
         Insert: {
           business_id: string;
           created_at?: string;
           created_by?: string | null;
           id?: string;
-          invoice_date: string;
-          invoice_number?: string | null;
-          notes?: string | null;
-          photo_url?: string | null;
-          supplier_id: string;
-          total_cents: number;
+          ingredient_id: string;
+          invoice_id: string;
+          match_source?: string | null;
+          presentation_id?: string | null;
+          quantity_base: number;
+          source_text?: string | null;
+          unit_cost_cents: number;
+          units: number;
         };
         Update: {
           business_id?: string;
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          ingredient_id?: string;
+          invoice_id?: string;
+          match_source?: string | null;
+          presentation_id?: string | null;
+          quantity_base?: number;
+          source_text?: string | null;
+          unit_cost_cents?: number;
+          units?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_items_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_invoice_items_ingredient_id_fkey";
+            columns: ["ingredient_id"];
+            isOneToOne: false;
+            referencedRelation: "ingredients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_invoice_items_invoice_id_fkey";
+            columns: ["invoice_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_invoices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_invoice_items_presentation_id_fkey";
+            columns: ["presentation_id"];
+            isOneToOne: false;
+            referencedRelation: "ingredient_presentations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      supplier_invoices: {
+        Row: {
+          business_id: string;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancelled_reason: string | null;
+          created_at: string;
+          created_by: string | null;
+          document_type: string;
+          due_date: string | null;
+          expense_concept_id: string | null;
+          id: string;
+          invoice_date: string;
+          invoice_number: string | null;
+          notes: string | null;
+          photo_url: string | null;
+          photo_urls: string[];
+          supplier_id: string;
+          total_cents: number;
+        };
+        Insert: {
+          business_id: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          document_type?: string;
+          due_date?: string | null;
+          expense_concept_id?: string | null;
+          id?: string;
+          invoice_date: string;
+          invoice_number?: string | null;
+          notes?: string | null;
+          photo_url?: string | null;
+          photo_urls?: string[];
+          supplier_id: string;
+          total_cents: number;
+        };
+        Update: {
+          business_id?: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          document_type?: string;
+          due_date?: string | null;
+          expense_concept_id?: string | null;
+          id?: string;
           invoice_date?: string;
           invoice_number?: string | null;
           notes?: string | null;
           photo_url?: string | null;
+          photo_urls?: string[];
           supplier_id?: string;
           total_cents?: number;
         };
@@ -3988,7 +4305,146 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "supplier_invoices_expense_concept_id_fkey";
+            columns: ["expense_concept_id"];
+            isOneToOne: false;
+            referencedRelation: "expense_concepts";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "supplier_invoices_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      supplier_payment_allocations: {
+        Row: {
+          amount_cents: number;
+          business_id: string;
+          created_at: string;
+          id: string;
+          invoice_id: string;
+          payment_id: string;
+        };
+        Insert: {
+          amount_cents: number;
+          business_id: string;
+          created_at?: string;
+          id?: string;
+          invoice_id: string;
+          payment_id: string;
+        };
+        Update: {
+          amount_cents?: number;
+          business_id?: string;
+          created_at?: string;
+          id?: string;
+          invoice_id?: string;
+          payment_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payment_allocations_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payment_allocations_invoice_id_fkey";
+            columns: ["invoice_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_invoices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payment_allocations_payment_id_fkey";
+            columns: ["payment_id"];
+            isOneToOne: false;
+            referencedRelation: "supplier_payments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      supplier_payments: {
+        Row: {
+          amount_cents: number;
+          business_id: string;
+          caja_id: string | null;
+          caja_movimiento_id: string | null;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancelled_reason: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          method: string;
+          notes: string | null;
+          numero: number | null;
+          paid_at: string;
+          supplier_id: string;
+        };
+        Insert: {
+          amount_cents: number;
+          business_id: string;
+          caja_id?: string | null;
+          caja_movimiento_id?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          method: string;
+          notes?: string | null;
+          numero?: number | null;
+          paid_at?: string;
+          supplier_id: string;
+        };
+        Update: {
+          amount_cents?: number;
+          business_id?: string;
+          caja_id?: string | null;
+          caja_movimiento_id?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          method?: string;
+          notes?: string | null;
+          numero?: number | null;
+          paid_at?: string;
+          supplier_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payments_caja_id_fkey";
+            columns: ["caja_id"];
+            isOneToOne: false;
+            referencedRelation: "cajas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payments_caja_movimiento_id_fkey";
+            columns: ["caja_movimiento_id"];
+            isOneToOne: false;
+            referencedRelation: "caja_movimientos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey";
             columns: ["supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
@@ -4002,11 +4458,13 @@ export type Database = {
           contact: string | null;
           created_at: string;
           cuit: string | null;
+          default_expense_concept_id: string | null;
           email: string | null;
           id: string;
           is_active: boolean;
           name: string;
           notes: string | null;
+          payment_terms_days: number;
           phone: string | null;
           updated_at: string;
         };
@@ -4015,11 +4473,13 @@ export type Database = {
           contact?: string | null;
           created_at?: string;
           cuit?: string | null;
+          default_expense_concept_id?: string | null;
           email?: string | null;
           id?: string;
           is_active?: boolean;
           name: string;
           notes?: string | null;
+          payment_terms_days?: number;
           phone?: string | null;
           updated_at?: string;
         };
@@ -4028,11 +4488,13 @@ export type Database = {
           contact?: string | null;
           created_at?: string;
           cuit?: string | null;
+          default_expense_concept_id?: string | null;
           email?: string | null;
           id?: string;
           is_active?: boolean;
           name?: string;
           notes?: string | null;
+          payment_terms_days?: number;
           phone?: string | null;
           updated_at?: string;
         };
@@ -4042,6 +4504,13 @@ export type Database = {
             columns: ["business_id"];
             isOneToOne: false;
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "suppliers_default_expense_concept_id_fkey";
+            columns: ["default_expense_concept_id"];
+            isOneToOne: false;
+            referencedRelation: "expense_concepts";
             referencedColumns: ["id"];
           },
         ];
@@ -4379,9 +4848,30 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      adjust_ingredient_stock: {
+        Args: {
+          p_business_id: string;
+          p_cost_cents: number;
+          p_created_by: string;
+          p_delta: number;
+          p_ingredient_id: string;
+          p_kind: string;
+          p_reason: string;
+        };
+        Returns: number;
+      };
       adjust_stock_item: {
         Args: { p_delta: number; p_stock_item_id: string };
         Returns: number;
+      };
+      anular_comprobante_tx: {
+        Args: {
+          p_business_id: string;
+          p_cancelled_by: string;
+          p_invoice_id: string;
+          p_reason: string;
+        };
+        Returns: undefined;
       };
       anular_pago_tx: {
         Args: {
@@ -4393,6 +4883,27 @@ export type Database = {
         Returns: {
           fully_paid: boolean;
           payment: Json;
+        }[];
+      };
+      cerrar_caja_tx: {
+        Args: {
+          p_barrer_salon: boolean;
+          p_business_id: string;
+          p_caja_id: string;
+          p_closing_cash_cents: number;
+          p_closing_notes: string;
+          p_denomination_count: Json;
+          p_encargado_id: string;
+          p_expected_cash_cents: number;
+          p_resumen?: Json;
+          p_retirar: boolean;
+        };
+        Returns: {
+          corte: Json;
+          mesas_liberadas: number;
+          mozos_limpiados: number;
+          print_job_id: string;
+          retiro_id: string;
         }[];
       };
       corregir_movimiento_tx: {
@@ -4423,6 +4934,10 @@ export type Database = {
           payment: Json;
         }[];
       };
+      editar_comprobante_tx: {
+        Args: { p_business_id: string; p_campos: Json; p_invoice_id: string };
+        Returns: undefined;
+      };
       fn_explode_ingredient: {
         Args: { p_ingredient_id: string; p_quantity: number };
         Returns: {
@@ -4450,8 +4965,45 @@ export type Database = {
       is_platform_admin: { Args: never; Returns: boolean };
       march_due_scheduled_orders: { Args: never; Returns: undefined };
       mark_overdue_reservations_no_show: { Args: never; Returns: number };
+      normalizar_nombre_proveedor: { Args: { p: string }; Returns: string };
+      normalizar_texto_insumo: { Args: { p: string }; Returns: string };
       operating_day: { Args: { ts: string }; Returns: string };
+      proponer_insumos_para_lineas: {
+        Args: { p_business_id: string; p_lineas: Json; p_supplier_id: string };
+        Returns: Json;
+      };
+      proponer_proveedor_para_cabecera: {
+        Args: { p_business_id: string; p_cuit: string; p_nombre: string };
+        Returns: Json;
+      };
       reconcile_pending_invoices: { Args: never; Returns: undefined };
+      registrar_items_comprobante_tx: {
+        Args: {
+          p_business_id: string;
+          p_created_by: string;
+          p_invoice_id: string;
+          p_items: Json;
+        };
+        Returns: number;
+      };
+      registrar_pago_proveedor_tx: {
+        Args: {
+          p_amount_cents: number;
+          p_business_id: string;
+          p_caja_id: string;
+          p_caja_reason: string;
+          p_created_by: string;
+          p_imputaciones?: Json;
+          p_method: string;
+          p_notes: string;
+          p_paid_at: string;
+          p_supplier_id: string;
+        };
+        Returns: {
+          caja_movimiento_id: string;
+          payment_id: string;
+        }[];
+      };
       registrar_pago_tx: {
         Args: {
           p_adjustment_cents: number;
@@ -4461,6 +5013,7 @@ export type Database = {
           p_business_id: string;
           p_caja_id: string;
           p_card_brand: string;
+          p_credit_customer_id?: string;
           p_last_four: string;
           p_method: string;
           p_notes: string;
@@ -4476,6 +5029,28 @@ export type Database = {
           payment: Json;
           split_done: boolean;
         }[];
+      };
+      revertir_items_comprobante_tx: {
+        Args: { p_business_id: string; p_invoice_id: string };
+        Returns: number;
+      };
+      saldo_caja_administrativa: {
+        Args: { p_business_id: string };
+        Returns: {
+          caja_id: string;
+          caja_name: string;
+          movimientos: number;
+          saldo_cents: number;
+          ultimo_movimiento: string;
+        }[];
+      };
+      seed_caja_administrativa: {
+        Args: { p_business_id: string };
+        Returns: undefined;
+      };
+      seed_expense_concepts: {
+        Args: { p_business_id: string };
+        Returns: undefined;
       };
       send_due_reservation_reminders: { Args: never; Returns: undefined };
       send_due_shift_summaries: { Args: never; Returns: undefined };

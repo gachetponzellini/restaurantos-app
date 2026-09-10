@@ -107,7 +107,7 @@ async function loadSplit(
   const { data } = await service
     .from("order_splits")
     .select(
-      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, paid_amount_cents, status, label",
+      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, tip_cents, paid_amount_cents, status, label",
     )
     .eq("id", splitId)
     .maybeSingle();
@@ -448,7 +448,7 @@ export async function iniciarCobro(
   const { data: splitsData } = await service
     .from("order_splits")
     .select(
-      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, paid_amount_cents, status, label",
+      "id, order_id, business_id, split_mode, split_index, expected_amount_cents, tip_cents, paid_amount_cents, status, label",
     )
     .eq("order_id", orderId)
     .order("split_index", { ascending: true });

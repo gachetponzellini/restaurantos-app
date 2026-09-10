@@ -63,6 +63,7 @@ function cuentaCobrada(
         split_mode: "por_personas",
         split_index: 0,
         expected_amount_cents: TOTAL,
+        tip_cents: 0,
         paid_amount_cents: TOTAL,
         status: "paid",
         label: null,

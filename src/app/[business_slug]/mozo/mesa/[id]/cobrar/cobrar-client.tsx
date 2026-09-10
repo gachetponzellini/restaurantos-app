@@ -95,6 +95,7 @@ export function CobrarClient({
               cuenta.order.id,
               cuenta.order.business_id,
               cuenta.totals.total_cents,
+              cuenta.order.tip_cents,
             ),
           ]
         : init.splits,
@@ -315,7 +316,6 @@ export function CobrarClient({
           slug={slug}
           isImplicit={init.hasImplicitSplit}
           methodConfigs={init.methodConfigs}
-          orderTipCents={cuenta.order.tip_cents}
           comprobante={comprobante}
           onComprobanteChange={setComprobante}
           onClose={() => setActiveSplitId(null)}
@@ -347,6 +347,7 @@ function implicitSplit(
   orderId: string,
   businessId: string,
   totalCents: number,
+  tipCents: number,
 ): OrderSplit {
   return {
     id: "__implicit__",
@@ -355,6 +356,9 @@ function implicitSplit(
     split_mode: "por_personas",
     split_index: 0,
     expected_amount_cents: totalCents,
+    // Sin división, la sub-cuenta implícita ES la orden: se lleva toda la
+    // propina (spec 177 · Parte 0).
+    tip_cents: tipCents,
     paid_amount_cents: 0,
     status: "pending",
     label: null,
@@ -482,7 +486,6 @@ function CobrarSplitSheet({
   slug,
   isImplicit,
   methodConfigs,
-  orderTipCents,
   comprobante,
   onComprobanteChange,
   onClose,
@@ -494,7 +497,6 @@ function CobrarSplitSheet({
   slug: string;
   isImplicit: boolean;
   methodConfigs: PaymentMethodConfig[];
-  orderTipCents: number;
   /** spec 156 · D1 — qué comprobante sale, elegido acá y no después. */
   comprobante: ComprobanteState;
   onComprobanteChange: (next: ComprobanteState) => void;
@@ -523,13 +525,13 @@ function CobrarSplitSheet({
         </SheetHeader>
 
         <div className="flex-1 space-y-4 px-4 pb-6">
-          {orderTipCents > 0 && (
+          {split.tip_cents > 0 && (
             <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2.5 ring-1 ring-emerald-200/70">
               <span className="text-xs font-medium text-emerald-800">
                 Propina incluida
               </span>
               <span className="text-sm font-bold tabular-nums text-emerald-700">
-                {formatCurrency(orderTipCents)}
+                {formatCurrency(split.tip_cents)}
               </span>
             </div>
           )}
@@ -552,7 +554,7 @@ function CobrarSplitSheet({
             size="touch"
             // La propina se carga en el paso Cuenta y viaja con la orden: acá
             // no se edita, sólo se muestra (hallazgo T002-2).
-            tip={{ mode: "fixed", cents: orderTipCents }}
+            tip={{ mode: "fixed", cents: split.tip_cents }}
             onSubmit={(input) => {
               // Tildó Factura A sin CUIT completo: se frena acá, no después de
               // cobrar. Emitir una B que no se pidió obliga a una nota de
