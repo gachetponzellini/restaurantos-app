@@ -69,6 +69,11 @@ export type ClockEntry = {
   clockIn: string;
   clockOut: string | null;
   durationMinutes: number | null;
+  /** Spec 179: anulada. Sólo la trae `getClockHistory`, para mostrarla tachada. */
+  cancelledAt?: string | null;
+  cancelledReason?: string | null;
+  /** Spec 179: la cargó a mano un encargado (no fichó con el PIN). */
+  manual?: boolean;
 };
 
 export async function getClockHistory(
@@ -84,9 +89,14 @@ export async function getClockHistory(
   const service = db();
   const timezone = opts?.timezone ?? TZ_AR;
 
+  // Spec 179 · D6 — es la única lectura que trae las anuladas, y las trae
+  // marcadas: el detalle del día las muestra tachadas, como el libro de caja.
+  // Todas las demás (sumas de horas, «quién está») las filtran.
   let query = service
     .from("clock_entries")
-    .select("id, user_id, clock_in, clock_out, duration_minutes")
+    .select(
+      "id, user_id, clock_in, clock_out, duration_minutes, cancelled_at, cancelled_reason, created_by",
+    )
     .eq("business_id", businessId)
     .order("clock_in", { ascending: false })
     .limit(opts?.limit ?? 100);
@@ -119,6 +129,9 @@ export async function getClockHistory(
       clockIn: e.clock_in,
       clockOut: e.clock_out,
       durationMinutes: e.duration_minutes,
+      cancelledAt: e.cancelled_at,
+      cancelledReason: e.cancelled_reason,
+      manual: e.created_by !== null,
     };
   });
 }
@@ -151,6 +164,8 @@ export async function getTodaySummary(
     .from("clock_entries")
     .select("id, user_id, clock_in, clock_out, duration_minutes")
     .eq("business_id", businessId)
+    // Spec 179 · D6 — lo anulado no cuenta.
+    .is("cancelled_at", null)
     .gte("clock_in", dayStart.toISOString())
     .order("clock_in", { ascending: true });
 
@@ -253,6 +268,8 @@ export async function getMonthlyOverview(
     .from("clock_entries")
     .select("user_id, clock_in, clock_out, duration_minutes")
     .eq("business_id", businessId)
+    // Spec 179 · D6 — lo anulado no suma horas.
+    .is("cancelled_at", null)
     .gte("clock_in", inicioMes.toISOString())
     .lt("clock_in", finMes.toISOString())
     .order("clock_in", { ascending: true });
@@ -390,6 +407,8 @@ export async function getWeeklySummary(
     .from("clock_entries")
     .select("user_id, clock_in, duration_minutes")
     .eq("business_id", businessId)
+    // Spec 179 · D6 — lo anulado no suma horas.
+    .is("cancelled_at", null)
     .gte("clock_in", weekStart.toISOString())
     .lt("clock_in", weekEnd.toISOString())
     .not("clock_out", "is", null);

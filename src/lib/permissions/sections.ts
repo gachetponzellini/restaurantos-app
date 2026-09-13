@@ -194,9 +194,13 @@ const MATRIX: Record<AdminSection, Record<BusinessRole, SectionAccess>> = {
   },
   // RRHH: admin-only (decisión 2026-06-15, confirmada por Juan). El encargado ya
   // no gestiona fichajes/equipo desde el panel admin.
+  // Spec 179 · D4 — la encargada corrige asistencias, así que las ve. `limited`
+  // = la pestaña Asistencia; Equipo (PINs, roles, altas) sigue admin-only. Es
+  // la misma partición que Operación tiene para la terminal: lo del piso sí,
+  // las llaves no. Revierte en parte el «admin-only» del 2026-06-15.
   rrhh: {
     admin: "full",
-    encargado: "none",
+    encargado: "limited",
     mozo: "none",
     terminal: "none",
     personal: "none",

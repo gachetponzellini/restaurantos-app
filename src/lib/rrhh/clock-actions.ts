@@ -102,12 +102,16 @@ export async function clockPunch(
 
   if (!member) return actionError("PIN no reconocido.");
 
+  // Spec 179 — una anulada no es una abierta, y el único parcial de la 0104
+  // garantiza que acá haya a lo sumo una: el `maybeSingle` ya no puede
+  // reventar por datos.
   const { data: openEntry } = await service
     .from("clock_entries")
     .select("id, clock_in")
     .eq("business_id", business.id)
     .eq("user_id", member.user_id)
     .is("clock_out", null)
+    .is("cancelled_at", null)
     .maybeSingle();
 
   if (!openEntry) {
@@ -168,6 +172,7 @@ export async function getCurrentPresent(
     .select("user_id, clock_in")
     .eq("business_id", business.id)
     .is("clock_out", null)
+    .is("cancelled_at", null)
     .order("clock_in", { ascending: true });
 
   if (!entries || entries.length === 0) return [];

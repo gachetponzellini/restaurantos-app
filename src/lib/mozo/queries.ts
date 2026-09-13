@@ -132,6 +132,8 @@ export async function getMozoAttendance(
     .select("clock_in, clock_out, duration_minutes")
     .eq("business_id", businessId)
     .eq("user_id", userId)
+    // Spec 179 · D6 — lo anulado no suma horas.
+    .is("cancelled_at", null)
     .gte("clock_in", monthStart.toISOString())
     .order("clock_in", { ascending: true });
 

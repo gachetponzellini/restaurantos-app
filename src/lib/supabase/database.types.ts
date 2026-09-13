@@ -1115,6 +1115,64 @@ export type Database = {
           },
         ];
       };
+      clock_audit_log: {
+        Row: {
+          business_id: string;
+          by_user_id: string | null;
+          created_at: string;
+          entry_id: string;
+          field: string;
+          from_value: string | null;
+          id: string;
+          reason: string;
+          to_value: string | null;
+        };
+        Insert: {
+          business_id: string;
+          by_user_id?: string | null;
+          created_at?: string;
+          entry_id: string;
+          field: string;
+          from_value?: string | null;
+          id?: string;
+          reason: string;
+          to_value?: string | null;
+        };
+        Update: {
+          business_id?: string;
+          by_user_id?: string | null;
+          created_at?: string;
+          entry_id?: string;
+          field?: string;
+          from_value?: string | null;
+          id?: string;
+          reason?: string;
+          to_value?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clock_audit_log_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clock_audit_log_by_user_id_fkey";
+            columns: ["by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clock_audit_log_entry_id_fkey";
+            columns: ["entry_id"];
+            isOneToOne: false;
+            referencedRelation: "clock_entries";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       clock_blocked_attempts: {
         Row: {
           attempted_at: string;
@@ -1153,9 +1211,13 @@ export type Database = {
       clock_entries: {
         Row: {
           business_id: string;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancelled_reason: string | null;
           clock_in: string;
           clock_out: string | null;
           created_at: string;
+          created_by: string | null;
           duration_minutes: number | null;
           id: string;
           notes: string | null;
@@ -1163,9 +1225,13 @@ export type Database = {
         };
         Insert: {
           business_id: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
           clock_in?: string;
           clock_out?: string | null;
           created_at?: string;
+          created_by?: string | null;
           duration_minutes?: number | null;
           id?: string;
           notes?: string | null;
@@ -1173,9 +1239,13 @@ export type Database = {
         };
         Update: {
           business_id?: string;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancelled_reason?: string | null;
           clock_in?: string;
           clock_out?: string | null;
           created_at?: string;
+          created_by?: string | null;
           duration_minutes?: number | null;
           id?: string;
           notes?: string | null;
@@ -1187,6 +1257,20 @@ export type Database = {
             columns: ["business_id"];
             isOneToOne: false;
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clock_entries_cancelled_by_fkey";
+            columns: ["cancelled_by"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clock_entries_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
         ];

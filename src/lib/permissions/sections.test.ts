@@ -86,8 +86,11 @@ describe("sectionAccess / canSee", () => {
       expect(sectionAccess("salones", "encargado")).toBe("full");
     });
 
-    it("NO ve RRHH (admin-only desde 2026-06-15)", () => {
-      expect(canSee("rrhh", "encargado")).toBe(false);
+    // Spec 179 · D4 — corrige asistencias, así que las ve. Equipo (PINs,
+    // roles) sigue siendo del admin: la page gatea esa pestaña aparte.
+    it("ve RRHH recortado: Asistencia sí, Equipo no (spec 179)", () => {
+      expect(sectionAccess("rrhh", "encargado")).toBe("limited");
+      expect(canSee("rrhh", "encargado")).toBe(true);
     });
   });
 

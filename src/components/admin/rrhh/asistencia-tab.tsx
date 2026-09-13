@@ -7,6 +7,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Pencil,
+  Plus,
+  Trash2,
   TrendingUp,
   Trophy,
   Users,
@@ -27,6 +30,10 @@ import {
   formatTime,
   relativeDate,
 } from "@/lib/rrhh/format-utils";
+import {
+  AnularFichadaModal,
+  FichadaModal,
+} from "@/components/admin/rrhh/fichada-modal";
 import { RoleFilter } from "@/components/admin/rrhh/role-filter";
 import { SearchInput } from "@/components/admin/rrhh/search-input";
 import { RoleBadge } from "@/components/shared/role-badge";
@@ -44,10 +51,19 @@ export function AsistenciaTab({
   overview,
   currentMonth,
   dayEntries,
+  slug,
+  timezone = "America/Argentina/Buenos_Aires",
+  canEdit = false,
+  empleados = [],
 }: {
   overview: MonthlyOverview;
   currentMonth: string;
   dayEntries?: ClockEntry[];
+  /** Spec 179 — para corregir / agregar / anular desde el detalle del día. */
+  slug?: string;
+  timezone?: string;
+  canEdit?: boolean;
+  empleados?: { userId: string; name: string }[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -197,6 +213,11 @@ export function AsistenciaTab({
           date={selectedDay}
           entries={dayEntries}
           onClose={() => selectDay(null)}
+          edicion={
+            canEdit && slug
+              ? { slug, timezone, empleados, onChanged: () => router.refresh() }
+              : null
+          }
         />
       )}
 
@@ -357,27 +378,47 @@ function DailyChart({
   );
 }
 
+type Edicion = {
+  slug: string;
+  timezone: string;
+  empleados: { userId: string; name: string }[];
+  onChanged: () => void;
+};
+
 function DayDetailPanel({
   date,
   entries,
   onClose,
+  edicion,
 }: {
   date: string;
   entries: ClockEntry[];
   onClose: () => void;
+  /** Spec 179 — null cuando el rol no edita: la tabla queda como siempre. */
+  edicion: Edicion | null;
 }) {
-  const dayLabel = new Date(date).toLocaleDateString("es-AR", {
+  // `new Date("2026-09-03")` es medianoche UTC, que en AR es el 2 a las 21:00:
+  // el panel del día 3 decía «Miércoles, 2 de septiembre». En la pantalla
+  // donde se corrigen horas, el día equivocado en el título es corregir el día
+  // equivocado. Al mediodía no hay timezone que lo mueva de fecha.
+  const dayLabel = new Date(`${date}T12:00:00`).toLocaleDateString("es-AR", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
 
-  const present = entries.filter((e) => !e.clockOut);
-  const finished = entries.filter((e) => e.clockOut);
-  const totalMinutes = entries.reduce(
+  // Spec 179 · D6 — las anuladas se muestran tachadas al final y no suman.
+  const vivas = entries.filter((e) => !e.cancelledAt);
+  const anuladas = entries.filter((e) => e.cancelledAt);
+  const present = vivas.filter((e) => !e.clockOut);
+  const finished = vivas.filter((e) => e.clockOut);
+  const totalMinutes = vivas.reduce(
     (s, e) => s + (e.durationMinutes ?? 0),
     0,
   );
+
+  const [editando, setEditando] = useState<ClockEntry | null | "nueva">(null);
+  const [anulando, setAnulando] = useState<ClockEntry | null>(null);
 
   return (
     <div className="rounded-2xl bg-white ring-1 ring-zinc-200/70">
@@ -387,18 +428,31 @@ function DayDetailPanel({
             {dayLabel}
           </p>
           <p className="text-xs text-zinc-500">
-            {entries.length} {entries.length === 1 ? "fichada" : "fichadas"} ·{" "}
+            {vivas.length} {vivas.length === 1 ? "fichada" : "fichadas"} ·{" "}
             {formatHours(totalMinutes)} totales
+            {anuladas.length > 0 && ` · ${anuladas.length} anulada${anuladas.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          aria-label="Cerrar detalle del día"
-        >
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {edicion && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditando("nueva")}
+            >
+              <Plus className="mr-1.5 size-3.5" />
+              Agregar fichada
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Cerrar detalle del día"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {entries.length === 0 ? (
@@ -415,19 +469,35 @@ function DayDetailPanel({
                 <th className="px-5 py-2.5">Entrada</th>
                 <th className="px-5 py-2.5">Salida</th>
                 <th className="px-5 py-2.5 text-right">Duración</th>
+                {edicion && <th className="px-5 py-2.5" aria-label="Acciones" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {[...present, ...finished].map((e) => (
-                <tr key={e.id} className="hover:bg-zinc-50/50">
+              {[...present, ...finished, ...anuladas].map((e) => (
+                <tr
+                  key={e.id}
+                  className={cn(
+                    "hover:bg-zinc-50/50",
+                    e.cancelledAt && "text-zinc-400 line-through",
+                  )}
+                  title={e.cancelledAt ? `Anulada: ${e.cancelledReason ?? ""}` : undefined}
+                >
                   <td className="px-5 py-2.5">
                     <div className="flex items-center gap-2">
                       {!e.clockOut && (
                         <span className="size-2 shrink-0 animate-pulse rounded-full bg-emerald-400" />
                       )}
-                      <span className="font-medium text-zinc-900">
+                      <span className={cn("font-medium", e.cancelledAt ? "text-zinc-400" : "text-zinc-900")}>
                         {e.name}
                       </span>
+                      {e.manual && !e.cancelledAt && (
+                        <span
+                          className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-800"
+                          title="La cargó un encargado, no fichó con el PIN"
+                        >
+                          manual
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-5 py-2.5">
@@ -439,14 +509,60 @@ function DayDetailPanel({
                   <td className="px-5 py-2.5 tabular-nums text-zinc-600">
                     {e.clockOut ? formatTime(e.clockOut) : "—"}
                   </td>
-                  <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-zinc-900">
+                  <td className={cn("px-5 py-2.5 text-right tabular-nums font-semibold", e.cancelledAt ? "text-zinc-400" : "text-zinc-900")}>
                     {formatDuration(e.durationMinutes)}
                   </td>
+                  {edicion && (
+                    <td className="px-5 py-2.5 text-right">
+                      {!e.cancelledAt && (
+                        <div className="inline-flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Corregir fichada de ${e.name}`}
+                            onClick={() => setEditando(e)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Anular fichada de ${e.name}`}
+                            onClick={() => setAnulando(e)}
+                          >
+                            <Trash2 className="size-3.5 text-rose-600" />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {edicion && (
+        <>
+          <FichadaModal
+            open={editando !== null}
+            onOpenChange={(o) => !o && setEditando(null)}
+            slug={edicion.slug}
+            timezone={edicion.timezone}
+            entry={editando === "nueva" ? null : editando}
+            empleados={edicion.empleados}
+            defaultDay={date}
+            onDone={edicion.onChanged}
+          />
+          <AnularFichadaModal
+            open={anulando !== null}
+            onOpenChange={(o) => !o && setAnulando(null)}
+            slug={edicion.slug}
+            entry={anulando}
+            onDone={edicion.onChanged}
+          />
+        </>
       )}
     </div>
   );

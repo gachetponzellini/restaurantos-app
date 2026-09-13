@@ -14,6 +14,7 @@ import {
   canCargarPedidoMesa,
   canConfirmOrder,
   canCorregirCobro,
+  canEditarAsistencia,
   canCrearPedidoFlash,
   canHacerCorte,
   canMakeSangria,
@@ -337,5 +338,20 @@ describe("permissions / rol terminal (spec 140)", () => {
     expect(canCargarPedidoMesa("personal")).toBe(false);
     expect(canTransferTable("personal", true, true)).toBe(false);
     expect(canAssignMozo("personal")).toBe(false);
+  });
+});
+
+// ── Spec 179 · corregir asistencias ─────────────────────────────────────
+describe("permissions / canEditarAsistencia (spec 179)", () => {
+  it("encargado y admin corrigen: es sueldo, mismo círculo que la caja", () => {
+    expect(canEditarAsistencia("admin")).toBe(true);
+    expect(canEditarAsistencia("encargado")).toBe(true);
+  });
+
+  it("mozo, personal y terminal no", () => {
+    expect(canEditarAsistencia("mozo")).toBe(false);
+    expect(canEditarAsistencia("personal")).toBe(false);
+    // La terminal es una cuenta compartida: el rastro diría «terminal».
+    expect(canEditarAsistencia("terminal")).toBe(false);
   });
 });

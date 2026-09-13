@@ -195,6 +195,15 @@ export function canRendirMozo(role: BusinessRole): boolean {
   return role === "admin" || role === "encargado";
 }
 
+/**
+ * Corregir, agregar o anular una fichada (spec 179). Es sueldo: el mismo
+ * círculo que corrige la caja. La `terminal` no — es una cuenta compartida por
+ * todo el salón, y el rastro diría «terminal», no quién.
+ */
+export function canEditarAsistencia(role: BusinessRole): boolean {
+  return role === "admin" || role === "encargado";
+}
+
 // ── Estados de mesa (CU-07 + CU-11) ─────────────────────────────
 
 /**

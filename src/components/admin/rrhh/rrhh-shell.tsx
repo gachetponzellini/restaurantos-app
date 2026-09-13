@@ -8,9 +8,16 @@ export type RrhhTab = "asistencia" | "equipo";
 
 export function RrhhShell({
   activeTab,
+  showEquipo = true,
   children,
 }: {
   activeTab: RrhhTab;
+  /**
+   * Spec 179 · D4 — la encargada ve Asistencia (`rrhh: limited`) pero Equipo
+   * (PINs, roles, altas) sigue siendo del admin. La page ya no la renderiza;
+   * acá se saca el botón para que no exista una pestaña que lleva a nada.
+   */
+  showEquipo?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -33,9 +40,11 @@ export function RrhhShell({
         <TabButton active={activeTab === "asistencia"} onClick={() => setTab("asistencia")}>
           Asistencia
         </TabButton>
-        <TabButton active={activeTab === "equipo"} onClick={() => setTab("equipo")}>
-          Equipo
-        </TabButton>
+        {showEquipo && (
+          <TabButton active={activeTab === "equipo"} onClick={() => setTab("equipo")}>
+            Equipo
+          </TabButton>
+        )}
       </nav>
 
       {children}
