@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { RolePicker } from "@/components/admin/users/role-picker";
+import { TerminalPrinterField } from "@/components/admin/users/terminal-printer-field";
 import {
   generateAccessLink,
   type AccessLinkPayload,
@@ -260,6 +261,17 @@ export function UserRow({
           )}
         </div>
       </div>
+
+      {/* Spec 181 — sólo la terminal tiene impresora: es un puesto. */}
+      {member.role === "terminal" && !isDisabled && (
+        <TerminalPrinterField
+          slug={slug}
+          userId={member.user_id}
+          initialIp={member.control_printer_ip}
+          initialPort={member.control_printer_port}
+          editable={canManage}
+        />
+      )}
 
       {acceso && (
         <div className="mt-3 rounded-xl bg-zinc-50 p-3 ring-1 ring-zinc-200/70">

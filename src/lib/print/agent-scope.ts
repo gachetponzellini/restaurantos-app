@@ -19,6 +19,17 @@
 
 export type PrinterScope = string[] | null | undefined;
 
+/** `local:NOMBRE` — spec 181. Espejo de `isLocalPrinterTarget` en schemas.ts. */
+function esDestinoLocal(entrada: string): boolean {
+  return entrada.toLowerCase().startsWith("local:");
+}
+
+function esDestinoLocalValido(entrada: string): boolean {
+  if (!esDestinoLocal(entrada)) return false;
+  const nombre = entrada.slice("local:".length).trim();
+  return nombre.length > 0 && !/[\\/\x00-\x1f]/.test(nombre);
+}
+
 /** Un rango parseado a enteros: `base` ya enmascarada + cantidad de bits. */
 type Rango = { base: number; bits: number };
 
@@ -90,9 +101,20 @@ export function alcanzaLaImpresora(
   scope: PrinterScope,
   printerIp: string | null | undefined,
 ): boolean {
-  if (!scope || scope.length === 0) return true;
-
   const ip = printerIp?.trim();
+
+  // Spec 181 · D3 — un destino local es un nombre para el spooler de UNA
+  // compu: lo alcanza sólo el agente que lo lista textual. Acá el default se
+  // invierte a propósito: «sin alcance» significa «todas las IPs», no «todas
+  // las USB del mundo» — servirlo a todos mandaría el control de la Terminal
+  // 2 al agente de cocina, que reportaría `failed` sobre un papel que la
+  // terminal sacó perfecto.
+  if (ip && esDestinoLocal(ip)) {
+    const objetivo = ip.toLowerCase();
+    return (scope ?? []).some((e) => e.trim().toLowerCase() === objetivo);
+  }
+
+  if (!scope || scope.length === 0) return true;
   if (!ip) return true;
 
   const objetivo = ipv4ANumero(ip);
@@ -122,10 +144,12 @@ export function normalizarScope(
   const limpias = crudas.map((e) => e.trim()).filter(Boolean);
   if (limpias.length === 0) return null;
 
-  const invalida = limpias.find((e) => parsearRango(e) === null);
+  const invalida = limpias.find(
+    (e) => parsearRango(e) === null && !esDestinoLocalValido(e),
+  );
   if (invalida) {
     throw new Error(
-      `"${invalida}" no es una IP ni un rango válido (ej: 192.168.100.7 o 192.168.100.0/24)`,
+      `"${invalida}" no es una IP, un rango ni una impresora local válida (ej: 192.168.100.7, 192.168.100.0/24 o local:CONTROL-T1)`,
     );
   }
 

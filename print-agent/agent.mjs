@@ -13,6 +13,12 @@
 //               Para PROBAR con una impresora USB / no-térmica (ej. HP LaserJet).
 //               En este modo la printer_ip de la comanda no se usa.
 //
+// Destino local (spec 181): un trabajo cuya printer_ip es `local:NOMBRE` es una
+// térmica USB enchufada a ESTA compu. Se imprime en cualquier transporte,
+// mandando los bytes ESC/POS crudos al spooler de Windows (datatype RAW) a la
+// impresora de ese nombre — con el driver «Genérico / Solo texto». El server
+// sólo se lo sirve al agente que lo lista en su alcance.
+//
 // Flags:
 //   --once         una sola pasada (sin loop)
 //   --dry-run      no imprime ni confirma; muestra el ticket en consola
@@ -391,6 +397,82 @@ function printWindows(text, printerName) {
   });
 }
 
+const LOCAL_PREFIX = "local:";
+
+/**
+ * Manda bytes ESC/POS crudos al spooler de Windows (spec 181 · D5).
+ *
+ * `Out-Printer` pasa por GDI y «dibuja» texto: sirve para una láser de prueba,
+ * no para una térmica. Acá se abre la impresora por nombre y se escribe el
+ * buffer con datatype RAW (OpenPrinter / StartDocPrinter / WritePrinter): con
+ * el driver «Genérico / Solo texto» la impresora recibe los mismos bytes que
+ * recibiría por el socket 9100.
+ *
+ * ⚠️ Sin probar en el fierro al momento de escribirse (se prueba por
+ * TeamViewer con la térmica enchufada). Dos cosas que ahí fallan seguido: un
+ * driver propietario que «interpreta» los bytes en vez de pasarlos, y un
+ * puerto USB que cambia de nombre al reconectar.
+ */
+function printWindowsRaw(payload, printerName) {
+  return new Promise((resolve, reject) => {
+    const tmp = path.join(
+      os.tmpdir(),
+      `ticket-${Date.now()}-${Math.floor(Math.random() * 1e6)}.bin`,
+    );
+    fs.writeFileSync(tmp, Buffer.from(payload, "latin1"));
+    const safeName = String(printerName).replace(/'/g, "''");
+    const safeTmp = tmp.replace(/'/g, "''");
+    // El helper clásico de RAW printing, vía Add-Type: no hay módulo nativo
+    // que empaquetar en el .exe (spec 046) ni dependencia nueva.
+    const cmd = `
+$src = @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public class RawPrinter {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA { [MarshalAs(UnmanagedType.LPStr)] public string pDocName; [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile; [MarshalAs(UnmanagedType.LPStr)] public string pDataType; }
+  [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
+  [DllImport("winspool.Drv", EntryPoint="EndDocPrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="StartPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="EndPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+  public static bool SendFile(string printer, string file) {
+    byte[] bytes = File.ReadAllBytes(file);
+    IntPtr h; DOCINFOA di = new DOCINFOA(); di.pDocName = "RestaurantOS"; di.pDataType = "RAW";
+    if (!OpenPrinter(printer, out h, IntPtr.Zero)) return false;
+    bool ok = false;
+    if (StartDocPrinter(h, 1, di)) { if (StartPagePrinter(h)) { IntPtr p = Marshal.AllocCoTaskMem(bytes.Length); Marshal.Copy(bytes, 0, p, bytes.Length); int w; ok = WritePrinter(h, p, bytes.Length, out w) && w == bytes.Length; Marshal.FreeCoTaskMem(p); EndPagePrinter(h); } EndDocPrinter(h); }
+    ClosePrinter(h); return ok;
+  }
+}
+"@
+Add-Type -TypeDefinition $src
+if (-not [RawPrinter]::SendFile('${safeName}', '${safeTmp}')) { Write-Error "WritePrinter fallo para '${safeName}'"; exit 2 }
+`;
+    const ps = spawn(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", cmd],
+      { windowsHide: true },
+    );
+    let err = "";
+    ps.stderr.on("data", (d) => (err += d));
+    ps.on("error", reject);
+    ps.on("exit", (code) => {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* best-effort */
+      }
+      code === 0
+        ? resolve()
+        : reject(new Error(`powershell exit ${code}: ${err.trim()}`));
+    });
+  });
+}
+
 /** Envía un payload ESC/POS ya armado a una térmica de red por socket TCP. */
 function printNetwork(payload, ip, port) {
   return new Promise((resolve, reject) => {
@@ -484,7 +566,12 @@ async function printOne(c) {
   // Intento de impresión. Si falla, NO se confirma → la comanda queda
   // `pendiente` y se reintenta; tras el umbral, se avisa al local (spec 33).
   try {
-    if (cfg.transport === "network") {
+    const destino = String(c.printer_ip ?? "");
+    if (destino.toLowerCase().startsWith(LOCAL_PREFIX)) {
+      // Spec 181 — la USB de esta compu, por nombre. Los mismos bytes que
+      // irían por el socket; sólo cambia el caño.
+      await printWindowsRaw(escpos, destino.slice(LOCAL_PREFIX.length).trim());
+    } else if (cfg.transport === "network") {
       if (!c.printer_ip) {
         console.log(`  ⏭  ${c.station_name}: sin printer_ip, se saltea`);
         return;

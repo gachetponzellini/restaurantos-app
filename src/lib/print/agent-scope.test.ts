@@ -162,3 +162,42 @@ describe("normalizarScope", () => {
     expect(() => normalizarScope("192.168.100.0/33")).toThrow();
   });
 });
+
+// ── Spec 181 · D3 — destinos locales ─────────────────────────────────────
+//
+// Una impresora USB es un nombre para el spooler de UNA compu. Un `local:`
+// sólo lo alcanza el agente que lo lista textual: servirlo «a todos» (la regla
+// para hostnames) mandaría el control de la Terminal 2 al agente de cocina,
+// que reportaría `failed` y marcaría fallido un papel que la terminal sacó
+// perfecto — el bug que la 124 vino a cerrar.
+describe("alcanzaLaImpresora · destinos locales (spec 181)", () => {
+  it("un `local:` lo alcanza sólo el agente que lo lista", () => {
+    expect(alcanzaLaImpresora(["local:CONTROL-T1"], "local:CONTROL-T1")).toBe(true);
+    expect(alcanzaLaImpresora(["local:CONTROL-T2"], "local:CONTROL-T1")).toBe(false);
+  });
+
+  it("el agente de cocina, con alcance por IP, NO recibe un `local:`", () => {
+    expect(alcanzaLaImpresora(["192.168.10.0/24"], "local:CONTROL-T1")).toBe(false);
+  });
+
+  it("un agente sin alcance tampoco: «sin restricción» es «todas las IPs», no «todas las USB del mundo»", () => {
+    expect(alcanzaLaImpresora(null, "local:CONTROL-T1")).toBe(false);
+    expect(alcanzaLaImpresora([], "local:CONTROL-T1")).toBe(false);
+  });
+
+  it("el agente de la terminal, con alcance `local:`, NO recibe las comandas de la LAN", () => {
+    expect(alcanzaLaImpresora(["local:CONTROL-T1"], "192.168.10.212")).toBe(false);
+  });
+
+  it("el nombre se compara sin distinguir mayúsculas: Windows tampoco", () => {
+    expect(alcanzaLaImpresora(["local:control-t1"], "local:CONTROL-T1")).toBe(true);
+  });
+
+  it("normalizarScope acepta `local:` junto con IPs y rangos", () => {
+    expect(normalizarScope("local:CONTROL-T1, 192.168.10.0/24")).toEqual([
+      "local:CONTROL-T1",
+      "192.168.10.0/24",
+    ]);
+    expect(() => normalizarScope("local:")).toThrow();
+  });
+});

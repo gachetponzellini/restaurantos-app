@@ -218,6 +218,8 @@ export type Database = {
       business_users: {
         Row: {
           business_id: string;
+          control_printer_ip: string | null;
+          control_printer_port: number | null;
           created_at: string;
           disabled_at: string | null;
           full_name: string | null;
@@ -228,6 +230,8 @@ export type Database = {
         };
         Insert: {
           business_id: string;
+          control_printer_ip?: string | null;
+          control_printer_port?: number | null;
           created_at?: string;
           disabled_at?: string | null;
           full_name?: string | null;
@@ -238,6 +242,8 @@ export type Database = {
         };
         Update: {
           business_id?: string;
+          control_printer_ip?: string | null;
+          control_printer_port?: number | null;
           created_at?: string;
           disabled_at?: string | null;
           full_name?: string | null;

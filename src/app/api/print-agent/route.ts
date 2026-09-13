@@ -534,13 +534,15 @@ async function buildPrintableControlTickets(
     control_printer_enabled: boolean | null;
   } | null;
 
-  if (
-    !biz ||
-    !biz.control_printer_ip?.trim() ||
-    biz.control_printer_enabled === false
-  ) {
-    return [];
-  }
+  if (!biz) return [];
+
+  // Spec 181 · D4 — la comandera del negocio pasa a ser el DEFAULT por
+  // trabajo, no un cortocircuito: un negocio puede no tener control central y
+  // sí tener dos terminales con la suya (KCC).
+  const controlDelNegocio =
+    biz.control_printer_ip?.trim() && biz.control_printer_enabled !== false
+      ? { ip: biz.control_printer_ip.trim(), port: biz.control_printer_port ?? 9100 }
+      : null;
 
   const { data: tickets, error } = await service
     .from("print_jobs")
@@ -550,6 +552,7 @@ async function buildPrintableControlTickets(
       status,
       emitted_at,
       reprint_requested_at,
+      requested_by,
       orders!inner(
         daily_number,
         delivery_type,
@@ -586,7 +589,45 @@ async function buildPrintableControlTickets(
     return [];
   }
 
-  return (tickets ?? []).map((t) => {
+  // Spec 181 · D4 — quién pidió cada papel. Si fue una terminal con impresora
+  // propia (la USB de esa compu), sale por la suya; si no, por la del negocio.
+  // Sólo el rol `terminal`: es un puesto, no una persona — la impresora
+  // configurada en un encargado no significa nada.
+  const pedidores = [
+    ...new Set(
+      (tickets ?? [])
+        .map((t) => (t as { requested_by?: string | null }).requested_by)
+        .filter((u): u is string => Boolean(u)),
+    ),
+  ];
+  const impresoraDeTerminal = new Map<string, { ip: string; port: number }>();
+  if (pedidores.length > 0) {
+    const { data: terminales } = await service
+      .from("business_users")
+      .select("user_id, role, control_printer_ip, control_printer_port")
+      .eq("business_id", businessId)
+      .in("user_id", pedidores);
+    for (const u of (terminales ?? []) as {
+      user_id: string;
+      role: string;
+      control_printer_ip: string | null;
+      control_printer_port: number | null;
+    }[]) {
+      const ip = u.control_printer_ip?.trim();
+      if (u.role === "terminal" && ip) {
+        impresoraDeTerminal.set(u.user_id, { ip, port: u.control_printer_port ?? 9100 });
+      }
+    }
+  }
+
+  const out = [];
+  for (const t of tickets ?? []) {
+    const pedidor = (t as { requested_by?: string | null }).requested_by ?? null;
+    const printer =
+      (pedidor ? impresoraDeTerminal.get(pedidor) : undefined) ?? controlDelNegocio;
+    // Sin destino no se entrega: queda pendiente para cuando lo configuren.
+    if (!printer) continue;
+
     const order = t.orders as unknown as {
       daily_number: number;
       delivery_type: string;
@@ -647,14 +688,14 @@ async function buildPrintableControlTickets(
     };
 
     const content = buildControlTicketContent(data);
-    return {
+    out.push({
       // El agente confirma con este id; el POST lo resuelve contra
       // `print_jobs` cuando no está en `comandas`.
       comanda_id: t.id,
       station_id: null,
       station_name: "CONTROL",
-      printer_ip: biz.control_printer_ip,
-      printer_port: biz.control_printer_port ?? 9100,
+      printer_ip: printer.ip,
+      printer_port: printer.port,
       printer_enabled: true,
       batch: 1,
       emitted_at: t.emitted_at,
@@ -665,8 +706,9 @@ async function buildPrintableControlTickets(
       items: data.items ?? [],
       content_escpos_b64: content.escpos_b64,
       content_plain: content.plain,
-    };
-  });
+    });
+  }
+  return out;
 }
 
 /**

@@ -129,6 +129,30 @@ describe("StationPrinterInput — config de comandera por sector (spec 28)", () 
     expect(r.success).toBe(true);
   });
 
+  // Spec 181 · D3 — una impresora USB no tiene IP: es un nombre para el
+  // spooler de la compu donde corre el agente.
+  it("acepta un destino local `local:NOMBRE` (spec 181)", () => {
+    const r = StationPrinterInput.safeParse({
+      printer_ip: "local:CONTROL-T1",
+      printer_port: 9100,
+      printer_enabled: true,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("un `local:` sin nombre, o con separadores de ruta, no pasa", () => {
+    for (const malo of ["local:", "local:C:\\x", "local:a/b", "local: "]) {
+      expect(
+        StationPrinterInput.safeParse({
+          printer_ip: malo,
+          printer_port: 9100,
+          printer_enabled: true,
+        }).success,
+        malo,
+      ).toBe(false);
+    }
+  });
+
   it("recorta espacios alrededor de la IP", () => {
     const r = StationPrinterInput.safeParse({
       printer_ip: "  192.168.10.50  ",

@@ -35,7 +35,27 @@ export type StationInput = z.infer<typeof StationInput>;
  * Un string que parece dotted-decimal se valida como IPv4 estricto (octetos
  * 0–255) para no aceptar "192.168.10.300" como si fuera un hostname numérico.
  */
+/**
+ * Spec 181 · D3 — un destino local: `local:NOMBRE`, el nombre de la impresora
+ * en el spooler de Windows de la compu donde corre el agente. No pasa por la
+ * allowlist RFC1918 porque nunca abre un socket. Se rechaza lo que rompería
+ * un nombre de impresora: vacío, separadores de ruta, caracteres de control.
+ */
+export const LOCAL_PRINTER_PREFIX = "local:";
+
+export function isLocalPrinterTarget(host: string): boolean {
+  return host.toLowerCase().startsWith(LOCAL_PRINTER_PREFIX);
+}
+
+export function localPrinterName(host: string): string {
+  return host.slice(LOCAL_PRINTER_PREFIX.length).trim();
+}
+
 export function isValidPrinterHost(host: string): boolean {
+  if (isLocalPrinterTarget(host)) {
+    const name = localPrinterName(host);
+    return name.length > 0 && name.length <= 220 && !/[\\/\x00-\x1f]/.test(name);
+  }
   if (/^[\d.]+$/.test(host)) {
     const parts = host.split(".");
     if (

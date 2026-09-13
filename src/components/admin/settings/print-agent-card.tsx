@@ -246,7 +246,7 @@ function AgenteRow({
             id={`scope-${agente.id}`}
             value={scope}
             onChange={(e) => setScope(e.target.value)}
-            placeholder="192.168.100.0/24, 10.0.0.7 — vacío = todas"
+            placeholder="192.168.100.0/24, 10.0.0.7, local:CONTROL-T1 — vacío = todas las IPs"
             className="min-w-0 flex-1 rounded-lg bg-white px-2 py-1.5 text-sm text-zinc-900 ring-1 ring-zinc-200/70"
           />
           <Button variant="ghost" onClick={handleSaveScope} disabled={saving}>

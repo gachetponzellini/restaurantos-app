@@ -52,6 +52,7 @@ vi.mock("@/lib/supabase/service", () => ({
             if (col === "kind") kind = String(val);
             return b;
           },
+          in: () => b,
           or: () => b,
           order: () => b,
           maybeSingle: async () => ({
@@ -67,7 +68,9 @@ vi.mock("@/lib/supabase/service", () => ({
           then: (resolve: (v: { data: Row[]; error: null }) => unknown) =>
             resolve({
               data:
-                table !== "print_jobs"
+                table === "business_users"
+                  ? businessUsersRows
+                  : table !== "print_jobs"
                   ? []
                   : kind === "control"
                     ? controlRows
@@ -179,7 +182,10 @@ function cuentaJob(): Row {
   };
 }
 
+let businessUsersRows: Row[] = [];
+
 beforeEach(() => {
+  businessUsersRows = [];
   businessRow = {
     name: "Restaurant del Golf",
     address: "Bv. Wilde",
@@ -220,6 +226,77 @@ describe("GET · controles de pedido", () => {
     businessRow = { ...businessRow!, control_printer_ip: null };
     const body = await (await GET(getReq())).json();
     expect(body.comandas).toEqual([]);
+  });
+
+  // ── Spec 181 · D4 — el control se resuelve por quien lo pidió ──────────
+  it("un control pedido por una terminal con impresora sale por la SUYA", async () => {
+    // El que pregunta es el agente DE la terminal: un `local:` sólo se sirve
+    // al agente que lo declara (D3). Sin alcance no le llegaría.
+    agentScope = ["local:CONTROL-T1"];
+    controlRows = [ticket({ requested_by: "term1" })];
+    businessUsersRows = [
+      {
+        user_id: "term1",
+        role: "terminal",
+        control_printer_ip: "local:CONTROL-T1",
+        control_printer_port: null,
+      },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas).toHaveLength(1);
+    expect(body.comandas[0].printer_ip).toBe("local:CONTROL-T1");
+  });
+
+  it("un control del sistema (sin requested_by) sigue yendo a la del negocio", async () => {
+    controlRows = [ticket({ requested_by: null })];
+    businessUsersRows = [
+      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
+  });
+
+  it("una terminal SIN impresora propia cae a la del negocio", async () => {
+    controlRows = [ticket({ requested_by: "term2" })];
+    businessUsersRows = [
+      { user_id: "term2", role: "terminal", control_printer_ip: null, control_printer_port: null },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
+  });
+
+  it("un negocio SIN control central igual sirve los de sus terminales", async () => {
+    // Antes esto era un cortocircuito: sin `control_printer_ip` en el negocio,
+    // `[]` y listo. Con terminales, el negocio puede no tener control central.
+    agentScope = ["local:CONTROL-T1"];
+    businessRow = { ...businessRow!, control_printer_ip: null };
+    controlRows = [ticket({ requested_by: "term1" }), ticket({ id: "ct2", requested_by: null })];
+    businessUsersRows = [
+      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+    ];
+    const body = await (await GET(getReq())).json();
+    // El de la terminal sale; el del sistema no tiene destino y queda pendiente.
+    expect(body.comandas.map((c: Row) => c.comanda_id)).toEqual(["ct1"]);
+  });
+
+  it("el agente de cocina (alcance por IP) no recibe el control de la terminal", async () => {
+    agentScope = ["192.168.10.0/24"];
+    controlRows = [ticket({ requested_by: "term1" }), ticket({ id: "ct2", requested_by: null })];
+    businessUsersRows = [
+      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+    ];
+    const body = await (await GET(getReq())).json();
+    // Sólo el del sistema, que va a la comandera de control del negocio (.60).
+    expect(body.comandas.map((c: Row) => c.comanda_id)).toEqual(["ct2"]);
+  });
+
+  it("la impresora de una persona (no terminal) no se usa: no es un puesto", async () => {
+    controlRows = [ticket({ requested_by: "sofia" })];
+    businessUsersRows = [
+      { user_id: "sofia", role: "encargado", control_printer_ip: "local:X", control_printer_port: null },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
   });
 
   it("no sale si la comandera está apagada", async () => {

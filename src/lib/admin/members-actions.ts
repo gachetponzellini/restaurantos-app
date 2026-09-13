@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+
+import { isValidPrinterHost } from "@/lib/catalog/schemas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildAccessMessage } from "@/lib/admin/access-message";
@@ -670,6 +672,69 @@ export async function updateMemberProfile(
   if (error) {
     console.error("updateMemberProfile", error);
     return actionError("No pudimos actualizar al miembro.");
+  }
+
+  revalidateEmpleados(business_slug);
+  return actionOk(null);
+}
+
+/**
+ * La comandera de control de una terminal (spec 181 · D2).
+ *
+ * Sólo para el rol `terminal`: es un puesto, no una persona, y el control de
+ * lo que se manda desde esa compu sale por acá. `null` = la del negocio. El
+ * destino admite IP o `local:NOMBRE` (la USB de esa compu, D3).
+ */
+export async function updateTerminalPrinter(
+  input: unknown,
+): Promise<ActionResult<null>> {
+  const parsed = z
+    .object({
+      business_slug: z.string().min(1),
+      user_id: z.string().uuid(),
+      control_printer_ip: z.string().trim().max(255).nullable(),
+      control_printer_port: z.number().int().min(1).max(65535).nullable(),
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return actionError(parsed.error.issues[0]?.message ?? "Datos inválidos.");
+  }
+  const { business_slug, user_id, control_printer_ip, control_printer_port } =
+    parsed.data;
+
+  const guard = await assertCanManage(business_slug);
+  if (!guard.ok) return actionError(guard.error);
+
+  const ip = control_printer_ip?.trim() || null;
+  if (ip && !isValidPrinterHost(ip)) {
+    return actionError(
+      "Destino inválido: una IP privada (192.168.…), un nombre de red, o `local:NOMBRE` para una impresora USB de esa compu.",
+    );
+  }
+
+  const service = svc();
+  const { data: member } = await service
+    .from("business_users")
+    .select("role")
+    .eq("business_id", guard.businessId)
+    .eq("user_id", user_id)
+    .maybeSingle();
+  if (!member) return actionError("Miembro no encontrado.");
+  if ((member as { role: string }).role !== "terminal") {
+    return actionError("La impresora de control es de una terminal, no de una persona.");
+  }
+
+  const { error } = await service
+    .from("business_users")
+    .update({
+      control_printer_ip: ip,
+      control_printer_port: ip ? control_printer_port : null,
+    })
+    .eq("business_id", guard.businessId)
+    .eq("user_id", user_id);
+  if (error) {
+    console.error("updateTerminalPrinter", error);
+    return actionError("No pudimos guardar la impresora.");
   }
 
   revalidateEmpleados(business_slug);
