@@ -141,6 +141,8 @@ function itemDePedido(
   comandaEmittedAt?: string,
   cancelledAt: string | null = null,
   comboName: string | null = null,
+  /** Spec 180: a qué comanda está vinculado (puede ser la de OTRO sector). */
+  comandaId = `c-${stationName}`,
 ): Row {
   return {
     order_id: "o1",
@@ -151,7 +153,12 @@ function itemDePedido(
     // El ítem padre del menú del día, o null si es un producto suelto (spec 145).
     parent: comboName ? { product_name: comboName } : null,
     comanda_items: comandaEmittedAt
-      ? [{ comandas: { emitted_at: comandaEmittedAt, cancelled_at: cancelledAt } }]
+      ? [
+          {
+            comanda_id: comandaId,
+            comandas: { emitted_at: comandaEmittedAt, cancelled_at: cancelledAt },
+          },
+        ]
       : [],
   };
 }
@@ -335,6 +342,30 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     // Lo propio del sector no se duplica abajo.
     expect(cocina.otros_sectores.flatMap((s) => s.items.map((i) => i.product_name)))
       .not.toContain("Ensalada Queso Azul");
+  });
+
+  // Spec 180 · D3 — con varias comanderas por producto, las papas de fritera
+  // viajan TAMBIÉN en la comanda de cocina. «Combina con» se decide por
+  // membresía, no por sector: lo que está en este papel no va abajo.
+  it("combina con: lo que ya está en ESTA comanda no se repite, aunque su sector sea otro", async () => {
+    rows = [makeRow("Cocina", "192.168.10.50")];
+    itemRows = [
+      itemDePedido("Ensalada Queso Azul", "st-Cocina", "Cocina"),
+      // Papas: sector principal Fritera, pero vinculadas a la comanda de
+      // COCINA (cocina es su 2ª comandera). Es propio de este papel.
+      itemDePedido("Papas Fritas", "st-Fritera", "Fritera", MISMO_ENVIO, null, null, "c-Cocina"),
+      // Entrecot: sólo parrilla. Sí combina.
+      itemDePedido("Entrecot", "st-Parrilla", "Parrilla", MISMO_ENVIO),
+    ];
+    const res = await GET(getReq());
+    const body = (await res.json()) as {
+      comandas: { otros_sectores: { station_name: string; items: { product_name: string }[] }[] }[];
+    };
+    const combina = body.comandas[0]!.otros_sectores.flatMap((s) =>
+      s.items.map((i) => i.product_name),
+    );
+    expect(combina).toContain("Entrecot");
+    expect(combina).not.toContain("Papas Fritas");
   });
 
   it("combina con: NO arrastra la tanda anterior (la picada que la mesa ya se comió)", async () => {

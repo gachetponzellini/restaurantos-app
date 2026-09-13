@@ -243,6 +243,7 @@ export async function GET(req: Request) {
         // Con qué combina: lo del MISMO envío que sale de los otros sectores.
         otros_sectores: agruparOtrosSectores(
           otrosPorPedido.get(order?.id) ?? [],
+          c.id as string,
           c.station_id as string | null,
           c.emitted_at as string | null,
         ),
@@ -355,7 +356,11 @@ type ItemDePedido = {
   /** El ítem padre si esto es el componente de un menú del día (spec 145). */
   parent: { product_name: string } | null;
   comanda_items:
-    | { comandas: { emitted_at: string; cancelled_at: string | null } | null }[]
+    | {
+        /** Spec 180: para saber si el ítem ya está en ESTA comanda. */
+        comanda_id?: string;
+        comandas: { emitted_at: string; cancelled_at: string | null } | null;
+      }[]
     | null;
 };
 
@@ -386,7 +391,7 @@ async function loadItemsPorPedido(
   const { data, error } = await service
     .from("order_items")
     .select(
-      "order_id, quantity, product_name, station_id, stations(name), parent:parent_order_item_id(product_name), comanda_items(comandas(emitted_at, cancelled_at))",
+      "order_id, quantity, product_name, station_id, stations(name), parent:parent_order_item_id(product_name), comanda_items(comanda_id, comandas(emitted_at, cancelled_at))",
     )
     .in("order_id", orderIds)
     .is("cancelled_at", null)
@@ -427,6 +432,7 @@ async function loadItemsPorPedido(
  */
 function agruparOtrosSectores(
   items: ItemDePedido[],
+  comandaId: string,
   stationId: string | null,
   emittedAt: string | null,
 ) {
@@ -444,6 +450,12 @@ function agruparOtrosSectores(
   >();
   for (const it of items) {
     if (!it.station_id || it.station_id === stationId) continue;
+    // Spec 180 · D3 — lo que ya viaja en ESTE papel no va abajo. Con varias
+    // comanderas por producto, las papas de fritera están también en la
+    // comanda de cocina como ítem propio: decidirlo por sector las duplicaría.
+    if ((it.comanda_items ?? []).some((ci) => ci.comanda_id === comandaId)) {
+      continue;
+    }
 
     const comandas = (it.comanda_items ?? [])
       .map((ci) => ci.comandas)

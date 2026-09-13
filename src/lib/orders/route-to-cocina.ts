@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { createComandasForItems } from "@/lib/comandas/route-items";
-import { resolveStation } from "@/lib/comandas/routing";
+import { resolveStations } from "@/lib/comandas/routing";
 import { createNotification } from "@/lib/notifications/create";
 import { notifyDeliveryStatusChange } from "@/lib/notifications/delivery-notify";
 import { emitControlTicket } from "@/lib/print/control-ticket-emit";
@@ -136,13 +136,15 @@ export async function routeOrderToCocina(
   type ProductRow = {
     id: string;
     station_id: string | null;
-    category: { station_id: string | null } | null;
+    extra_station_ids: string[] | null;
+    sin_comanda: boolean;
+    category: { station_id: string | null; extra_station_ids: string[] | null } | null;
   };
   let productById = new Map<string, ProductRow>();
   if (productIds.length > 0) {
     const { data: productRows } = await service
       .from("products")
-      .select("id, station_id, category:categories(station_id)")
+      .select("id, station_id, extra_station_ids, sin_comanda, category:categories(station_id, extra_station_ids)")
       .in("id", productIds);
     productById = new Map(
       ((productRows ?? []) as unknown as ProductRow[]).map((p) => [p.id, p]),
@@ -154,12 +156,10 @@ export async function routeOrderToCocina(
 
   for (const item of itemRows) {
     const product = item.product_id ? productById.get(item.product_id) : null;
-    const stationId = product
-      ? resolveStation(
-          { station_id: product.station_id, category: product.category },
-          null,
-        )
-      : null;
+    // Spec 180 — la primera es el sector principal; las demás reciben su
+    // propia comanda.
+    const stations = product ? resolveStations(product, null) : [];
+    const stationId = stations[0] ?? null;
 
     const { error: updErr } = await service
       .from("order_items")
@@ -179,9 +179,11 @@ export async function routeOrderToCocina(
     }
 
     if (stationId) {
-      const bucket = itemsByStation.get(stationId) ?? [];
-      bucket.push(item.id);
-      itemsByStation.set(stationId, bucket);
+      for (const st of stations) {
+        const bucket = itemsByStation.get(st) ?? [];
+        bucket.push(item.id);
+        itemsByStation.set(st, bucket);
+      }
     } else {
       withoutStation += 1;
     }

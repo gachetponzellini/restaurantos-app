@@ -104,11 +104,39 @@ export async function deleteStation(
   if (!guard.ok) return guard;
 
   const supabase = await createSupabaseServerClient();
+
+  // Spec 180 — las 2ª/3ª comanderas viven en un `uuid[]` sin FK, así que el
+  // SET NULL no las alcanza. Se sacan a mano antes de borrar: un id muerto en
+  // el array sería un bucket de ruteo a un sector que no existe.
+  const bizId = guard.data.businessId;
+  const { data: cats } = await supabase
+    .from("categories")
+    .select("id, extra_station_ids")
+    .eq("business_id", bizId)
+    .contains("extra_station_ids", [id]);
+  for (const c of (cats ?? []) as { id: string; extra_station_ids: string[] }[]) {
+    await supabase
+      .from("categories")
+      .update({ extra_station_ids: c.extra_station_ids.filter((x) => x !== id) })
+      .eq("id", c.id);
+  }
+  const { data: prods } = await supabase
+    .from("products")
+    .select("id, extra_station_ids")
+    .eq("business_id", bizId)
+    .contains("extra_station_ids", [id]);
+  for (const p of (prods ?? []) as { id: string; extra_station_ids: string[] }[]) {
+    await supabase
+      .from("products")
+      .update({ extra_station_ids: p.extra_station_ids.filter((x) => x !== id) })
+      .eq("id", p.id);
+  }
+
   const { error } = await supabase
     .from("stations")
     .delete()
     .eq("id", id)
-    .eq("business_id", guard.data.businessId);
+    .eq("business_id", bizId);
   if (error) {
     console.error("deleteStation", error);
     if (error.code === "23503") {

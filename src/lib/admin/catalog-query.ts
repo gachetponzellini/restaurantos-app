@@ -33,6 +33,10 @@ export type AdminProduct = {
   show_online: boolean;
   sort_order: number;
   station_id: string | null;
+  /** Spec 180: 2ª y 3ª comandera; null hereda de la categoría. */
+  extra_station_ids: string[] | null;
+  /** Spec 180: no imprime comanda aunque la categoría tenga sector. */
+  sin_comanda: boolean;
   prep_time_minutes: number | null;
   modifier_groups: AdminModifierGroup[];
 };
@@ -45,6 +49,8 @@ export type AdminCategory = {
   is_active: boolean;
   super_category_id: string | null;
   station_id: string | null;
+  /** Spec 180: 2ª y 3ª comandera por default del rubro. */
+  extra_station_ids: string[];
 };
 
 export type AdminSuperCategory = {
@@ -89,13 +95,13 @@ export async function getAdminCatalog(businessId: string) {
       .order("sort_order"),
     supabase
       .from("categories")
-      .select("id, name, slug, sort_order, is_active, super_category_id, station_id")
+      .select("id, name, slug, sort_order, is_active, super_category_id, station_id, extra_station_ids")
       .eq("business_id", businessId)
       .order("sort_order"),
     supabase
       .from("products")
       .select(
-        "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
+        "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
       )
       .eq("business_id", businessId)
       .order("sort_order"),
@@ -114,6 +120,8 @@ export async function getAdminCatalog(businessId: string) {
     show_online: p.show_online,
     sort_order: p.sort_order,
     station_id: p.station_id,
+    extra_station_ids: p.extra_station_ids ?? null,
+    sin_comanda: p.sin_comanda ?? false,
     prep_time_minutes: p.prep_time_minutes ?? null,
     modifier_groups: (p.modifier_groups ?? [])
       .slice()
@@ -151,7 +159,7 @@ export async function getAdminProduct(id: string): Promise<AdminProduct | null> 
   const { data } = await supabase
     .from("products")
     .select(
-      "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
+      "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -169,6 +177,8 @@ export async function getAdminProduct(id: string): Promise<AdminProduct | null> 
     show_online: data.show_online,
     sort_order: data.sort_order,
     station_id: data.station_id,
+    extra_station_ids: data.extra_station_ids ?? null,
+    sin_comanda: data.sin_comanda ?? false,
     prep_time_minutes: data.prep_time_minutes ?? null,
     modifier_groups: (data.modifier_groups ?? [])
       .slice()

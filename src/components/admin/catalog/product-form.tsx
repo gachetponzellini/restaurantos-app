@@ -74,6 +74,8 @@ export function ProductForm({
           image_url: product.image_url,
           category_id: product.category_id,
           station_id: product.station_id,
+          extra_station_ids: product.extra_station_ids,
+          sin_comanda: product.sin_comanda,
           is_available: product.is_available,
           is_active: product.is_active,
           show_online: product.show_online,
@@ -104,6 +106,8 @@ export function ProductForm({
           // producto de cortesía a $0 sigue siendo posible: se escribe el 0.
           price_cents: Number.NaN,
           station_id: null,
+          extra_station_ids: null,
+          sin_comanda: false,
           is_available: true,
           is_active: true,
           show_online: true,
@@ -331,6 +335,114 @@ export function ProductForm({
               </FormItem>
             );
           }}
+        />
+
+        {/* Spec 180 · varias comanderas por producto. Es lo que en MaxiRest es
+            «2ª/3ª Comandera»: cocina «sale con todo» porque es la 2ª de cada
+            plato. La 1ª (arriba) es la que cocina y mueve el estado; éstas
+            reciben su propia comanda. null = hereda de la categoría. */}
+        <FormField
+          control={form.control}
+          name="extra_station_ids"
+          render={({ field }) => {
+            const currentCategoryId = form.watch("category_id");
+            const cat = currentCategoryId
+              ? (categories.find((c) => c.id === currentCategoryId) ?? null)
+              : null;
+            const heredadas = cat?.extra_station_ids ?? [];
+            const nombre = (id: string) =>
+              stations.find((s) => s.id === id)?.name ?? "?";
+            const hereda = field.value === null || field.value === undefined;
+            const valor: string[] = hereda ? heredadas : (field.value ?? []);
+            const setPos = (pos: 0 | 1, id: string | null) => {
+              const base = [...valor];
+              if (id === null) base.splice(pos, 1);
+              else base[pos] = id;
+              field.onChange(base.filter(Boolean).slice(0, 2));
+            };
+            return (
+              <FormItem>
+                <FormLabel>También imprime en</FormLabel>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {([0, 1] as const).map((pos) => (
+                    <Select
+                      key={pos}
+                      value={valor[pos] ?? "__none__"}
+                      onValueChange={(v) => setPos(pos, v === "__none__" ? null : v)}
+                    >
+                      <SelectTrigger aria-label={pos === 0 ? "2ª comandera" : "3ª comandera"}>
+                        <SelectValue>
+                          {(v) =>
+                            !v || v === "__none__"
+                              ? `${pos === 0 ? "2ª" : "3ª"} · ninguna`
+                              : `${pos === 0 ? "2ª" : "3ª"} · ${nombre(String(v))}`
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="text-zinc-500">Ninguna</span>
+                        </SelectItem>
+                        {stations
+                          .filter((s) => s.is_active)
+                          .map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  ))}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {hereda
+                    ? heredadas.length > 0
+                      ? `Hereda de la categoría: ${heredadas.map(nombre).join(", ")}. Tocá para pisar.`
+                      : "Hereda de la categoría (ninguna). Tocá para agregar."
+                    : "Propio de este producto."}{" "}
+                  Cada sector recibe su propia comanda; el estado del plato lo
+                  mueve el sector de cocina de arriba.
+                  {!hereda && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="underline underline-offset-2"
+                        onClick={() => field.onChange(null)}
+                      >
+                        Volver a heredar
+                      </button>
+                    </>
+                  )}
+                </p>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
+        />
+
+        <FormField
+          control={form.control}
+          name="sin_comanda"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4"
+                    checked={field.value ?? false}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                  <span>No imprime comanda</span>
+                </label>
+              </FormControl>
+              <p className="text-muted-foreground text-xs">
+                Aunque la categoría tenga sector. Para lo que el mozo sirve
+                directo: la Heineken, el alfajor.
+              </p>
+            </FormItem>
+          )}
         />
 
         <FormField

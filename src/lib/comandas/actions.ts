@@ -65,7 +65,7 @@ import { soloCambiaElPrecio, type EditarItemComandaPatch } from "./edicion";
 import { buildItemLibreRow, validateItemLibre } from "./item-libre";
 import { normalizarObservacion } from "./observacion";
 import { createComandasForItems } from "./route-items";
-import { resolveStation } from "./routing";
+import { resolveStations } from "./routing";
 import type { ComandaStatus, KitchenItemStatus } from "./types";
 
 type GenericClient = SupabaseClient;
@@ -399,7 +399,7 @@ export async function enviarComanda(
   const { data: productRows } = await service
     .from("products")
     .select(
-      "id, name, price_cents, business_id, is_active, is_available, station_id, track_stock, category:categories(station_id)",
+      "id, name, price_cents, business_id, is_active, is_available, station_id, extra_station_ids, sin_comanda, track_stock, category:categories(station_id, extra_station_ids)",
     )
     .in("id", productIds);
 
@@ -411,8 +411,11 @@ export async function enviarComanda(
     is_active: boolean;
     is_available: boolean;
     station_id: string | null;
+    /** Spec 180: 2ª y 3ª comandera; null hereda de la categoría. */
+    extra_station_ids: string[] | null;
+    sin_comanda: boolean;
     track_stock: boolean;
-    category: { station_id: string | null } | null;
+    category: { station_id: string | null; extra_station_ids: string[] | null } | null;
   };
   const products = (productRows ?? []) as unknown as ProductRow[];
   if (products.length !== productIds.length) {
@@ -608,10 +611,11 @@ export async function enviarComanda(
     }
 
     const product = productById.get(inputItem.product_id)!;
-    const stationId = resolveStation(
-      { station_id: product.station_id, category: product.category },
-      null,
-    );
+    // Spec 180 — la primera es el sector principal (va en el ítem y mueve su
+    // estado); las demás reciben su propia comanda. «Cocina sale con todo» es
+    // que cocina está de 2ª en cada plato.
+    const stations = resolveStations(product, null);
+    const stationId = stations[0] ?? null;
 
     const modIds = inputItem.modifier_ids ?? [];
     const mods = modIds.map((id) => modifierById.get(id)!);
@@ -689,10 +693,14 @@ export async function enviarComanda(
     }
 
     // Solo agregar a la comanda si no es item de stock (bebidas skip cocina).
-    if (stationId && !isStockItem) {
-      const bucket = itemsByStation.get(stationId) ?? [];
-      bucket.push((itemRow as { id: string }).id);
-      itemsByStation.set(stationId, bucket);
+    // Spec 180: en CADA sector de la lista — una comanda por sector, todas con
+    // el mismo ítem. `comanda_items` lo admite (su PK es el par).
+    if (!isStockItem) {
+      for (const st of stations) {
+        const bucket = itemsByStation.get(st) ?? [];
+        bucket.push((itemRow as { id: string }).id);
+        itemsByStation.set(st, bucket);
+      }
     }
   }
 
@@ -930,7 +938,7 @@ export async function enviarComanda(
         const { data: childProds } = await service
           .from("products")
           .select(
-            "id, name, price_cents, business_id, is_active, is_available, station_id, category:categories(station_id)",
+            "id, name, price_cents, business_id, is_active, is_available, station_id, extra_station_ids, sin_comanda, category:categories(station_id, extra_station_ids)",
           )
           .in("id", missingIds);
         for (const p of (childProds ?? []) as unknown as ProductRow[]) {
@@ -946,13 +954,9 @@ export async function enviarComanda(
       for (const [childIndex, pid] of childProductIds.entries()) {
         const childProduct = productById.get(pid);
         if (!childProduct) continue;
-        const childStation = resolveStation(
-          {
-            station_id: childProduct.station_id,
-            category: childProduct.category,
-          },
-          null,
-        );
+        // Spec 180 — el plato del menú también puede salir por varias.
+        const childStations = resolveStations(childProduct, null);
+        const childStation = childStations[0] ?? null;
 
         const { data: childRow } = await service
           .from("order_items")
@@ -996,10 +1000,12 @@ export async function enviarComanda(
           }
         }
 
-        if (childRow && childStation) {
-          const bucket = itemsByStation.get(childStation) ?? [];
-          bucket.push((childRow as { id: string }).id);
-          itemsByStation.set(childStation, bucket);
+        if (childRow) {
+          for (const st of childStations) {
+            const bucket = itemsByStation.get(st) ?? [];
+            bucket.push((childRow as { id: string }).id);
+            itemsByStation.set(st, bucket);
+          }
         }
       }
     }
@@ -1136,7 +1142,7 @@ export async function marcarComandaEntregada(
 
   const { data: row } = await service
     .from("comandas")
-    .select("id, status, cancelled_at, orders!inner(business_id)")
+    .select("id, status, station_id, cancelled_at, orders!inner(business_id)")
     .eq("id", comandaId)
     .maybeSingle();
   const ownerBusinessId = (row as { orders?: { business_id: string } } | null)
@@ -1144,6 +1150,7 @@ export async function marcarComandaEntregada(
   if (!row || ownerBusinessId !== business.id) {
     return actionError("Comanda no encontrada.");
   }
+  const stationDeLaComanda = (row as { station_id: string | null }).station_id;
   // spec 095 · H-14 — una comanda anulada no se «entrega». `getComandasByOrder`
   // ni siquiera traía `cancelled_at`, así que en la app del mozo la tanda
   // anulada seguía mostrando el botón verde sin ningún cartel: el mozo lo
@@ -1191,6 +1198,10 @@ export async function marcarComandaEntregada(
       // kanban un ítem aparece tachado con motivo **y** entregado, y cualquier
       // métrica de tiempos por sector se contamina.
       .is("cancelled_at", null)
+      // spec 180 · D2 — la 1ª comandera manda el estado del ítem. La comanda de
+      // cocina lleva las papas de fritera «para saber con qué salen»; marcarla
+      // entregada no puede dar por servidas papas que fritera no terminó.
+      .eq("station_id", stationDeLaComanda)
       .select("quantity");
     platosParaServir = ((actualizados ?? []) as { quantity: number }[]).reduce(
       (n, i) => n + i.quantity,
@@ -1282,7 +1293,7 @@ export async function advanceComandaStatus(
 
   const { data: row } = await service
     .from("comandas")
-    .select("id, status, orders!inner(business_id)")
+    .select("id, status, station_id, orders!inner(business_id)")
     .eq("id", comandaId)
     .maybeSingle();
   const ownerBusinessId = (row as { orders?: { business_id: string } } | null)
@@ -1328,7 +1339,10 @@ export async function advanceComandaStatus(
     await service
       .from("order_items")
       .update({ kitchen_status: itemKitchen })
-      .in("id", itemIds);
+      .in("id", itemIds)
+      // spec 180 · D2 — sólo los ítems cuyo sector principal es éste: la
+      // comanda de cocina no mueve el estado de lo que cocina fritera.
+      .eq("station_id", (row as { station_id: string | null }).station_id);
   }
 
   revalidatePath(`/${slug}/cocina`);
@@ -2005,7 +2019,7 @@ export async function getSwappableProducts(
   const { data: rows } = await service
     .from("products")
     .select(
-      "id, name, price_cents, station_id, category:categories(station_id)",
+      "id, name, price_cents, station_id, extra_station_ids, sin_comanda, category:categories(station_id, extra_station_ids)",
     )
     .eq("business_id", business.id)
     .eq("is_active", true)
@@ -2017,16 +2031,14 @@ export async function getSwappableProducts(
     name: string;
     price_cents: number;
     station_id: string | null;
-    category: { station_id: string | null } | null;
+    extra_station_ids: string[] | null;
+    sin_comanda: boolean;
+    category: { station_id: string | null; extra_station_ids: string[] | null } | null;
   };
+  // Spec 180 — «rutea a este sector» ahora incluye a los que lo tienen como
+  // 2ª o 3ª: en la comanda de cocina se puede cambiar una papa por otra.
   const out = ((rows ?? []) as unknown as Row[])
-    .filter(
-      (p) =>
-        resolveStation(
-          { station_id: p.station_id, category: p.category },
-          null,
-        ) === stationId,
-    )
+    .filter((p) => resolveStations(p, null).includes(stationId))
     .map((p) => ({
       id: p.id,
       name: p.name,

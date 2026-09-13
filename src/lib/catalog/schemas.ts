@@ -17,6 +17,8 @@ export const CategoryInput = z.object({
   sort_order: z.number().int().min(0),
   super_category_id: z.string().uuid().nullable().optional(),
   station_id: z.string().uuid().nullable().optional(),
+  /** Spec 180: 2ª y 3ª comandera por default del rubro. */
+  extra_station_ids: z.array(z.string().uuid()).max(2).optional(),
 });
 export type CategoryInput = z.infer<typeof CategoryInput>;
 
@@ -168,6 +170,10 @@ export const ProductInput = z.object({
   image_url: z.string().url().nullable().optional(),
   category_id: z.string().uuid().nullable().optional(),
   station_id: z.string().uuid().nullable().optional(),
+  /** Spec 180: 2ª y 3ª comandera. null = hereda de la categoría; [] = ninguna. */
+  extra_station_ids: z.array(z.string().uuid()).max(2).nullable().optional(),
+  /** Spec 180: no imprime comanda aunque la categoría tenga sector. */
+  sin_comanda: z.boolean().optional(),
   is_available: z.boolean(),
   is_active: z.boolean(),
   /**

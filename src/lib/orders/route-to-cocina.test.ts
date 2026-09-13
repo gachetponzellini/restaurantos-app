@@ -44,6 +44,8 @@ vi.mock("@/lib/comandas/routing", () => ({
   // Todo ítem resuelve sector salvo que el test pida lo contrario vía
   // `comandaIds = []` + un product sin station (ver `stationless`).
   resolveStation: () => (stationless ? null : "station-1"),
+  // Spec 180: la lista, principal primero. Acá siempre una sola.
+  resolveStations: () => (stationless ? [] : ["station-1"]),
 }));
 
 vi.mock("@/lib/print/control-ticket-emit", () => ({

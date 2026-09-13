@@ -866,6 +866,7 @@ export type Database = {
       categories: {
         Row: {
           business_id: string;
+          extra_station_ids: string[];
           id: string;
           is_active: boolean;
           name: string;
@@ -876,6 +877,7 @@ export type Database = {
         };
         Insert: {
           business_id: string;
+          extra_station_ids?: string[];
           id?: string;
           is_active?: boolean;
           name: string;
@@ -886,6 +888,7 @@ export type Database = {
         };
         Update: {
           business_id?: string;
+          extra_station_ids?: string[];
           id?: string;
           is_active?: boolean;
           name?: string;
@@ -3495,6 +3498,7 @@ export type Database = {
           category_id: string | null;
           created_at: string;
           description: string | null;
+          extra_station_ids: string[] | null;
           id: string;
           image_url: string | null;
           is_active: boolean;
@@ -3504,6 +3508,7 @@ export type Database = {
           prep_time_minutes: number | null;
           price_cents: number;
           show_online: boolean;
+          sin_comanda: boolean;
           slug: string;
           sort_order: number;
           station_id: string | null;
@@ -3514,6 +3519,7 @@ export type Database = {
           category_id?: string | null;
           created_at?: string;
           description?: string | null;
+          extra_station_ids?: string[] | null;
           id?: string;
           image_url?: string | null;
           is_active?: boolean;
@@ -3523,6 +3529,7 @@ export type Database = {
           prep_time_minutes?: number | null;
           price_cents: number;
           show_online?: boolean;
+          sin_comanda?: boolean;
           slug: string;
           sort_order?: number;
           station_id?: string | null;
@@ -3533,6 +3540,7 @@ export type Database = {
           category_id?: string | null;
           created_at?: string;
           description?: string | null;
+          extra_station_ids?: string[] | null;
           id?: string;
           image_url?: string | null;
           is_active?: boolean;
@@ -3542,6 +3550,7 @@ export type Database = {
           prep_time_minutes?: number | null;
           price_cents?: number;
           show_online?: boolean;
+          sin_comanda?: boolean;
           slug?: string;
           sort_order?: number;
           station_id?: string | null;

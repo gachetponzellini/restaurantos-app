@@ -79,6 +79,7 @@ export function CategoryDialog({
           sort_order: category.sort_order,
           super_category_id: category.super_category_id,
           station_id: category.station_id,
+          extra_station_ids: category.extra_station_ids ?? [],
         }
       : {
           name: "",
@@ -86,6 +87,7 @@ export function CategoryDialog({
           sort_order: defaultSortOrder,
           super_category_id: defaultSuperCategoryId ?? null,
           station_id: null,
+          extra_station_ids: [],
         },
   });
 
@@ -258,6 +260,68 @@ export function CategoryDialog({
                   <FormMessage />
                 </FormItem>
               )}
+            />
+
+            {/* Spec 180 · 2ª y 3ª comandera por default del rubro. Es cómo se
+                carga «todo lo de cocina también sale en cocina» diez veces en
+                vez de doscientas. */}
+            <FormField
+              control={form.control}
+              name="extra_station_ids"
+              render={({ field }) => {
+                const valor: string[] = field.value ?? [];
+                const setPos = (pos: 0 | 1, id: string | null) => {
+                  const base = [...valor];
+                  if (id === null) base.splice(pos, 1);
+                  else base[pos] = id;
+                  field.onChange(base.filter(Boolean).slice(0, 2));
+                };
+                const nombre = (id: string) =>
+                  stations.find((s) => s.id === id)?.name ?? "?";
+                return (
+                  <FormItem>
+                    <FormLabel>También imprime en</FormLabel>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {([0, 1] as const).map((pos) => (
+                        <Select
+                          key={pos}
+                          value={valor[pos] ?? "__none__"}
+                          onValueChange={(v) =>
+                            setPos(pos, v === "__none__" ? null : v)
+                          }
+                        >
+                          <SelectTrigger aria-label={pos === 0 ? "2ª comandera" : "3ª comandera"}>
+                            <SelectValue>
+                              {(v) =>
+                                !v || v === "__none__"
+                                  ? `${pos === 0 ? "2ª" : "3ª"} · ninguna`
+                                  : `${pos === 0 ? "2ª" : "3ª"} · ${nombre(String(v))}`
+                              }
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              <span className="text-zinc-500">Ninguna</span>
+                            </SelectItem>
+                            {stations
+                              .filter((s) => s.is_active)
+                              .map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-xs">
+                      Cada sector recibe su propia comanda con los productos del
+                      rubro. Cada producto puede pisarlo desde su drawer.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
           </form>
         </Form>
