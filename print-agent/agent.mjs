@@ -99,6 +99,10 @@ const RULE = "------------------------"; // 24 col (≈ ancho útil 58mm con el 
 // uno solo). Despega la lista de la línea separadora y del corte del papel.
 const EDGE_PADDING = 3;
 
+// Renglones en blanco arriba de todo (#289): el porta-comandas de la cocina
+// tapa los primeros ~3 cm del papel, y ahí quedaba el «ENTREGAR».
+const TOP_MARGIN = 3;
+
 // Reemplazos de los caracteres no-ASCII más comunes. La térmica no recibe
 // codepage, así que todo lo que pase de 0x7e sale como el símbolo que tenga
 // cargado la impresora en su tabla — o sea, basura.
@@ -189,6 +193,8 @@ function ticketLines(c) {
   const banner = (text) => {
     for (const l of wrap(text, COLS.xl)) push(l, { size: "xl", bold: true, align: "center" });
   };
+
+  pad(TOP_MARGIN); // lo que el porta-comandas tapa (#289)
 
   // Lo PRIMERO del ticket, arriba incluso del sector: cuándo sale el plato
   // manda sobre qué plato es. En una comanda anulada no va.

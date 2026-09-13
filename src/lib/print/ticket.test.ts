@@ -5,6 +5,7 @@ import {
   buildTicketLines,
   COLS,
   renderEscPos,
+  TOP_MARGIN,
   type TicketComanda,
 } from "./ticket";
 import fixtures from "./__fixtures__/tickets.json";
@@ -112,6 +113,37 @@ describe("buildTicketLines · ítems grandes y espaciados", () => {
     }).filter((l) => l.size === "xl");
     expect(lines.map((l) => l.text).join("")).toContain("Supercalifragilistico");
     for (const l of lines) expect(l.text.length).toBeLessThanOrEqual(11);
+  });
+});
+
+describe("buildTicketLines · margen arriba para el porta-comandas (#289)", () => {
+  // El riel de la cocina tapa los primeros ~3 cm del papel: lo primero que se
+  // lee tiene que empezar más abajo, en TODAS las comandas.
+  it("arranca con TOP_MARGIN renglones en blanco", () => {
+    expect(TOP_MARGIN).toBeGreaterThanOrEqual(3);
+    for (const c of Object.values(cases)) {
+      const texts = buildTicketLines(c).map((l) => l.text);
+      expect(texts.slice(0, TOP_MARGIN)).toEqual(Array(TOP_MARGIN).fill(""));
+      expect(texts[TOP_MARGIN]).not.toBe("");
+    }
+  });
+
+  it("el margen va ANTES del ENTREGAR: es justo lo que el riel tapaba", () => {
+    const texts = buildTicketLines({ ...base, kitchen_time: "20:15" }).map((l) => l.text);
+    expect(texts.slice(0, TOP_MARGIN)).toEqual(Array(TOP_MARGIN).fill(""));
+    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual(["ENTREGAR", "20:15"]);
+  });
+
+  it("los blancos del margen son renglones de verdad en el ESC/POS (avanzan papel)", () => {
+    // Sin los comandos de estilo (init, interlineado, espaciado, alineación,
+    // tamaño, énfasis), lo primero que sale son TOP_MARGIN LF — y recién
+    // después el primer texto.
+    const escpos = renderEscPos(buildTicketLines(base)).replace(
+      /\x1b(?:@|[3 aEM].)|\x1d(?:!|V)./g,
+      "",
+    );
+    expect(escpos.startsWith("\n".repeat(TOP_MARGIN))).toBe(true);
+    expect(escpos[TOP_MARGIN]).not.toBe("\n");
   });
 });
 
@@ -314,20 +346,20 @@ describe("buildTicketLines · nota de cocina («ENTREGAR x»)", () => {
     // En doble ancho entran 11 col, así que «ENTREGAR 21:30» ocupa dos
     // renglones — cortado por palabra, no partido al medio.
     const texts = buildTicketLines(conNota).map((l) => l.text);
-    expect(texts.slice(0, 2)).toEqual(["ENTREGAR", "21:30"]);
+    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual(["ENTREGAR", "21:30"]);
   });
 
   it("va arriba de todo: antes del sector y de los ítems", () => {
     const lines = buildTicketLines(conNota);
     const entregar = lines.findIndex((l) => l.text.startsWith("ENTREGAR"));
     const sector = lines.findIndex((l) => l.text === "COCINA");
-    expect(entregar).toBe(0);
+    expect(entregar).toBe(TOP_MARGIN); // arriba de todo, después del margen (#289)
     expect(entregar).toBeLessThan(sector);
   });
 
   it("sale en el cuerpo más grande — se lee de lejos", () => {
     const lines = buildTicketLines(conNota);
-    expect(lines[0]).toMatchObject({ size: "xl", bold: true });
+    expect(lines[TOP_MARGIN]).toMatchObject({ size: "xl", bold: true });
   });
 
   it("una nota larga se parte por palabra, sin perder el prefijo", () => {
@@ -335,7 +367,7 @@ describe("buildTicketLines · nota de cocina («ENTREGAR x»)", () => {
       ...conNota,
       kitchen_notes: "junto con la mesa 5",
     }).map((l) => l.text);
-    expect(texts[0].startsWith("ENTREGAR")).toBe(true);
+    expect(texts[TOP_MARGIN].startsWith("ENTREGAR")).toBe(true);
     expect(texts.join(" ")).toContain("mesa 5");
   });
 
@@ -482,8 +514,8 @@ describe("buildTicketLines · la hora de cocina (spec 127)", () => {
   it("encabeza el ticket, en el cuerpo más grande", () => {
     const lines = conHora();
     // A doble ancho entra en dos renglones, como cualquier banner del ticket.
-    expect(lines[0]).toMatchObject({ text: "ENTREGAR", size: "xl" });
-    expect(lines[1]).toMatchObject({ text: "21:15", size: "xl" });
+    expect(lines[TOP_MARGIN]).toMatchObject({ text: "ENTREGAR", size: "xl" });
+    expect(lines[TOP_MARGIN + 1]).toMatchObject({ text: "21:15", size: "xl" });
   });
 
   it("la nota de cocina baja un renglón y deja de ser el banner", () => {

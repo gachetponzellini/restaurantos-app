@@ -73,6 +73,19 @@ export const RULE_COND = "-".repeat(COLS_COND);
 // uno solo). Despega la lista de la línea separadora y del corte del papel.
 const EDGE_PADDING = 3;
 
+/**
+ * Renglones en blanco **arriba de todo** el ticket de comanda (#289).
+ *
+ * En la cocina la comanda cuelga de un porta-comandas, y el riel tapa los
+ * primeros ~3 cm del papel: justo el `ENTREGAR 20:15` que se puso arriba de
+ * todo para leerse de lejos. La impresora ya deja ~1 cm entre el corte y la
+ * primera línea (distancia cabezal→cuchilla); con 3 renglones más a
+ * `LINE_SPACING` (64 pt ≈ 8 mm c/u) el primer contenido arranca a ~3,5 cm del
+ * borde, fuera del clip. Aplica a TODAS las comandas —anuladas y
+ * reimpresiones incluidas—, no a la cuenta ni al control, que no se cuelgan.
+ */
+export const TOP_MARGIN = 3;
+
 export const TIMEZONE = "America/Argentina/Buenos_Aires";
 
 export type TicketItem = {
@@ -300,6 +313,8 @@ export function buildTicketLines(c: TicketComanda): Line[] {
     for (const l of wrap(text, COLS.xl))
       push(l, { size: "xl", bold: true, align: "center" });
   };
+
+  pad(TOP_MARGIN); // lo que el porta-comandas tapa (#289)
 
   // Lo PRIMERO del ticket, arriba incluso del sector: cuándo sale el plato
   // manda sobre qué plato es. El prefijo lo pone el sistema, así que siempre se
