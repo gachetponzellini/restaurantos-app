@@ -861,6 +861,13 @@ export async function registrarRendicionMozo(
     );
   }
 
+  // Spec 178 — la propina que se va a pagar entra al snapshot de la fila, para
+  // que el papel diga lo que se firmó y no lo que el libro tenga después. Es el
+  // mismo criterio de `por_metodo`. Cero si no entregó: la 177 no paga contra
+  // una deuda abierta.
+  const propina_pagada_cents =
+    estado === "rendida" ? pendiente.total_propinas_cents : 0;
+
   const { data: inserted, error } = await service
     .from("mozo_rendiciones")
     .insert({
@@ -873,6 +880,7 @@ export async function registrarRendicionMozo(
       notes: motivo,
       por_metodo: pendiente.por_metodo,
       estado,
+      propina_pagada_cents,
       // El mismo instante con el que se leyó: define el piso del próximo período.
       created_at: corteIso,
     })
@@ -897,8 +905,7 @@ export async function registrarRendicionMozo(
   //
   // Un `no_entrego` no cobra: declaró que no entregó nada, pagarle la propina
   // sería sacar plata del cajón contra una deuda abierta.
-  let propina_pagada_cents = 0;
-  if (estado === "rendida" && pendiente.total_propinas_cents > 0) {
+  if (propina_pagada_cents > 0) {
     const caja = cajaId ?? (await getDefaultCaja(business.id))?.id;
     if (!caja) {
       await service.from("mozo_rendiciones").delete().eq("id", rendicion.id);
@@ -911,7 +918,7 @@ export async function registrarRendicionMozo(
       caja_id: caja,
       kind: "propina",
       mozo_id: mozoId,
-      amount_cents: pendiente.total_propinas_cents,
+      amount_cents: propina_pagada_cents,
       // El nombre va adentro del motivo a propósito: el papel del cierre
       // (spec 139) arma sus renglones con `reason` y sin esto la línea diría
       // sólo «Propina», que en una lista de seis es inútil.
@@ -929,7 +936,6 @@ export async function registrarRendicionMozo(
         `No se pudo pagar la propina, así que la rendición no se registró: ${movErr.message}`,
       );
     }
-    propina_pagada_cents = pendiente.total_propinas_cents;
   }
 
   // D6 · no traba el cierre, pero no queda invisible: el dueño se entera de la

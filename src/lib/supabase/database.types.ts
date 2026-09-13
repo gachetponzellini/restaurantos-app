@@ -2351,6 +2351,7 @@ export type Database = {
           mozo_id: string;
           notes: string | null;
           por_metodo: Json;
+          propina_pagada_cents: number;
           registered_by: string;
         };
         Insert: {
@@ -2364,6 +2365,7 @@ export type Database = {
           mozo_id: string;
           notes?: string | null;
           por_metodo?: Json;
+          propina_pagada_cents?: number;
           registered_by: string;
         };
         Update: {
@@ -2377,6 +2379,7 @@ export type Database = {
           mozo_id?: string;
           notes?: string | null;
           por_metodo?: Json;
+          propina_pagada_cents?: number;
           registered_by?: string;
         };
         Relationships: [
@@ -3266,6 +3269,7 @@ export type Database = {
           order_id: string | null;
           print_failed_at: string | null;
           printed_at: string | null;
+          rendicion_id: string | null;
           reprint_requested_at: string | null;
           requested_by: string | null;
           status: string;
@@ -3284,6 +3288,7 @@ export type Database = {
           order_id?: string | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
+          rendicion_id?: string | null;
           reprint_requested_at?: string | null;
           requested_by?: string | null;
           status?: string;
@@ -3302,6 +3307,7 @@ export type Database = {
           order_id?: string | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
+          rendicion_id?: string | null;
           reprint_requested_at?: string | null;
           requested_by?: string | null;
           status?: string;
@@ -3336,6 +3342,13 @@ export type Database = {
             columns: ["order_id"];
             isOneToOne: false;
             referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "print_jobs_rendicion_id_fkey";
+            columns: ["rendicion_id"];
+            isOneToOne: false;
+            referencedRelation: "mozo_rendiciones";
             referencedColumns: ["id"];
           },
           {

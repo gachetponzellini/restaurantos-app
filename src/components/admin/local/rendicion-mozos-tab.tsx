@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CajaAssignmentsPanel } from "@/components/admin/local/caja-assignments-tab";
 import { registrarRendicionMozo } from "@/lib/caja/actions";
 import { mozosQueDebenRendir } from "@/lib/caja/deben-rendir";
+import { ImprimirRendicionBoton } from "./imprimir-rendicion-boton";
 import type {
   Caja,
   CajaUserAssignment,
@@ -218,6 +219,9 @@ export function RendicionMozosTab({
                   <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
                     Hora
                   </th>
+                  {/* Spec 178 — el papel del mozo, a pedido. Sin rótulo: el
+                      botón se explica solo y la columna queda angosta. */}
+                  <th className="px-3 py-2" aria-label="Imprimir" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -256,6 +260,13 @@ export function RendicionMozosTab({
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <ImprimirRendicionBoton
+                          slug={slug}
+                          rendicionId={r.id}
+                          mozoName={r.mozo_name}
+                        />
                       </td>
                     </tr>
                   );

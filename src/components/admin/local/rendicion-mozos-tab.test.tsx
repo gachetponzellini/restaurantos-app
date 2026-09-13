@@ -7,6 +7,12 @@ import type { RendicionMozoPendiente } from "@/lib/caja/types";
 vi.mock("@/lib/caja/actions", () => ({
   registrarRendicionMozo: vi.fn(async () => ({ ok: true as const, data: {} })),
 }));
+vi.mock("@/lib/caja/rendicion-print-actions", () => ({
+  imprimirRendicion: vi.fn(async () => ({
+    ok: true as const,
+    data: { print_job_id: "pj-1", reimpresion: false },
+  })),
+}));
 
 vi.mock("@/app/[business_slug]/admin/(authed)/operacion/actions", () => ({
   getRendicionTabData: async () => ({
@@ -53,12 +59,17 @@ function pendienteMixto(
   };
 }
 
-function renderTab(pendientes: RendicionMozoPendiente[]) {
+type Historial = React.ComponentProps<typeof RendicionMozosTab>["initialHistorial"];
+
+function renderTab(
+  pendientes: RendicionMozoPendiente[],
+  historial: Historial = [],
+) {
   return render(
     <RendicionMozosTab
       slug="demo"
       initialPendientes={pendientes}
-      initialHistorial={[]}
+      initialHistorial={historial}
       cajas={[]}
       cajaAssignments={[]}
       members={[]}
@@ -199,5 +210,49 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
         screen.queryByText(/no tiene efectivo para entregar/i),
       ).not.toBeInTheDocument();
     });
+  });
+});
+
+// ── Spec 178 — el papel de la rendición, a pedido ─────────────────────────
+describe("rendición · el ticket por mozo (spec 178)", () => {
+  const rendida: Historial[number] = {
+    id: "r1",
+    business_id: "biz",
+    mozo_id: "m1",
+    mozo_name: "Lucía Moza",
+    registered_by: "s1",
+    registered_by_name: "Sofía",
+    expected_cash_cents: 1_850_000,
+    delivered_cash_cents: 1_850_000,
+    difference_cents: 0,
+    notes: null,
+    por_metodo: { ...EMPTY_METODO, cash: 1_850_000 },
+    estado: "rendida",
+    propina_pagada_cents: 420_000,
+    created_at: "2026-09-10T23:41:00Z",
+  };
+
+  it("cada rendición del historial tiene su botón de imprimir", () => {
+    renderTab([], [rendida]);
+    expect(
+      screen.getByRole("button", { name: /imprimir rendición de lucía moza/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("apretar manda ESA rendición, y el botón pasa a «Reimprimir»", async () => {
+    // Es el cableado que a la 177 se le escapó: que el botón llame a la action
+    // con el id correcto, no sólo que la action exista.
+    const { imprimirRendicion } = await import(
+      "@/lib/caja/rendicion-print-actions"
+    );
+    renderTab([], [rendida]);
+
+    const boton = screen.getByRole("button", {
+      name: /imprimir rendición de lucía moza/i,
+    });
+    await userEvent.click(boton);
+
+    expect(imprimirRendicion).toHaveBeenCalledWith("r1", "demo");
+    expect(await screen.findByText(/reimprimir/i)).toBeInTheDocument();
   });
 });

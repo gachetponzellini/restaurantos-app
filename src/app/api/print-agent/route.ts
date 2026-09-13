@@ -6,6 +6,10 @@ import {
   type ControlTicketData,
 } from "@/lib/print/control-ticket";
 import {
+  buildRendicionContent,
+  type RendicionTicketData,
+} from "@/lib/print/rendicion-ticket";
+import {
   resolveCierrePrinter,
   resolveCuentaPrinter,
 } from "@/lib/print/cuenta-printer";
@@ -293,7 +297,8 @@ export async function GET(req: Request) {
   // Cada familia de papel va aislada: un bug armando el control, la cuenta o la
   // factura NO puede dejar a cocina sin comandas. Es la parte crítica de este
   // endpoint y la única que, si falla, para el local.
-  const [controls, cuentas, facturas, cierres, pruebas] = await Promise.all([
+  const [controls, cuentas, facturas, cierres, pruebas, rendiciones] =
+    await Promise.all([
     safePrintables("control", () =>
       buildPrintableControlTickets(service, businessId),
     ),
@@ -308,6 +313,9 @@ export async function GET(req: Request) {
     ),
     safePrintables("prueba", () =>
       buildPrintableTestTickets(service, businessId),
+    ),
+    safePrintables("rendicion", () =>
+      buildPrintableRendicionTickets(service, businessId),
     ),
   ]);
 
@@ -329,6 +337,7 @@ export async function GET(req: Request) {
     ...facturas,
     ...cierres,
     ...pruebas,
+    ...rendiciones,
   ].filter(
     (t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip),
   );
@@ -1171,6 +1180,144 @@ async function buildPrintableCierreTickets(
       cancelled_reason: null,
       reprint: Boolean(j.reprint_requested_at),
       table_label: data.caja_name,
+      items: [],
+      content_escpos_b64: content.escpos_b64,
+      content_plain: content.plain,
+    });
+  }
+  return out;
+}
+
+/**
+ * Los papeles de rendición pendientes (spec 178).
+ *
+ * La hermana chica del cierre: misma comandera (`resolveCierrePrinter`) y mismo
+ * criterio — se arma del snapshot de `mozo_rendiciones`, no de la base viva. Lo
+ * único que se resuelve en vivo son los dos nombres, que no están en la fila.
+ */
+async function buildPrintableRendicionTickets(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+) {
+  const { data: bizRow } = await service
+    .from("businesses")
+    .select(
+      "name, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled, control_printer_ip, control_printer_port, control_printer_enabled",
+    )
+    .eq("id", businessId)
+    .maybeSingle();
+  const biz = bizRow as {
+    name: string;
+    cuenta_printer_ip: string | null;
+    cuenta_printer_port: number | null;
+    cuenta_printer_enabled: boolean | null;
+    control_printer_ip: string | null;
+    control_printer_port: number | null;
+    control_printer_enabled: boolean | null;
+  } | null;
+  if (!biz) return [];
+
+  const printer = resolveCierrePrinter(biz);
+  // Sin destino no se entrega: queda pendiente para cuando lo configuren.
+  if (!printer) return [];
+
+  const { data: jobs, error } = await service
+    .from("print_jobs")
+    .select(
+      `
+      id,
+      emitted_at,
+      reprint_requested_at,
+      mozo_rendiciones!inner(
+        mozo_id,
+        registered_by,
+        estado,
+        por_metodo,
+        expected_cash_cents,
+        delivered_cash_cents,
+        difference_cents,
+        propina_pagada_cents,
+        notes,
+        created_at
+      )
+    `,
+    )
+    .eq("business_id", businessId)
+    .eq("kind", "rendicion")
+    .eq("status", "pendiente")
+    .order("emitted_at", { ascending: true });
+
+  if (error) {
+    // No tumba el GET: las comandas de cocina se devuelven igual.
+    console.error("print-agent GET · print_jobs rendicion", error);
+    return [];
+  }
+  if (!jobs || jobs.length === 0) return [];
+
+  type Fila = {
+    mozo_id: string;
+    registered_by: string | null;
+    estado: "rendida" | "no_entrego";
+    por_metodo: Record<string, number> | null;
+    expected_cash_cents: number;
+    delivered_cash_cents: number;
+    difference_cents: number;
+    propina_pagada_cents: number | null;
+    notes: string | null;
+    created_at: string;
+  };
+
+  // Los nombres, de una sola pasada: el del mozo y el de quien registró.
+  const ids = new Set<string>();
+  for (const j of jobs) {
+    const r = j.mozo_rendiciones as unknown as Fila;
+    ids.add(r.mozo_id);
+    if (r.registered_by) ids.add(r.registered_by);
+  }
+  const { data: gente } = await service
+    .from("business_users")
+    .select("user_id, full_name")
+    .eq("business_id", businessId)
+    .in("user_id", [...ids]);
+  const nombre = new Map(
+    ((gente ?? []) as { user_id: string; full_name: string | null }[]).map(
+      (u) => [u.user_id, u.full_name],
+    ),
+  );
+
+  const out = [];
+  for (const j of jobs) {
+    const r = j.mozo_rendiciones as unknown as Fila;
+    const data: RendicionTicketData = {
+      negocio_name: sanitizeTicketText(biz.name) ?? "—",
+      mozo_name: sanitizeTicketText(nombre.get(r.mozo_id) ?? null) ?? "Mozo",
+      registrado_por: r.registered_by
+        ? sanitizeTicketText(nombre.get(r.registered_by) ?? null)
+        : null,
+      fecha: r.created_at,
+      estado: r.estado,
+      por_metodo: r.por_metodo ?? {},
+      expected_cash_cents: r.expected_cash_cents,
+      delivered_cash_cents: r.delivered_cash_cents,
+      difference_cents: r.difference_cents,
+      propina_pagada_cents: r.propina_pagada_cents ?? 0,
+      notes: sanitizeTicketText(r.notes),
+      reimpresion: Boolean(j.reprint_requested_at),
+    };
+    const content = buildRendicionContent(data);
+    out.push({
+      comanda_id: j.id,
+      station_id: null,
+      station_name: "RENDICION",
+      printer_ip: printer.ip,
+      printer_port: printer.port,
+      printer_enabled: true,
+      batch: 1,
+      emitted_at: j.emitted_at,
+      cancelled: false,
+      cancelled_reason: null,
+      reprint: Boolean(j.reprint_requested_at),
+      table_label: data.mozo_name,
       items: [],
       content_escpos_b64: content.escpos_b64,
       content_plain: content.plain,

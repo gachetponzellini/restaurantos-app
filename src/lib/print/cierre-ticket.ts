@@ -85,7 +85,7 @@ export function fechaLarga(iso: string, timeZone = TZ): string {
   return `${DIAS[d.getUTCDay()]} ${Number(get("day"))} de ${MESES[Number(get("month")) - 1]} de ${get("year")}`;
 }
 
-function hora(iso: string, timeZone = TZ): string {
+export function hora(iso: string, timeZone = TZ): string {
   return new Intl.DateTimeFormat("es-AR", {
     timeZone,
     hour: "2-digit",
@@ -110,7 +110,7 @@ export function monto(cents: number): string {
 }
 
 /** `izq ............ der`, ajustado al ancho condensado. */
-function fila(izq: string, der: string, ancho = COLS_COND): string {
+export function fila(izq: string, der: string, ancho = COLS_COND): string {
   const espacio = ancho - der.length;
   const texto = izq.length > espacio - 1 ? izq.slice(0, Math.max(0, espacio - 2)) : izq;
   return texto.padEnd(Math.max(0, espacio), " ") + der;
@@ -252,7 +252,7 @@ export function buildCierreLines(d: CierreTicketData): Line[] {
 }
 
 /** Corta por palabra al ancho condensado. */
-function wrapCond(texto: string): string[] {
+export function wrapCond(texto: string): string[] {
   const out: string[] = [];
   let linea = "";
   for (const palabra of texto.split(/\s+/)) {

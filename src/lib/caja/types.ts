@@ -352,6 +352,8 @@ export type MozoRendicion = {
   notes: string | null;
   por_metodo: Record<PaymentMethod, number>;
   estado: RendicionEstado;
+  /** Lo que se le pagó de propina en esta rendición, congelado (spec 178). */
+  propina_pagada_cents: number;
   created_at: string;
 };
 
