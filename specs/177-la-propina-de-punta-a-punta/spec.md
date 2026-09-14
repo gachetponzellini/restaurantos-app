@@ -315,9 +315,13 @@ período de transición** —propinas cobradas antes del deploy, rendiciones des
 el esperado va a subir por esa propina sin que exista el movimiento que la baja.
 El primer cierre después del deploy puede mostrar sobrante por ese monto.
 
-Hay que decidir si se corrige el histórico o se marca un corte hacia adelante,
-igual que hizo la 098 con el stock (*"de acá en adelante ajusta solo"*). **No se
-hizo nada de eso todavía.**
+✅ **Resuelto por el issue [#287](https://github.com/gachetponzellini/RestaurantOS-app/issues/287)**
+(2026-09-14). A diferencia de la 098 con el stock, acá **sí se corrige el
+histórico**: la migración `0107` repone el movimiento `propina` que la rendición
+habría creado, fechado en el cobro. Y la medición contra el cloud dice que para
+golf-jcr y kcc el problema es hipotético —cero propina en efectivo en toda su
+historia—, así que la migración es una red y no una corrección. Ver la pregunta
+abierta 4 para los números.
 
 **La rendición del mozo pide plata que en KCC el mozo no tiene.** La D3 de la
 139 excluye de la rendición al operador de la caja y a los encargados, pero la
@@ -341,8 +345,22 @@ implementar B.**
 3. ~~¿El fondo es realmente fijo?~~ **Respondida**: *"capaz varía, pero va a ser
    siempre más o menos parecido"* — o sea configurable y estable, que es lo que
    D7 implementa.
-4. **¿Se corrige el histórico de arqueos** al cambiar la fórmula, o se marca un
-   corte hacia adelante? **Sigue abierta, y bloquea el deploy tranquilo.**
+4. ~~¿Se corrige el histórico de arqueos al cambiar la fórmula, o se marca un
+   corte hacia adelante?~~ **Respondida** (Juan, 2026-09-14, issue
+   [#287](https://github.com/gachetponzellini/RestaurantOS-app/issues/287)): **se
+   corrige el histórico**, con la migración
+   [`0107`](../../supabase/migrations/0107_la_propina_de_antes_del_deploy.sql).
+   Por cada propina en efectivo que una rendición ya registrada cubrió, escribe
+   el movimiento `propina` que esa rendición habría creado, fechado **en el
+   cobro** para que caiga en la misma ventana que neutraliza.
+
+   Medido contra el cloud antes de decidir: **golf-jcr y kcc no tienen una sola
+   propina en efectivo**, ni en los 8 cortes cerrados ni en los períodos
+   abiertos (que además no tienen un cobro). La fórmula vieja reproduce
+   `caja_cortes.expected_cash_cents` exacto en los 8, así que el cruce del
+   deploy está vacío y la migración inserta **0 filas** para los dos. Va igual
+   como red: si entre la medición y el deploy se cobra una propina en efectivo,
+   queda cubierta sola en vez de aparecer como sobrante esa noche.
 5. **D3 (`received_cents`)** — sigue sin confirmar. Está implementado; si no era
    eso, se saca sin tocar nada más.
 6. **Corregir la propina de un cobro no ajusta la orden.** `corregir_pago_tx`
