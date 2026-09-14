@@ -34,8 +34,18 @@ export function elapsedSince(iso: string): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+/**
+ * `new Date("2026-09-03")` es medianoche UTC, que en AR es el 2 a las 21:00:
+ * una fecha sin hora (`YYYY-MM-DD`) se ancla al mediodía para que ningún
+ * timezone la mueva de día. Un timestamp completo (ya trae su propia hora)
+ * se deja como está.
+ */
+function parseLocalDay(iso: string): Date {
+  return iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
+}
+
 export function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-AR", {
+  return parseLocalDay(iso).toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "short",
   });

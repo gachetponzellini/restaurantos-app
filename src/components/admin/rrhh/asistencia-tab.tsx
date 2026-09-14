@@ -297,13 +297,17 @@ function KpiCard({
   );
 }
 
+// `dateStr` acá siempre es `YYYY-MM-DD` (la fecha del gráfico diario, sin
+// hora). `new Date(dateStr)` la lee como medianoche UTC, que en AR cae en el
+// día anterior — el mismo desfase que tenía el título del panel de detalle
+// (ver `DayDetailPanel`, más abajo). Ancla al mediodía para que no se mueva.
 function getDayOfWeekLabel(dateStr: string): string {
-  const day = new Date(dateStr).getDay();
+  const day = new Date(`${dateStr}T12:00:00`).getDay();
   return ["D", "L", "M", "M", "J", "V", "S"][day];
 }
 
 function isWeekend(dateStr: string): boolean {
-  const day = new Date(dateStr).getDay();
+  const day = new Date(`${dateStr}T12:00:00`).getDay();
   return day === 0 || day === 6;
 }
 
