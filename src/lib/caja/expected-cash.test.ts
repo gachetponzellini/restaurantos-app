@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateExpectedCash, separarRetiroDelCierre } from "./expected-cash";
+import {
+  calculateExpectedCash,
+  separarRetiroDelCierre,
+  type ExpectedCashInput,
+} from "./expected-cash";
 
 describe("calculateExpectedCash", () => {
   it("sin movimientos ni payments: devuelve last_closing_cash", () => {
@@ -280,5 +284,129 @@ describe("separarRetiroDelCierre", () => {
     expect(r.apertura_cents).toBe(arrastre);
     expect(r.retiro_cierre_cents).toBe(0);
     expect(r.del_turno).toEqual([mov]);
+  });
+});
+
+// ── issue #287 · el cruce del deploy de la spec 177 ──────────────────────
+//
+// La D5 cambió la fórmula, y `calculateExpectedCash` no congela nada: el
+// resumen de un cierre se reconstruye de su ventana (spec 149 · D1). Así que
+// una propina en efectivo cobrada **antes** del deploy deja de descontarse del
+// esperado, pero tampoco existe el movimiento que la baje —cuando esa rendición
+// se registró, el flujo no lo creaba—. Un corte que alguien contó y firmó se
+// relee con un esperado más alto, y el primer cierre posterior muestra
+// sobrante.
+//
+// La migración `0107` lo regulariza: por cada propina en efectivo que una
+// rendición ya registrada cubrió, escribe el movimiento que esa rendición
+// habría creado. Lo de acá abajo fija la propiedad que esa migración restituye,
+// y de paso el porqué del monto que elige.
+
+/** La fórmula anterior a la 177: el cajón esperaba el efectivo NETO de propina. */
+function esperadoConFormulaVieja(input: ExpectedCashInput): number {
+  const cash = input.payments
+    .filter((p) => p.method === "cash")
+    .reduce((acc, p) => acc + p.amount_cents - (p.tip_cents ?? 0), 0);
+  const vivos = input.movimientos.filter((m) => !m.cancelled_at);
+  const ingresos = vivos
+    .filter((m) => m.kind === "ingreso")
+    .reduce((acc, m) => acc + m.amount_cents, 0);
+  const sangrias = vivos
+    .filter((m) => m.kind === "sangria")
+    .reduce((acc, m) => acc + m.amount_cents, 0);
+  return input.last_closing_cash_cents + cash + ingresos - sangrias;
+}
+
+describe("issue #287 · regularizar la propina de antes del deploy", () => {
+  // Una noche cualquiera pre-177: arrastre, dos cobros en efectivo con propina,
+  // uno con tarjeta que también dejó propina, y la sangría del dueño.
+  const apertura = 50_000_00;
+  const payments: ExpectedCashInput["payments"] = [
+    { method: "cash", amount_cents: 120_000_00, tip_cents: 8_000_00 },
+    { method: "cash", amount_cents: 45_000_00, tip_cents: 2_500_00 },
+    { method: "card_manual", amount_cents: 60_000_00, tip_cents: 5_050_00 },
+  ];
+  const sangria = { kind: "sangria" as const, amount_cents: 30_000_00 };
+  const propinaEnEfectivo = 8_000_00 + 2_500_00;
+
+  /** Lo que el encargado firmó esa noche, con la fórmula de entonces. */
+  const firmado = esperadoConFormulaVieja({
+    last_closing_cash_cents: apertura,
+    payments,
+    movimientos: [sangria],
+  });
+
+  it("sin regularizar, el corte firmado se relee con sobrante por la propina en efectivo", () => {
+    const releidoHoy = calculateExpectedCash({
+      last_closing_cash_cents: apertura,
+      payments,
+      movimientos: [sangria],
+    });
+
+    // Esto es exactamente el bug del issue: el cierre pide contar más plata de
+    // la que pidió esa noche, y la diferencia es la propina en efectivo.
+    expect(releidoHoy - firmado).toBe(propinaEnEfectivo);
+  });
+
+  it("con el movimiento backfilleado, el corte vuelve a dar lo que se firmó", () => {
+    const releidoRegularizado = calculateExpectedCash({
+      last_closing_cash_cents: apertura,
+      payments,
+      movimientos: [
+        sangria,
+        // Lo que escribe la 0107: un `propina` por cada cobro en efectivo con
+        // propina, fechado en el cobro para que caiga en esta misma ventana.
+        { kind: "propina", amount_cents: 8_000_00 },
+        { kind: "propina", amount_cents: 2_500_00 },
+      ],
+    });
+
+    expect(releidoRegularizado).toBe(firmado);
+  });
+
+  // El porqué de la decisión 1 de la migración. La propina de tarjeta nunca
+  // estuvo descontada del esperado viejo *ni salió del cajón* en esa época:
+  // pagarle al mozo la propina de tarjeta es justo lo que la 177 construyó.
+  // Backfillearla inventaría una salida que no ocurrió.
+  it("backfillear también la propina de tarjeta dejaría el corte POR DEBAJO de lo firmado", () => {
+    const conPropinaDeTarjeta = calculateExpectedCash({
+      last_closing_cash_cents: apertura,
+      payments,
+      movimientos: [
+        sangria,
+        { kind: "propina", amount_cents: 8_000_00 },
+        { kind: "propina", amount_cents: 2_500_00 },
+        { kind: "propina", amount_cents: 5_050_00 },
+      ],
+    });
+
+    expect(conPropinaDeTarjeta).toBe(firmado - 5_050_00);
+    expect(conPropinaDeTarjeta).toBeLessThan(firmado);
+  });
+
+  // El porqué de las decisiones 4 y 5, que son el mismo riesgo por los dos
+  // lados: una propina que la rendición todavía no pagó (el flujo nuevo la va a
+  // pagar cuando ocurra) y una que la rendición YA pagó (el movimiento existe,
+  // fechado en la rendición). En los dos casos el backfill sería un segundo
+  // movimiento por la misma plata, y el cajón la pierde dos veces.
+  it("un segundo movimiento por la misma propina la descuenta dos veces", () => {
+    const backfill = { kind: "propina" as const, amount_cents: 8_000_00 };
+    const laRendicionFutura = {
+      kind: "propina" as const,
+      amount_cents: 8_000_00,
+    };
+
+    const unaVez = calculateExpectedCash({
+      last_closing_cash_cents: apertura,
+      payments,
+      movimientos: [sangria, laRendicionFutura],
+    });
+    const dosVeces = calculateExpectedCash({
+      last_closing_cash_cents: apertura,
+      payments,
+      movimientos: [sangria, backfill, laRendicionFutura],
+    });
+
+    expect(unaVez - dosVeces).toBe(8_000_00);
   });
 });
