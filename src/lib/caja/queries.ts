@@ -6,6 +6,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { calculateExpectedCash, separarRetiroDelCierre } from "./expected-cash";
 import { calcularRendicionMozo } from "./liquidacion-mozo";
+import { MOVIMIENTO_LABEL } from "./movimiento-label";
 import { mozosQueDebenRendir } from "./deben-rendir";
 import {
   repartirEfectivoEsperado,
@@ -1465,8 +1466,8 @@ export async function getLibroDeMovimientos(
       method: null,
       attributed_mozo_id: null,
       attributed_mozo_name: null,
-      descripcion:
-        m.reason?.trim() || (m.kind === "sangria" ? "Sangría" : "Ingreso"),
+      // issue #299 — el fallback binario llamaba «Ingreso» al pago de propina.
+      descripcion: m.reason?.trim() || MOVIMIENTO_LABEL[m.kind],
       order_id: null,
       order_number: null,
       anulado: m.cancelled_at !== null,

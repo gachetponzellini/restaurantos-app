@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { registrarIngreso, registrarSangria } from "@/lib/caja/actions";
 import { agruparCobrosPorMozo } from "@/lib/caja/liquidacion-mozo";
+import { MOVIMIENTO_LABEL, saleDelCajon } from "@/lib/caja/movimiento-label";
 import type { CajaPayment } from "@/lib/caja/queries";
 import type {
   CajaConEstado,
@@ -576,7 +577,10 @@ function CajaCard({
 
 
 function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
-  const isSangria = mov.kind === "sangria";
+  // issue #299 — esto era `mov.kind === "sangria"`, así que el pago de propina
+  // (spec 177 · D6) caía en el `else` y se dibujaba como «Ingreso», verde y con
+  // `+`: plata que salió del cajón figurando como que entró.
+  const sale = saleDelCajon(mov.kind);
   const time = new Date(mov.created_at).toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -593,10 +597,10 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
       <span
         className={cn(
           "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
-          isSangria ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700",
+          sale ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700",
         )}
       >
-        {isSangria ? (
+        {sale ? (
           <ArrowDownToLine className="size-3.5" strokeWidth={2.25} />
         ) : (
           <ArrowUpFromLine className="size-3.5" strokeWidth={2.25} />
@@ -605,11 +609,11 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-sm font-semibold text-zinc-900">
-            {isSangria ? "Sangría" : "Ingreso"}
+            {MOVIMIENTO_LABEL[mov.kind]}
             <span className="ml-1.5 text-[10px] font-normal text-zinc-400 tabular-nums">{time}</span>
           </p>
-          <p className={cn("shrink-0 text-sm font-bold tabular-nums", isSangria ? "text-rose-700" : "text-emerald-700")}>
-            {isSangria ? "−" : "+"}
+          <p className={cn("shrink-0 text-sm font-bold tabular-nums", sale ? "text-rose-700" : "text-emerald-700")}>
+            {sale ? "−" : "+"}
             {formatCurrency(mov.amount_cents)}
           </p>
         </div>

@@ -45,6 +45,7 @@ import {
   verCorrecciones,
   type CorreccionLogConNombres,
 } from "@/lib/caja/correccion-actions";
+import { MOVIMIENTO_LABEL, saleDelCajon } from "@/lib/caja/movimiento-label";
 import type { LibroEntry, LibroTotales, PaymentMethod } from "@/lib/caja/types";
 import { formatInvoiceNumber, tipoLabel } from "@/lib/afip/format";
 import type { TipoComprobante } from "@/lib/afip/types";
@@ -329,7 +330,10 @@ export function LibroClient({
           <ul className="divide-y divide-zinc-100">
             {entries.map((e) => {
               const Icon = iconoDe(e);
-              const esSangria = e.tipo === "sangria" || e.tipo === "propina";
+              // Gobierna el signo de abajo. Se llamaba `esSangria` aunque ya
+              // incluía la propina: el valor era correcto, el nombre no, y un
+              // nombre que miente sobre un signo de plata es como nació el #299.
+              const sale = e.tipo !== "cobro" && saleDelCajon(e.tipo);
               return (
                 <li key={`${e.tipo}-${e.id}`}>
                   <button
@@ -344,7 +348,7 @@ export function LibroClient({
                           ? "bg-zinc-100 text-zinc-400"
                           : e.tipo === "propina"
                             ? "bg-amber-50 text-amber-700"
-                            : esSangria
+                            : sale
                               ? "bg-rose-50 text-rose-700"
                               : e.tipo === "ingreso"
                                 ? "bg-emerald-50 text-emerald-700"
@@ -371,22 +375,24 @@ export function LibroClient({
                             "shrink-0 text-base font-bold tabular-nums",
                             e.anulado
                               ? "text-zinc-400 line-through"
-                              : esSangria
+                              : sale
                                 ? "text-rose-700"
                                 : "text-zinc-900",
                           )}
                         >
-                          {esSangria ? "−" : "+"}
+                          {sale ? "−" : "+"}
                           {formatCurrency(e.amount_cents)}
                         </p>
                       </div>
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="truncate text-sm text-zinc-500">
-                          {e.tipo === "cobro" && e.method
-                            ? METHOD_LABEL[e.method]
-                            : esSangria
-                              ? "Sangría"
-                              : "Ingreso"}
+                          {e.tipo === "cobro"
+                            ? e.method
+                              ? METHOD_LABEL[e.method]
+                              : "Cobro"
+                            : // issue #299 — decía «Sangría» para el pago de
+                              // propina, que el drawer de abajo ya nombraba bien.
+                              MOVIMIENTO_LABEL[e.tipo]}
                           <span className="mx-1 text-zinc-300">·</span>
                           {e.caja_name}
                           {e.attributed_mozo_name && (

@@ -1,6 +1,7 @@
 import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 
+import { MOVIMIENTO_LABEL, saleDelCajon } from "@/lib/caja/movimiento-label";
 import type { CajaMovimiento } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,9 @@ export function MovimientoRow({
   movimiento: CajaMovimiento;
   timezone: string;
 }) {
-  const esIngreso = m.kind === "ingreso";
+  // issue #299 — el signo ya estaba bien (la propina cae del lado de la salida),
+  // pero el rótulo de fallback la llamaba «Sangría».
+  const esIngreso = !saleDelCajon(m.kind);
   const anulado = m.cancelled_at != null;
   const Icon = esIngreso ? ArrowUpFromLine : ArrowDownToLine;
 
@@ -43,7 +46,7 @@ export function MovimientoRow({
             anulado ? "text-zinc-400 line-through" : "text-zinc-900",
           )}
         >
-          {m.reason?.trim() || (esIngreso ? "Ingreso" : "Sangría")}
+          {m.reason?.trim() || MOVIMIENTO_LABEL[m.kind]}
         </p>
         <p className="mt-0.5 text-xs tabular-nums text-zinc-500">
           {formatInTimeZone(new Date(m.created_at), timezone, "HH:mm")}
