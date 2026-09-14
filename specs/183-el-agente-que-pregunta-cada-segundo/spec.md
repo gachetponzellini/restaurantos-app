@@ -15,8 +15,9 @@ instalador), [`124`](../124-print-agents-por-alcance/spec.md) (varios agentes po
 negocio), [`051`](../051-print-agent-render-server/spec.md) (el server
 pre-renderiza el ticket; el agente es un relay).
 
-**Se mide contra** [`#304`](https://github.com/gachetponzellini/RestaurantOS-app/issues/304),
-que hay que cerrar primero.
+**Medido** en [`#304`](https://github.com/gachetponzellini/RestaurantOS-app/issues/304):
+la cadencia de 1s y los dos agentes están confirmados contra producción (ver
+«Lo medido», abajo). Falta sólo saber qué línea de la factura se dispara.
 
 ---
 
@@ -70,9 +71,37 @@ latido justamente para poder razonar sobre agentes viejos. O sea: el server ya
 sabe convivir con `.exe` de distintas épocas, que es la restricción real acá
 (actualizar el binario en golf es una sesión de TeamViewer, no un deploy).
 
+**Fluid Compute ya está activo y la región ya está alineada** (#304):
+`resourceConfig.fluid: true`, `iad1` = us-east-1 = la de Supabase. No hay un
+toggle gratis esperando, y no hay cross-region. Lo que queda por bajar es
+tráfico real, que es de lo que trata esta spec.
+
 **La identidad ya viaja en la key.** Desde la 124 el server sabe *qué* agente
 está llamando sin que el agente mande nada nuevo. Eso es lo que hace posible la
 D2 sin cambiar el instalador.
+
+---
+
+---
+
+## Lo medido — 2026-09-14
+
+Dos muestras de `print_agent_status` contra la base cloud:
+
+| negocio | staleness #1 | #2 | `agent_version` |
+|---|---|---|---|
+| `golf-jcr` | 1.1s | 1.25s | **NULL** |
+| `kcc` | 1.2s | 0.87s | **NULL** |
+
+El latido nunca pasa de ~1,3s de viejo: la cadencia de 1s es real en los dos
+locales. Son **exactamente dos agentes**, así que la cuenta de arriba no hay que
+corregirla.
+
+Y `agent_version` viene **NULL en los dos**: ambos `.exe` son anteriores a
+set-2026 (la #278 fue la que agregó el campo). Eso convierte el riesgo de más
+abajo en un hecho — hoy, ningún local ahorraría nada — y a la vez lo abarata:
+los dos binarios hay que actualizarlos igual, así que la visita ya estaba
+pendiente por otro motivo.
 
 ---
 
@@ -168,11 +197,13 @@ no hace falta pagar el riesgo.
 
 ## Riesgos
 
-- **Un agente viejo no ahorra nada.** Ignora `next_poll_ms` y sigue a 1s; la D1
-  tampoco lo alcanza porque él sigue mandando el latido aparte. El ahorro
-  completo llega recién cuando el `.exe` está actualizado en los dos locales —
-  por eso la D3 existe. Hay que mirar `agent_version` en el panel para saber
-  contra quién estamos midiendo.
+- **Un agente viejo no ahorra nada, y hoy los dos son viejos.** Ignora
+  `next_poll_ms` y sigue a 1s; la D1 tampoco lo alcanza porque él sigue mandando
+  el latido aparte. El ahorro completo llega recién cuando el `.exe` está
+  actualizado en golf y en kcc — por eso la D3 existe, y por eso conviene
+  empaquetar esta actualización con cualquier otra que ya deba ir al local.
+  `agent_version` en el panel dice contra quién estamos midiendo: mientras siga
+  en NULL, no hay nada que medir.
 - **`next_poll_ms` mal calculado deja al local sin imprimir rápido.** Es el modo
   de fallar que importa. Mitigación: la función es pura y testeada, el piso
   nunca baja de 1s y el techo está acotado a 20s, y cualquier pull que traiga
