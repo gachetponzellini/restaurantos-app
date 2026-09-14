@@ -112,7 +112,7 @@ describe("FloorPlanViewer — punto de demora (spec 30)", () => {
 });
 
 describe("FloorPlanViewer — el mozo de la mesa", () => {
-  it("escribe el nombre debajo de la mesa, no un círculo con iniciales", () => {
+  it("escribe el nombre ADENTRO de la mesa, no un círculo con iniciales", () => {
     const extras: Record<string, TableExtra> = {
       t1: { mozoLabel: "Juan B.", mozoColor: "#6366f1", mozoInk: "#4338ca" },
     };
@@ -121,12 +121,32 @@ describe("FloorPlanViewer — el mozo de la mesa", () => {
     );
 
     const nombre = getByText("Juan B.");
-    // Debajo del borde de abajo de la mesa (height = 100), no adentro.
-    expect(Number(nombre.getAttribute("y"))).toBeGreaterThan(100);
+    const y = Number(nombre.getAttribute("y"));
+    // Adentro del dibujo (la mesa va de y=0 a y=100), no colgando abajo: ahí
+    // se mezclaba con la mesa de la fila siguiente.
+    expect(y).toBeGreaterThan(0);
+    expect(y).toBeLessThan(100);
+    // Y debajo del número, que sigue siendo el renglón que manda.
+    expect(y).toBeGreaterThan(Number(getByText("12").getAttribute("y")));
     // Con el color del mozo, el mismo que su punto en la leyenda.
     expect(nombre.getAttribute("fill")).toBe("#4338ca");
     // El badge viejo (círculo con las iniciales) no está más.
     expect(container.querySelector('circle[fill="#6366f1"]')).toBeNull();
+  });
+
+  it("en una mesa chica recorta el nombre en vez de desbordarla", () => {
+    const extras: Record<string, TableExtra> = { t1: { mozoLabel: "Antonella" } };
+    const { getByText, queryByText } = render(
+      <FloorPlanViewer
+        plan={plan}
+        tables={[makeTable({ width: 35, height: 35 })]}
+        extras={extras}
+      />,
+    );
+
+    // 35 pt de ancho (las del Jardín de KCC) no dan para "Antonella".
+    expect(queryByText("Antonella")).toBeNull();
+    expect(getByText("Anton…")).not.toBeNull();
   });
 
   it("una mesa girada no deja el nombre acostado", () => {

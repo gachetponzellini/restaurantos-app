@@ -186,9 +186,9 @@ function ViewerTable({
   const [showDelayTip, setShowDelayTip] = useState(false);
   const cx = table.width / 2;
   const cy = table.height / 2;
-  // El translate y el rotate van separados a propósito: el nombre del mozo
-  // cuelga del grupo trasladado pero NO del rotado, así una mesa girada no
-  // deja el nombre acostado de lado.
+  // El translate y el rotate van separados a propósito: el nombre del mozo va
+  // en el grupo trasladado pero NO en el rotado, así una mesa girada no lo
+  // deja acostado de lado.
   const place = `translate(${table.x} ${table.y})`;
   const spin = `rotate(${table.rotation} ${cx} ${cy})`;
   const opStatus = table.operational_status ?? "libre";
@@ -269,6 +269,39 @@ function ViewerTable({
     }
   }
 
+  // ── Los renglones de adentro de la mesa ──
+  // Hasta tres, centrados en el medio del dibujo: el rótulo (número o nombre
+  // del cliente), la sub-línea (hora de la reserva / hace cuánto está abierta)
+  // y el nombre del mozo. El del mozo colgaba DEBAJO de la mesa y en un plano
+  // apretado se leía mal —quedaba pegado a la mesa de abajo—, así que entró
+  // adentro como un renglón más (Juan, 2026-09-14).
+  const labelFontSize = nameLabel ? labelSize * 0.86 : labelSize;
+  // Recortado al ancho de la mesa, igual que el nombre del cliente: en las
+  // mesas de 35 pt del Jardín de KCC "Antonella" no entra ni cerca.
+  const mozoLabel = extra?.mozoLabel
+    ? fitNameToTable(extra.mozoLabel, table.width / (mozoNameSize * 0.58))
+    : null;
+
+  const LINE_GAP = 2;
+  const lineSizes = [
+    labelFontSize,
+    ...(subLine ? [subSize] : []),
+    ...(mozoLabel ? [mozoNameSize] : []),
+  ];
+  const stackHeight =
+    lineSizes.reduce((a, b) => a + b, 0) + LINE_GAP * (lineSizes.length - 1);
+  // El bloque arranca arriba del centro y cada texto se apoya a ~0.85 de su
+  // caja, que es más o menos donde cae la base de una mayúscula.
+  let lineTop = cy - stackHeight / 2;
+  const baselines = lineSizes.map((size) => {
+    const y = lineTop + size * 0.85;
+    lineTop += size + LINE_GAP;
+    return y;
+  });
+  const labelY = baselines[0];
+  const subLineY = subLine ? baselines[1] : 0;
+  const mozoY = mozoLabel ? baselines[subLine ? 2 : 1] : 0;
+
   return (
     <g
       transform={place}
@@ -310,9 +343,9 @@ function ViewerTable({
         {/* Label central */}
         <text
           x={cx}
-          y={subLine ? cy - 2 : cy + labelSize * 0.35}
+          y={labelY}
           textAnchor="middle"
-          fontSize={nameLabel ? labelSize * 0.86 : labelSize}
+          fontSize={labelFontSize}
           fontWeight="700"
           fill="#18181b"
           style={{
@@ -328,7 +361,7 @@ function ViewerTable({
         {subLine && (
           <text
             x={cx}
-            y={cy + subSize + 2}
+            y={subLineY}
             textAnchor="middle"
             fontSize={subSize}
             fontWeight="500"
@@ -441,21 +474,22 @@ function ViewerTable({
         )}
       </g>
 
-      {/* Nombre del mozo, DEBAJO de la mesa y derecho (fuera del grupo que
-          rota). Reemplaza al círculo con iniciales que vivía en la esquina:
-          en un plano lleno, "JB" no dice nada sin ir a buscar la leyenda, y
-          encima le comía la esquina a la mesa. El halo blanco es para que se
-          lea igual sobre la foto del salón. */}
-      {extra?.mozoLabel && (
+      {/* Nombre del mozo: ADENTRO de la mesa, como último renglón, pero
+          derecho —fuera del grupo que rota—. Reemplazó al círculo con
+          iniciales ("JB" no dice nada sin ir a buscar la leyenda) y antes
+          colgaba debajo del dibujo, donde en un plano lleno se confundía con
+          la mesa de abajo. El halo blanco queda, finito: en modo pintura el
+          relleno es translúcido y atrás puede haber foto del salón. */}
+      {mozoLabel && (
         <text
           x={cx}
-          y={table.height + mozoNameSize * 0.85 + 3}
+          y={mozoY}
           textAnchor="middle"
           fontSize={mozoNameSize}
           fontWeight="700"
-          fill={extra.mozoInk ?? "#3f3f46"}
+          fill={extra?.mozoInk ?? "#3f3f46"}
           stroke="#ffffff"
-          strokeWidth={mozoNameSize * 0.3}
+          strokeWidth={mozoNameSize * 0.18}
           strokeLinejoin="round"
           style={{
             paintOrder: "stroke",
@@ -464,7 +498,7 @@ function ViewerTable({
             fontFamily: "inherit",
           }}
         >
-          {extra.mozoLabel}
+          {mozoLabel}
         </text>
       )}
     </g>
