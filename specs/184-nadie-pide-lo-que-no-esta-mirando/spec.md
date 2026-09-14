@@ -15,7 +15,14 @@ es el patrón a copiar), [`101`](../101-tabs-sin-red/spec.md) (el keep-alive de
 tabs y el guard `active`), [`039`](../039-fundaciones-perf-percibida/spec.md)
 (la iniciativa de perf percibida).
 
-**Se mide contra** [`#304`](https://github.com/gachetponzellini/RestaurantOS-app/issues/304).
+**Prioridad: baja.** #304 midió la factura y **esto no es una issue de plata**:
+el print-agent ([`183`](../183-el-agente-que-pregunta-cada-segundo/spec.md))
+explica prácticamente todas las invocaciones del proyecto, y el total de
+invocaciones cuesta $1.94/mes. Los tres hallazgos de acá son reales, pero
+arreglarlos no se nota en el resumen. Se sostiene por **correctitud** (D1: un
+negocio disparando refetches en otro está mal aunque sea gratis, y deja de ser
+gratis con diez negocios en la misma base) y por **perf percibida** (D3), no por
+costo. Va después de la 183.
 
 ---
 

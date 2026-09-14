@@ -35,12 +35,20 @@ async function tick() {
   const comandas = await fetchComandas(); // GET  /api/print-agent
 ```
 
-| | por agente | Golf + House |
-|---|---|---|
-| día | 172.800 | 345.600 |
-| mes | ~5,2 M | **~10,4 M** |
+Medido contra la factura (#304): **3,24M invocaciones/mes**, 108.000 por día —
+que es exactamente dos agentes a 2 req/s durante las ~7,5 h que las PCs del
+local están encendidas. Y que Edge Requests (3.22M) e Invocations (3.24M) den
+casi igual dice lo demás: **el tráfico del proyecto es este loop**, no gente
+usando la app.
 
-Y desde la 124 golf tiene una PC por caja, así que son más de dos agentes.
+**Y cada una de esas invocaciones cuesta diez veces lo que parece.** La
+invocación en sí vale $0.0006; pero arrastra **~9 eventos de Observability**
+(8.96 medido sobre 30 días, 9.73 sobre 18 — la relación es estable) a $1.20 el
+millón, o sea **$0.011**. Observability Events es el **70% de la factura**
+($34.82 de $49.46), y lo que está ingiriendo es, casi entero, este loop: nueve
+eventos cada vez que la respuesta es «no hay nada para imprimir».
+
+Lo caro nunca fue la invocación. Es **mirarla**.
 
 No es sólo el conteo. Cada request hace `autenticarAgente` → una query a
 `print_agent_credentials` ([`agent-auth.ts:56`](../../src/app/api/print-agent/agent-auth.ts)),
@@ -54,7 +62,13 @@ de corrido.
 
 Un restaurante manda comandas durante cuatro o cinco horas por día, y adentro
 de ese rato pasan minutos entre una y otra. La cadencia de 1s está dimensionada
-para el peor segundo del año y se paga los otros 86.399.
+para el peor segundo del año y se paga todos los demás.
+
+**Cuánto vale esta spec:** un recorte del 85% del tráfico del agente baja la
+factura del proyecto de ~$49 a **~$15/mes**. Es el único cambio de código del
+repo que mueve la aguja — todo lo que arregla la
+[`184`](../184-nadie-pide-lo-que-no-esta-mirando/spec.md) junto suma $9.50 y
+hacerlo entero no se notaría.
 
 ## Lo que ya está construido
 
