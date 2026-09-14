@@ -27,6 +27,7 @@ import {
 import {
   canCancelItem,
   canModifyPostEnvio,
+  canEmpezarComanda,
   canReimprimirComanda,
 } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -415,7 +416,10 @@ export async function enviarComanda(
     extra_station_ids: string[] | null;
     sin_comanda: boolean;
     track_stock: boolean;
-    category: { station_id: string | null; extra_station_ids: string[] | null } | null;
+    category: {
+      station_id: string | null;
+      extra_station_ids: string[] | null;
+    } | null;
   };
   const products = (productRows ?? []) as unknown as ProductRow[];
   if (products.length !== productIds.length) {
@@ -1288,6 +1292,11 @@ export async function advanceComandaStatus(
 
   const ctxResult = await requireMozoActionContext(business.id);
   if (!ctxResult.ok) return ctxResult;
+  // Spec 182 · D2 — empezar una comanda es de cocina. La terminal mira el
+  // tablero y entrega, pero no empieza.
+  if (!canEmpezarComanda(ctxResult.data.role)) {
+    return actionError("Solo encargado o admin pueden empezar una comanda.");
+  }
 
   const service = createSupabaseServiceClient() as unknown as GenericClient;
 
@@ -2033,7 +2042,10 @@ export async function getSwappableProducts(
     station_id: string | null;
     extra_station_ids: string[] | null;
     sin_comanda: boolean;
-    category: { station_id: string | null; extra_station_ids: string[] | null } | null;
+    category: {
+      station_id: string | null;
+      extra_station_ids: string[] | null;
+    } | null;
   };
   // Spec 180 — «rutea a este sector» ahora incluye a los que lo tienen como
   // 2ª o 3ª: en la comanda de cocina se puede cambiar una papa por otra.

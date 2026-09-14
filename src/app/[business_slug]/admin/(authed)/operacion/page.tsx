@@ -8,6 +8,10 @@ import { getSalonOptions } from "@/lib/admin/floor-plan/queries";
 import { startOfTodayUtc } from "@/lib/admin/orders-query";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { canSee } from "@/lib/permissions/sections";
+import {
+  veTabDeOperacion,
+  type OperacionTab,
+} from "@/lib/permissions/operacion-tabs";
 import { getBusiness } from "@/lib/tenant";
 
 import {
@@ -78,22 +82,40 @@ export default async function LocalEnVivoPage({
   // Una promesa por grupo de tab. NO se hace `await`: se pasan a LocalShell,
   // que las lee con `use()` dentro de un `<Suspense>` por tab. Salón (default)
   // pinta apenas resuelve `salon`, sin esperar a las demás.
+  // Spec 182 · D3 — una promesa SÓLO por tab que este rol ve. Antes se creaban
+  // las ocho para todos: el shell escondía el pane, pero la promesa se le pasa
+  // igual a un componente cliente y React la serializa, así que el dato viajaba
+  // al navegador lo mismo. Al `terminal` —una PC que comparte todo el salón—
+  // le llegaban los cortes de caja (esperado, contado, diferencia), las
+  // rendiciones por mozo y los teléfonos de las reservas del día. No se veían
+  // en pantalla: se leían con «ver código fuente».
+  const rol = ctx.isPlatformAdmin ? "admin" : (ctx.role ?? "admin");
+  const ve = (tab: OperacionTab) => veTabDeOperacion(rol, tab);
+
   const salon = loadSalon(business.id, service, { todayStart, tomorrowStart });
   const comandas = loadComandas(business.id);
-  const pedidos = loadPedidos(business.id, business.timezone, {
-    kitchenMin: business.scheduled_march_lead_kitchen_min,
-    deliveryFeeCents: Number(business.delivery_fee_cents ?? 0),
-  });
-  const caja = loadCaja(business.id);
-  const cuentas = loadCuentas(business.id);
-  const rendicion = loadRendicion(business.id, service);
   const fichaje = loadFichaje(business.id, business_slug);
-  const reservas = loadReservas(business.id, service, {
-    date: reservasDate,
-    dayStart: reservasDayStart,
-    dayEnd: reservasDayEnd,
-    timezone: business.timezone,
-  });
+  const pedidos = ve("pedidos")
+    ? loadPedidos(business.id, business.timezone, {
+        kitchenMin: business.scheduled_march_lead_kitchen_min,
+        deliveryFeeCents: Number(business.delivery_fee_cents ?? 0),
+      })
+    : null;
+  // Caja la usa también el panel de Rendición (el corte del turno), así que se
+  // carga si el rol ve cualquiera de las dos.
+  const caja = ve("caja") || ve("rendicion") ? loadCaja(business.id) : null;
+  const cuentas = ve("cuentas") ? loadCuentas(business.id) : null;
+  const rendicion = ve("rendicion")
+    ? loadRendicion(business.id, service)
+    : null;
+  const reservas = ve("reservas")
+    ? loadReservas(business.id, service, {
+        date: reservasDate,
+        dayStart: reservasDayStart,
+        dayEnd: reservasDayEnd,
+        timezone: business.timezone,
+      })
+    : null;
 
   // /admin/operacion toma full viewport (overlay sobre el sidebar) — sin
   // PageShell/PageHeader: el header con tabs ya vive dentro de LocalShell.
@@ -104,7 +126,7 @@ export default async function LocalEnVivoPage({
       businessId={business.id}
       timezone={business.timezone}
       currentUserId={ctx.userId}
-      role={ctx.isPlatformAdmin ? "admin" : (ctx.role ?? "admin")}
+      role={rol}
       salones={salones}
       salon={salon}
       comandas={comandas}

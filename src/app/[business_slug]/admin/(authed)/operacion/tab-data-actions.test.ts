@@ -166,7 +166,6 @@ describe("la terminal del salón (spec 140 · D2)", () => {
   // hasta recargar la página.
   const suyas = [
     ["salón", () => getSalonTabData("golf"), loadSalon],
-    ["reservas", () => getReservasTabData("golf", "2026-08-08"), loadReservas],
     ["fichaje", () => getFichajeTabData("golf"), loadFichaje],
   ] as const;
 
@@ -182,6 +181,10 @@ describe("la terminal del salón (spec 140 · D2)", () => {
   const ajenas = [
     ["caja", () => getCajaTabData("golf"), loadCaja],
     ["rendición", () => getRendicionTabData("golf"), loadRendicion],
+    // Spec 182 · D1 — el libro del día pasó a ser supervisión. La terminal ve
+    // las reservas de HOY por la tab Mesas (viajan con el plano); navegar
+    // fechas, editar y la bandeja «A confirmar» son del encargado.
+    ["reservas", () => getReservasTabData("golf", "2026-08-08"), loadReservas],
   ] as const;
 
   for (const [nombre, call, loader] of ajenas) {

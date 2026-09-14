@@ -195,7 +195,10 @@ export async function getReservasTabData(
   slug: string,
   date: string,
 ): Promise<ActionResult<ReservasData>> {
-  const ctx = await requireOperacionContext(slug);
+  // Spec 182 · D1 — el libro del día es supervisión: la terminal perdió la tab
+  // (la matriz ya cerraba `/admin/reservas` para ella), y las reservas que sí
+  // necesita —las de hoy, para sentar— viajan en la tab Mesas.
+  const ctx = await requireOperacionContext(slug, { soloSupervision: true });
   if (!ctx.ok) return ctx;
 
   const { businessId, timezone } = ctx.data;

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -33,6 +27,7 @@ import {
   marcarComandaEntregada,
   solicitarReimpresion,
 } from "@/lib/comandas/actions";
+import type { BusinessRole } from "@/lib/admin/context";
 import type { LocalComanda, LocalStation } from "@/lib/admin/local-query";
 import { matchesSalon } from "@/lib/admin/salon-filter";
 import {
@@ -41,14 +36,18 @@ import {
 } from "@/lib/comandas/entregadas-window";
 import type { ComandaStatus } from "@/lib/comandas/types";
 import {
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  canCancelItem,
+  canEmpezarComanda,
+  canModifyPostEnvio,
+  canReimprimirComanda,
+} from "@/lib/permissions/can";
 import { AnularComandaModal } from "@/components/shared/anular-comanda-modal";
 import { EditarItemsModal } from "@/components/shared/editar-items-modal";
 
@@ -237,6 +236,7 @@ type ComandaOptimistic =
 export function ComandasKanban({
   slug,
   businessId,
+  role,
   initialComandas,
   stations: initialStations,
   mozos: initialMozos,
@@ -247,6 +247,13 @@ export function ComandasKanban({
 }: {
   slug: string;
   businessId: string;
+  /**
+   * Spec 182 · D2 — hasta acá el kanban no sabía quién lo miraba, y le pintaba
+   * a la `terminal` los tres botones que el server le rechaza: reimprimir,
+   * editar y anular. Un botón que existe para fallar enseña a ignorar los
+   * errores. La terminal ve y **entrega**; empezar es de cocina.
+   */
+  role: BusinessRole;
   initialComandas: LocalComanda[];
   stations: LocalStation[];
   mozos: MozoMember[];
@@ -339,6 +346,13 @@ export function ComandasKanban({
         return { ...c, status: "entregado", delivered_at: action.deliveredAt };
       }),
   );
+
+  // Los tres del ⋯ son admin/encargado en el server; `puedeEmpezar` lo es
+  // desde la 182. Se calculan una vez acá y bajan a las cards.
+  const puedeEmpezar = canEmpezarComanda(role);
+  const puedeReimprimir = canReimprimirComanda(role);
+  const puedeEditar = canModifyPostEnvio(role);
+  const puedeAnular = canCancelItem(role);
 
   const onEmpezar = (id: string) => {
     run({ kind: "empezar", id }, () => advanceComandaStatus(id, slug));
@@ -649,6 +663,10 @@ export function ComandasKanban({
                     onReimprimir={onReimprimir}
                     onEditar={() => setEditarTarget(c)}
                     onAnular={() => setAnularTarget(c)}
+                    puedeEmpezar={puedeEmpezar}
+                    puedeReimprimir={puedeReimprimir}
+                    puedeEditar={puedeEditar}
+                    puedeAnular={puedeAnular}
                     isPending={isPending}
                   />
                 ))}
@@ -788,6 +806,10 @@ function ComandaCard({
   onReimprimir,
   onEditar,
   onAnular,
+  puedeEmpezar,
+  puedeReimprimir,
+  puedeEditar,
+  puedeAnular,
   isPending,
 }: {
   comanda: LocalComanda;
@@ -800,6 +822,12 @@ function ComandaCard({
   onReimprimir: (id: string) => void;
   onEditar: () => void;
   onAnular: () => void;
+  /** Spec 182 · D2. Ojo con el nombre: `isTerminal` de acá abajo es el ESTADO
+   *  de la comanda (entregada), no el rol `terminal`. */
+  puedeEmpezar: boolean;
+  puedeReimprimir: boolean;
+  puedeEditar: boolean;
+  puedeAnular: boolean;
   isPending: boolean;
 }) {
   const elapsed = useElapsedMinutes(comanda.emitted_at);
@@ -981,7 +1009,7 @@ function ComandaCard({
           para que la card ocupe poco con muchas comandas a la vez. */}
       {!isTerminal ? (
         <div className="flex items-center gap-1.5 pt-0.5">
-          {comanda.status === "pendiente" && (
+          {comanda.status === "pendiente" && puedeEmpezar && (
             <button
               type="button"
               onClick={() => onEmpezar(comanda.id)}
@@ -1009,6 +1037,9 @@ function ComandaCard({
             onReimprimir={onReimprimir}
             onEditar={onEditar}
             onAnular={onAnular}
+            puedeReimprimir={puedeReimprimir}
+            puedeEditar={puedeEditar}
+            puedeAnular={puedeAnular}
           />
         </div>
       ) : (
@@ -1035,6 +1066,9 @@ function ComandaCard({
             onReimprimir={onReimprimir}
             onEditar={onEditar}
             onAnular={onAnular}
+            puedeReimprimir={puedeReimprimir}
+            puedeEditar={puedeEditar}
+            puedeAnular={puedeAnular}
           />
         </div>
       )}
@@ -1058,6 +1092,9 @@ function ComandaMenu({
   onReimprimir,
   onEditar,
   onAnular,
+  puedeReimprimir,
+  puedeEditar,
+  puedeAnular,
 }: {
   comanda: LocalComanda;
   isPending: boolean;
@@ -1066,8 +1103,17 @@ function ComandaMenu({
   onReimprimir: (id: string) => void;
   onEditar: () => void;
   onAnular: () => void;
+  puedeReimprimir: boolean;
+  puedeEditar: boolean;
+  puedeAnular: boolean;
 }) {
-  const canManage = comanda.status !== "entregado" && !comanda.cancelled_at;
+  const activa = comanda.status !== "entregado" && !comanda.cancelled_at;
+  const verEditar = activa && puedeEditar;
+  const verAnular = activa && puedeAnular;
+
+  // Sin ninguna de las tres no hay menú: el ⋯ vacío era la versión que veía la
+  // terminal (spec 182 · D2).
+  if (!puedeReimprimir && !verEditar && !verAnular) return null;
 
   return (
     <DropdownMenu>
@@ -1079,34 +1125,38 @@ function ComandaMenu({
         <MoreVertical className="size-4" strokeWidth={2.5} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem
-          onClick={() => onReimprimir(comanda.id)}
-          disabled={reprintQueued}
-        >
-          {reprintQueued ? (
-            <>
-              <Printer />
-              En cola de impresión…
-            </>
-          ) : printFailed ? (
-            <>
-              <RotateCcw />
-              Reintentar impresión
-            </>
-          ) : (
-            <>
-              <Printer />
-              Reimprimir
-            </>
-          )}
-        </DropdownMenuItem>
-        {canManage && (
+        {puedeReimprimir && (
+          <DropdownMenuItem
+            onClick={() => onReimprimir(comanda.id)}
+            disabled={reprintQueued}
+          >
+            {reprintQueued ? (
+              <>
+                <Printer />
+                En cola de impresión…
+              </>
+            ) : printFailed ? (
+              <>
+                <RotateCcw />
+                Reintentar impresión
+              </>
+            ) : (
+              <>
+                <Printer />
+                Reimprimir
+              </>
+            )}
+          </DropdownMenuItem>
+        )}
+        {verEditar && (
+          <DropdownMenuItem onClick={onEditar}>
+            <Pencil />
+            Editar comanda
+          </DropdownMenuItem>
+        )}
+        {verAnular && (
           <>
-            <DropdownMenuItem onClick={onEditar}>
-              <Pencil />
-              Editar comanda
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {(puedeReimprimir || verEditar) && <DropdownMenuSeparator />}
             <DropdownMenuItem variant="destructive" onClick={onAnular}>
               <Ban />
               Anular comanda
@@ -1170,4 +1220,3 @@ function comandaOrigen(comanda: LocalComanda): string {
     ? `Mesa ${comanda.table_label ?? "?"}`
     : comanda.customer_name || "Pedido online";
 }
-

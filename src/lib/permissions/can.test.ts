@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canEmpezarComanda,
   DESCUENTO_BAJO_PCT,
   DESCUENTO_MEDIO_PCT,
   DIFERENCIA_CAJA_OK_CENTS,
@@ -32,6 +33,22 @@ import {
   canTransferTable,
   canTransitionMesa,
 } from "./can";
+
+describe("canEmpezarComanda (spec 182)", () => {
+  it("empezar una comanda es de cocina: admin y encargado", () => {
+    expect(canEmpezarComanda("admin")).toBe(true);
+    expect(canEmpezarComanda("encargado")).toBe(true);
+  });
+
+  it("la terminal mira el tablero y entrega, pero no empieza", () => {
+    expect(canEmpezarComanda("terminal")).toBe(false);
+  });
+
+  it("el mozo tampoco (ni ve el kanban)", () => {
+    expect(canEmpezarComanda("mozo")).toBe(false);
+    expect(canEmpezarComanda("personal")).toBe(false);
+  });
+});
 
 describe("permissions / canMoveTable", () => {
   it("solo admin y encargado pueden trasladar una mesa (spec 048)", () => {
@@ -152,26 +169,26 @@ describe("permissions / canAcceptCajaDifference", () => {
   });
 
   it("encargado: borde exacto en $5000 (positivo) acepta", () => {
-    expect(canAcceptCajaDifference("encargado", DIFERENCIA_CAJA_OK_CENTS))
-      .toBe(true);
+    expect(canAcceptCajaDifference("encargado", DIFERENCIA_CAJA_OK_CENTS)).toBe(
+      true,
+    );
   });
 
   it("encargado: borde exacto en -$5000 (faltante) acepta", () => {
-    expect(canAcceptCajaDifference("encargado", -DIFERENCIA_CAJA_OK_CENTS))
-      .toBe(true);
+    expect(
+      canAcceptCajaDifference("encargado", -DIFERENCIA_CAJA_OK_CENTS),
+    ).toBe(true);
   });
 
   it("encargado: $5000.01 rechaza (sobrante)", () => {
-    expect(canAcceptCajaDifference("encargado", DIFERENCIA_CAJA_OK_CENTS + 1))
-      .toBe(false);
+    expect(
+      canAcceptCajaDifference("encargado", DIFERENCIA_CAJA_OK_CENTS + 1),
+    ).toBe(false);
   });
 
   it("encargado: -$5000.01 rechaza (faltante)", () => {
     expect(
-      canAcceptCajaDifference(
-        "encargado",
-        -(DIFERENCIA_CAJA_OK_CENTS + 1),
-      ),
+      canAcceptCajaDifference("encargado", -(DIFERENCIA_CAJA_OK_CENTS + 1)),
     ).toBe(false);
   });
 

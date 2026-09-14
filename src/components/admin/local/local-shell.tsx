@@ -98,46 +98,16 @@ import {
   getFichajeTabData,
   getReservasTabData,
 } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
+import {
+  tabsVisiblesEnOperacion,
+  type OperacionTab,
+} from "@/lib/permissions/operacion-tabs";
 import { cn } from "@/lib/utils";
 import { AyudaChip } from "@/components/admin/ayuda-chip";
 
-const TABS = [
-  "salon",
-  "reservas",
-  "comandas",
-  "pedidos",
-  "caja",
-  // spec 141 — «Cuentas corrientes», no «Cuentas»: en la casa «la cuenta» es la
-  // factura de la mesa, y confundirlas en la barra de operación sería caro. Va
-  // después de Caja porque es la familia de la plata.
-  "cuentas",
-  "rendicion",
-  "fichaje",
-] as const;
-
-type Tab = (typeof TABS)[number];
-
-/**
- * Qué tabs ve cada rol (spec 140 · D2). Sin entrada acá = las ve todas.
- *
- * `terminal` es el puesto compartido del salón: opera mesas y comandas,
- * gestiona la agenda del día y deja que el personal fiche con su PIN. No ve la
- * plata de supervisión —caja, rendición— ni la cola de pedidos de mostrador.
- *
- * Rendición además no tendría qué mostrar: con una cuenta compartida por todo
- * el salón, "lo mío" no existe. La plata se atribuye al mozo de cada mesa y la
- * rendición la mira el encargado desde su propia pantalla.
- *
- * Se le pasa a `useTabParam` como lista de válidas, así un `?tab=caja` escrito
- * a mano cae al default en vez de abrir la tab.
- */
-const TABS_POR_ROL: Partial<Record<BusinessRole, readonly Tab[]>> = {
-  terminal: ["salon", "reservas", "comandas", "fichaje"],
-};
-
-function tabsVisibles(role: BusinessRole): readonly Tab[] {
-  return TABS_POR_ROL[role] ?? TABS;
-}
+// Spec 182 — la lista y el gate viven en `lib/permissions/operacion-tabs.ts`:
+// el server los necesita para no crear la promesa de una tab que el rol no ve.
+type Tab = OperacionTab;
 
 /**
  * Tabs a las que aplica el filtro por salón (spec 065, FR-002).
@@ -172,12 +142,19 @@ type ShellProps = {
   cajaPedida?: string | null;
   salon: Promise<SalonData>;
   comandas: Promise<ComandasData>;
-  pedidos: Promise<PedidosData>;
-  caja: Promise<CajaData>;
-  cuentas: Promise<CuentasData>;
-  rendicion: Promise<RendicionData>;
   fichaje: Promise<FichajeData>;
-  reservas: Promise<ReservasData>;
+  /**
+   * Spec 182 · D3 — `null` cuando el rol no ve esa tab. No es una optimización:
+   * una promesa pasada a un componente cliente la serializa React y viaja al
+   * navegador, vea o no el pane. Así llegaban a la terminal —una PC compartida
+   * por todo el salón— los cortes de caja, las rendiciones por mozo y los
+   * teléfonos de las reservas del día.
+   */
+  pedidos: Promise<PedidosData> | null;
+  caja: Promise<CajaData> | null;
+  cuentas: Promise<CuentasData> | null;
+  rendicion: Promise<RendicionData> | null;
+  reservas: Promise<ReservasData> | null;
 };
 
 // ─── Pills: nunca un "0" provisional (FR-006) ────────────────────────────────
@@ -337,6 +314,7 @@ function ComandasPanel({
   promise,
   slug,
   businessId,
+  role,
   salonIds,
   salonLabel,
   active,
@@ -344,6 +322,7 @@ function ComandasPanel({
   promise: Promise<ComandasData>;
   slug: string;
   businessId: string;
+  role: BusinessRole;
   salonIds: string[];
   salonLabel: string | null;
   active: boolean;
@@ -354,6 +333,7 @@ function ComandasPanel({
     <ComandasKanban
       slug={slug}
       businessId={businessId}
+      role={role}
       initialComandas={initialComandas}
       stations={stations}
       mozos={mozos}
@@ -733,7 +713,7 @@ function TabsInner({
   // de tab no dispara ningún request (spec 101). Antes era `router.replace`, o
   // sea una navegación soft que re-ejecutaba la page entera — las 7 promesas,
   // ~30 queries — para pintar una sola tab.
-  const visibles = useMemo(() => tabsVisibles(role), [role]);
+  const visibles = useMemo(() => tabsVisiblesEnOperacion(role), [role]);
   const ve = useCallback((t: Tab) => visibles.includes(t), [visibles]);
   const [active, setTab] = useTabParam<Tab>("tab", "salon", visibles);
 
@@ -830,19 +810,21 @@ function TabsInner({
       >
         Mesas
       </TabButton>
-      <TabButton
-        active={active === "reservas"}
-        onClick={() => setTab("reservas")}
-        count={
-          <Pill
-            promise={reservas}
-            override={reservasData}
-            compute={(d) => countReservasPorSentar(d.rows, salonFilter)}
-          />
-        }
-      >
-        Reservas
-      </TabButton>
+      {ve("reservas") && reservas && (
+        <TabButton
+          active={active === "reservas"}
+          onClick={() => setTab("reservas")}
+          count={
+            <Pill
+              promise={reservas}
+              override={reservasData}
+              compute={(d) => countReservasPorSentar(d.rows, salonFilter)}
+            />
+          }
+        >
+          Reservas
+        </TabButton>
+      )}
       {/* Comandas va SIN pill: el contador de "activas" no coincidía con lo que
           se ve en el kanban de la tab, así que un número mal es peor que
           ninguno. La tab muestra el estado real. */}
@@ -852,7 +834,7 @@ function TabsInner({
       >
         Comandas
       </TabButton>
-      {ve("pedidos") && (
+      {ve("pedidos") && pedidos && (
         <TabButton
           active={active === "pedidos"}
           onClick={() => setTab("pedidos")}
@@ -866,7 +848,7 @@ function TabsInner({
           Pedidos online
         </TabButton>
       )}
-      {ve("caja") && (
+      {ve("caja") && caja && (
         <TabButton
           active={active === "caja"}
           onClick={() => setTab("caja")}
@@ -881,7 +863,7 @@ function TabsInner({
           Caja
         </TabButton>
       )}
-      {ve("cuentas") && (
+      {ve("cuentas") && cuentas && (
         <TabButton
           active={active === "cuentas"}
           onClick={() => setTab("cuentas")}
@@ -898,7 +880,7 @@ function TabsInner({
           Cuentas corrientes
         </TabButton>
       )}
-      {ve("rendicion") && (
+      {ve("rendicion") && rendicion && (
         <TabButton
           active={active === "rendicion"}
           onClick={() => setTab("rendicion")}
@@ -985,7 +967,7 @@ function TabsInner({
         {/* Pedidos online: SIEMPRE montado (oculto con CSS) para que su
             suscripción realtime no se caiga al cambiar de tab. Salvo que el rol
             no lo vea (spec 140): ahí no se monta y no abre su channel. */}
-        {ve("pedidos") && (
+        {ve("pedidos") && pedidos && (
           <div className={paneClass("pedidos")}>
             <ErrorBoundary fallback={<TabLoadError />}>
               <Suspense fallback={<TabContentSkeleton />}>
@@ -1000,7 +982,7 @@ function TabsInner({
             </ErrorBoundary>
           </div>
         )}
-        {mounted("reservas") && (
+        {ve("reservas") && mounted("reservas") && reservas && (
           <div className={paneClass("reservas")}>
             <ErrorBoundary fallback={<TabLoadError />}>
               <Suspense fallback={<TabContentSkeleton />}>
@@ -1027,6 +1009,7 @@ function TabsInner({
                   promise={comandas}
                   slug={slug}
                   businessId={businessId}
+                  role={role}
                   salonIds={salonFilter}
                   salonLabel={salonLabel}
                   active={active === "comandas"}
@@ -1035,7 +1018,7 @@ function TabsInner({
             </ErrorBoundary>
           </div>
         )}
-        {ve("caja") && mounted("caja") && (
+        {ve("caja") && mounted("caja") && caja && (
           <div className={paneClass("caja")}>
             <ErrorBoundary fallback={<TabLoadError money />}>
               <Suspense fallback={<TabContentSkeleton />}>
@@ -1051,7 +1034,7 @@ function TabsInner({
             </ErrorBoundary>
           </div>
         )}
-        {ve("cuentas") && mounted("cuentas") && (
+        {ve("cuentas") && mounted("cuentas") && cuentas && (
           <div className={paneClass("cuentas")}>
             <ErrorBoundary fallback={<TabLoadError money />}>
               <Suspense fallback={<TabContentSkeleton />}>
@@ -1064,7 +1047,7 @@ function TabsInner({
             </ErrorBoundary>
           </div>
         )}
-        {ve("rendicion") && mounted("rendicion") && (
+        {ve("rendicion") && mounted("rendicion") && rendicion && caja && (
           <div className={paneClass("rendicion")}>
             <ErrorBoundary fallback={<TabLoadError money />}>
               <Suspense fallback={<TabContentSkeleton />}>

@@ -46,13 +46,21 @@ vi.mock("@/components/reservations/admin-day-list", () => ({
   AdminDayList: () => <div data-testid="panel-reservas">RESERVAS</div>,
 }));
 vi.mock("@/components/reservations/solicitudes-inbox", () => ({
-  SolicitudesInbox: () => <div data-testid="panel-solicitudes">SOLICITUDES</div>,
+  SolicitudesInbox: () => (
+    <div data-testid="panel-solicitudes">SOLICITUDES</div>
+  ),
 }));
 
 // Las actions de tab: lo que se verifica es que al entrar a una tab se pida
 // SÓLO lo suyo, en vez de re-correr la ruta entera.
-const getReservasTabData = vi.fn(async () => ({ ok: false as const, error: "x" }));
-const getFichajeTabData = vi.fn(async () => ({ ok: false as const, error: "x" }));
+const getReservasTabData = vi.fn(async () => ({
+  ok: false as const,
+  error: "x",
+}));
+const getFichajeTabData = vi.fn(async () => ({
+  ok: false as const,
+  error: "x",
+}));
 vi.mock("@/app/[business_slug]/admin/(authed)/operacion/actions", () => ({
   getReservasTabData: () => getReservasTabData(),
   getFichajeTabData: () => getFichajeTabData(),
@@ -113,9 +121,12 @@ function shellProps() {
  * `use(promise)` y, montada fuera de act, la suspensión no se reanuda en este
  * entorno — el árbol se queda en los skeletons y no se ve ningún panel.
  */
-async function shell(url = "/golf/admin/operacion") {
+async function shell(
+  url = "/golf/admin/operacion",
+  overrides: Partial<React.ComponentProps<typeof LocalShell>> = {},
+) {
   window.history.replaceState(null, "", url);
-  const props = shellProps();
+  const props = { ...shellProps(), ...overrides };
   let utils!: ReturnType<typeof render>;
   await act(async () => {
     utils = render(<LocalShell {...props} />);
@@ -223,5 +234,51 @@ describe("LocalShell · tabs sin red (spec 101)", () => {
     await clickTab(user, /Mesas/);
     expect(screen.getByTestId("panel-salon")).toBeInTheDocument();
     expect(window.location.search).toBe("");
+  });
+});
+
+/**
+ * Spec 182 — la terminal es una PC compartida por todo el salón. El shell no le
+ * muestra la tab, y la página no le manda el dato: las props de las tabs que no
+ * ve llegan en `null` (D3). Los dos lados se prueban juntos porque el bug era
+ * justamente que sólo existía el primero.
+ */
+describe("LocalShell · lo que ve la terminal (spec 182)", () => {
+  const propsDeTerminal = {
+    role: "terminal",
+    reservas: null,
+    caja: null,
+    cuentas: null,
+    rendicion: null,
+    pedidos: null,
+  } as unknown as Partial<React.ComponentProps<typeof LocalShell>>;
+
+  it("no tiene la tab Reservas, ni su contador", async () => {
+    await shell("/golf/admin/operacion", propsDeTerminal);
+
+    expect(
+      screen.queryByRole("button", { name: /Reservas/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("panel-reservas")).not.toBeInTheDocument();
+  });
+
+  it("le quedan Mesas, Comandas y Fichaje", async () => {
+    await shell("/golf/admin/operacion", propsDeTerminal);
+
+    for (const tab of [/Mesas/, /Comandas/, /Fichaje/]) {
+      expect(screen.getByRole("button", { name: tab })).toBeInTheDocument();
+    }
+    for (const tab of [/Caja/, /Rendición/, /Cuentas corrientes/, /Pedidos/]) {
+      expect(
+        screen.queryByRole("button", { name: tab }),
+      ).not.toBeInTheDocument();
+    }
+  });
+
+  it("un ?tab=reservas escrito a mano cae en Mesas, no en el libro del día", async () => {
+    await shell("/golf/admin/operacion?tab=reservas", propsDeTerminal);
+
+    expect(screen.getByTestId("panel-salon")).toBeInTheDocument();
+    expect(screen.queryByTestId("panel-reservas")).not.toBeInTheDocument();
   });
 });

@@ -92,6 +92,7 @@ function pintar(items: LocalComandaItem[]) {
     <ComandasKanban
       slug="demo"
       businessId="biz-1"
+      role="encargado"
       initialComandas={[comanda(items)]}
       stations={[{ id: "st-fritera", name: "Fritera", sort_order: 1 }]}
       mozos={[]}

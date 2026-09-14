@@ -105,6 +105,23 @@ export function canReimprimirComanda(role: BusinessRole): boolean {
   return role === "admin" || role === "encargado";
 }
 
+/**
+ * Mover una comanda de «pendiente» a «en preparación» — el botón «Empezar» del
+ * kanban (spec 182 · D2).
+ *
+ * Es el acto de **cocina**, no del salón: lo agarré, lo estoy haciendo. La
+ * `terminal` mira el tablero y entrega (`marcarComandaEntregada`, que también
+ * usa el panel de la mesa), pero no empieza lo que no cocina.
+ *
+ * Hasta la 182 `advanceComandaStatus` no miraba el rol: alcanzaba con ser
+ * miembro del negocio. Nadie de afuera llegaba porque el kanban es la única
+ * superficie que la llama y vive en Operación — pero una puerta que sólo
+ * existe en la UI no es una puerta.
+ */
+export function canEmpezarComanda(role: BusinessRole): boolean {
+  return role === "admin" || role === "encargado";
+}
+
 // ── Cuenta / cobros ─────────────────────────────────────────────
 
 /**
