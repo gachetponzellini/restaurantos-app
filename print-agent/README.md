@@ -19,7 +19,7 @@ reimpresión pedida en el mismo GET, así que el agente imprime lo que recibe.
 | `businessId` | UUID del negocio cuyas comandas imprime |
 | `transport` | `windows` (driver/Out-Printer) o `network` (socket TCP ESC/POS) |
 | `printerName` | sólo para `windows`: nombre exacto de la impresora instalada |
-| `pollMs` | cada cuánto consulta (ms) |
+| `pollMs` | cada cuánto consulta (ms). **3000** desde la spec 183 · D3 — lo escribe el panel, no se toca a mano |
 
 - **`network`** = producción on-site: usa la `printer_ip`/`printer_port` que cada
   comanda trae en el GET (configurada en Configuración → Comanderas). Cero mapeo local.
@@ -39,3 +39,42 @@ Flags: `--once` (una pasada), `--dry-run` (no imprime ni confirma),
 
 > El server tiene que tener `PRINT_AGENT_KEY` en `.env.local` (igual a
 > `printAgentKey`). Si la agregás con el server prendido, **reiniciá `pnpm dev`**.
+
+---
+
+## Cambiar la cadencia de un local ya instalado
+
+El `.exe` lee `config.json` **una sola vez, al arrancar**, y no tiene default
+propio: el valor sale del `config.json` que generó el panel
+(`buildAgentConfig`, `src/lib/print-agent/credentials.ts`). Un agente instalado
+antes de la spec 183 sigue a `pollMs: 1000` hasta que alguien le cambie el
+archivo — deployar el server **no lo alcanza**.
+
+No hace falta TeamViewer ni un `.exe` nuevo. Desde la PC del local, con sesión
+de admin del negocio:
+
+1. Configuración → Comanderas → **Descargar instalador** en la card del agente.
+2. Descomprimir el ZIP y dejar el `config.json` recién bajado al lado de
+   `instalar.bat`.
+3. Doble clic en `instalar.bat`. Frena la tarea, copia los archivos y la vuelve
+   a registrar.
+
+**La key no cambia.** `getPrintAgentInstaller` devuelve la credencial que ya
+existe (`resolverAgente`); la que rota es `rotatePrintAgentKey`, que es otro
+botón. Bajar el config de nuevo es seguro y no deja al local sin imprimir.
+
+Para verificar que quedó, desde la base:
+
+```sql
+select b.slug, round(extract(epoch from (now() - s.last_seen_at))::numeric, 2)
+from print_agent_status s join businesses b on b.id = s.business_id
+order by b.slug;
+```
+
+Dos corridas seguidas: si el staleness pasea entre 0 y ~3s en vez de quedarse
+abajo de 1,3s, el local tomó los 3000.
+
+> El `print-agent/config.json` del repo es la config de **desarrollo**
+> (`serverUrl: localhost`). Sigue en `pollMs: 1000` a propósito: contra tu
+> propia máquina no cuesta nada y probar impresión con 3s de espera es
+> molesto. El valor que importa es el de `buildAgentConfig`.

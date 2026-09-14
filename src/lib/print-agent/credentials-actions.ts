@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { canManageBusiness, ensureAdminAccess } from "@/lib/admin/context";
+import { buildAgentConfig } from "@/lib/print-agent/credentials";
 import { normalizarScope } from "@/lib/print/agent-scope";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
@@ -312,13 +313,11 @@ export async function getPrintAgentInstaller(
   if ("error" in agente) return actionError(agente.error);
 
   const serverUrl = await currentServerUrl();
-  const config = {
+  const config = buildAgentConfig({
     serverUrl,
-    printAgentKey: agente.apiKey,
+    apiKey: agente.apiKey,
     businessId: gate.id,
-    transport: "network",
-    pollMs: 1000,
-  };
+  });
   const configJson = JSON.stringify(config, null, 2) + "\n";
 
   // El ZIP vive en Storage (fuera de Vercel por el límite de 4.5MB). Si el

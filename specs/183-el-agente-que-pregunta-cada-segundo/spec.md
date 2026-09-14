@@ -2,7 +2,7 @@
 
 **Issue:** [#302](https://github.com/gachetponzellini/RestaurantOS-app/issues/302) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** propuesta
+**Estado:** D3 implementada (2026-09-14). D1, D2 y D4, pendientes.
 
 **Input:** Juan, 2026-09-14: *"esta gastando mucha plata en vercel este
 projecto, revisemos porque esta pasando esto"*. Contando invocaciones en el
@@ -165,14 +165,27 @@ comandera. Del segundo ticket en adelante el servicio ya está en la ventana
 rápida. Contra el alternativo —*todo* el tiempo a 1s— es un intercambio que se
 hace solo.
 
-### D3 · El mínimo que se puede hacer hoy, sin tocar código
+### D3 · El mínimo que se puede hacer hoy, sin tocar el binario — ✅ hecho
 
-`pollMs` vive en el `config.json` de cada PC. **Subirlo a 3000 en los dos
-locales es un cambio de archivo, no un `.exe` nuevo**, y ya corta dos tercios
-de la cuenta mientras la D1 y la D2 se implementan y se despliegan.
+`pollMs` vive en el `config.json` de cada PC, pero **ese archivo no se escribe a
+mano: lo genera el server** y el admin lo baja del panel
+(`getPrintAgentInstaller`). Así que subirlo a 3000 sí es un cambio de código —
+sólo que del lado que no requiere un `.exe` nuevo.
+
+El valor se extrajo a `POLL_MS_DEFAULT` en `lib/print-agent/credentials.ts`,
+junto con `buildAgentConfig`, que arma el config y es puro — para poder testear
+el contrato con el `.exe` sin Supabase de por medio. El test **fija el 3000**,
+no sólo la forma: que alguien lo devuelva a 1000 tiene que romper CI, no
+aparecer en la factura tres semanas después.
+
+**Deployar no alcanza.** El `.exe` lee el config una sola vez, al arrancar, y no
+tiene default propio: los dos agentes ya instalados siguen a 1s hasta que
+alguien les cambie el archivo. El procedimiento —bajar el config del panel y
+re-correr `instalar.bat`, sin TeamViewer y sin rotar la key— quedó documentado
+en [`print-agent/README.md`](../../print-agent/README.md#cambiar-la-cadencia-de-un-local-ya-instalado).
 
 Va acá y no en una issue aparte porque es la misma decisión vista desde la
-urgencia: si la factura molesta esta semana, esto se hace el lunes.
+urgencia: corta dos tercios mientras la D1 y la D2 se implementan.
 
 ### D4 · Qué NO se hace: cachear las credenciales
 
@@ -195,7 +208,10 @@ no hace falta pagar el riesgo.
 5. Tests: la tabla de D2 como test de unidad de la función que elige la
    cadencia (pura, sin Supabase); un test de que el GET late; un test de que un
    agente sin `x-agent-version` no pisa la versión guardada (la regla de la #278).
-6. Operativo: `pollMs: 3000` en los `config.json` de golf y kcc (D3).
+6. ✅ **D3, hecha:** `POLL_MS_DEFAULT = 3000` + `buildAgentConfig` (puro) en
+   `lib/print-agent/credentials.ts`; `getPrintAgentInstaller` la usa; test que
+   fija el valor; el README documenta cómo lo toma un local ya instalado.
+   **Pendiente operativo:** que golf y kcc bajen el config nuevo.
 
 ## No-objetivos
 

@@ -1,3 +1,4 @@
+import { buildAgentConfig } from "./credentials";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // listPrintAgentCredentials (spec 046, ampliado en la 124) resuelve las keys de
@@ -140,5 +141,33 @@ describe("listPrintAgentCredentials (spec 046 + 124)", () => {
 
     expect(capturado.tablas).toEqual(["print_agent_credentials"]);
     expect(capturado.eqs).toEqual([["business_id", "biz1"]]);
+  });
+});
+
+// ── buildAgentConfig (spec 183 · D3) ──────────────────────────────────────
+// El `config.json` que baja el panel es el ÚNICO lugar donde se decide cada
+// cuánto pregunta un agente: el `.exe` lo lee al arrancar y no tiene default
+// propio. Por eso se testea el valor y no sólo la forma — que alguien lo
+// devuelva a 1000 tiene que romper un test, no aparecer en la factura tres
+// semanas después.
+describe("buildAgentConfig", () => {
+  const args = {
+    serverUrl: "https://restaurant.mithandir.com",
+    apiKey: "pak_test",
+    businessId: "b-1",
+  };
+
+  it("pollea cada 3s, no cada 1s", () => {
+    expect(buildAgentConfig(args).pollMs).toBe(3000);
+  });
+
+  it("arma el resto del contrato que espera el .exe", () => {
+    expect(buildAgentConfig(args)).toEqual({
+      serverUrl: "https://restaurant.mithandir.com",
+      printAgentKey: "pak_test",
+      businessId: "b-1",
+      transport: "network",
+      pollMs: 3000,
+    });
   });
 });
