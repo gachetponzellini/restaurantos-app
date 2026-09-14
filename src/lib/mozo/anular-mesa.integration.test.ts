@@ -288,5 +288,81 @@ describe.skipIf(!dbAvailable)(
         .single();
       expect(order!.lifecycle_status).toBe("cancelled");
     }, 30_000);
+
+    // ── issue #296 · la mesa sin cuenta también se cierra ─────────────────
+    //
+    // Mesa ocupada a la que no se le cargó nada: cerrarla es deshacer un click
+    // (spec 071, por eso no se pide motivo). El corte de la spec 096 · H-30
+    // estaba escrito contra la *cuenta* en vez de contra el *estado*, así que
+    // esta mesa devolvía «La mesa no tiene una cuenta abierta para anular» y
+    // quedaba trabada: el plano no ofrece ninguna otra salida.
+    it("mesa ocupada sin cuenta abierta: la libera igual, sin pedir motivo", async () => {
+      CURRENT_USER_ID = encargadoId;
+      const tableId = await seedTable();
+
+      const res = await anularMesa(tableId, "", businessSlug);
+      expect(res.ok).toBe(true);
+
+      const { data: table } = await supabase
+        .from("tables")
+        .select("operational_status, opened_at, current_order_id")
+        .eq("id", tableId)
+        .single();
+      expect(table!.operational_status).toBe("libre");
+      expect(table!.opened_at).toBeNull();
+      expect(table!.current_order_id).toBeNull();
+
+      // Con su rastro: quién la cerró y el motivo que pone el sistema.
+      const { data: audit } = await supabase
+        .from("tables_audit_log")
+        .select("to_value, reason")
+        .eq("table_id", tableId)
+        .eq("kind", "status");
+      expect(audit).toHaveLength(1);
+      expect(audit![0]!.to_value).toBe("libre");
+      expect(audit![0]!.reason).toBe("Mesa sin consumo");
+    }, 30_000);
+
+    // Lo mismo desde `pidio_cuenta`: el permiso ya lo habilita y el cliente que
+    // pidió la cuenta y se fue sin consumir no tiene por qué dejar la mesa presa.
+    it("mesa en pidio_cuenta sin cuenta abierta: también se libera", async () => {
+      CURRENT_USER_ID = encargadoId;
+      const tableId = await seedTable();
+      await supabase
+        .from("tables")
+        .update({ operational_status: "pidio_cuenta" })
+        .eq("id", tableId);
+
+      const res = await anularMesa(tableId, "", businessSlug);
+      expect(res.ok).toBe(true);
+
+      const { data: table } = await supabase
+        .from("tables")
+        .select("operational_status")
+        .eq("id", tableId)
+        .single();
+      expect(table!.operational_status).toBe("libre");
+    }, 30_000);
+
+    // El caso que H-30 sí tenía que atajar: la mesa ya está libre (el mozo la
+    // cobró un segundo antes). Ahí no hay nada que anular, y lo que dolía era
+    // el falso «Mesa anulada.» con su audit y su notificación al mozo.
+    it("mesa ya libre: no anula ni deja rastro", async () => {
+      CURRENT_USER_ID = encargadoId;
+      const tableId = await seedTable();
+      await supabase
+        .from("tables")
+        .update({ operational_status: "libre", opened_at: null })
+        .eq("id", tableId);
+
+      const res = await anularMesa(tableId, "", businessSlug);
+      expect(res.ok).toBe(false);
+
+      const { data: audit } = await supabase
+        .from("tables_audit_log")
+        .select("id")
+        .eq("table_id", tableId);
+      expect(audit ?? []).toHaveLength(0);
+    }, 30_000);
   },
 );

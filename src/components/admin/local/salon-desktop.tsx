@@ -1392,10 +1392,10 @@ export function SalonDesktop({
     ? (allActiveTables.find((t) => t.id === pedirTable.id) ?? null)
     : null;
 
-  const pedirEstado = pedirTable
+  const pedirEstado: OperationalStatus = pedirTable
     ? ((pedirLive?.operational_status ??
         pedirTable.operational_status ??
-        "libre") as string)
+        "libre") as OperationalStatus)
     : "libre";
 
   /** Mozo vivo de esa misma mesa: asignar desde el panel se ve al instante. */
@@ -2007,8 +2007,8 @@ export function SalonDesktop({
                       ? () => setTrasladarTableId(pedirTable.id)
                       : undefined,
                   onAnular:
-                    pedirEstado === "ocupada" &&
-                    canTransitionMesa(role, "ocupada", "libre")
+                    pedirEstado !== "libre" &&
+                    canTransitionMesa(role, pedirEstado, "libre")
                       ? () => pedirAnular(pedirTable.id, pedirTable.label)
                       : undefined,
                 }}
@@ -3056,8 +3056,12 @@ function TableDetail({
   const canWalkIn = status === "libre";
   const canTransfer =
     status !== "libre" && (role !== "mozo" || table.mozo_id === currentUserId);
+  // issue #296 — también desde `pidio_cuenta`. El permiso ya lo habilita
+  // (`isAnulacion` cubre los dos estados) y era la única salida que faltaba: la
+  // mesa que pidió la cuenta y se fue sin consumir no se cobra —no hay nada que
+  // cobrar— y sin «Anular» quedaba ocupada hasta el cierre de caja.
   const canAnular =
-    status === "ocupada" && canTransitionMesa(role, status, "libre");
+    status !== "libre" && canTransitionMesa(role, status, "libre");
   // Trasladar la mesa entera a otra libre (spec 048): mesa con order abierta,
   // solo encargado/admin.
   const canTrasladar =

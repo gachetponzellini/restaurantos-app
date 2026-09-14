@@ -449,6 +449,31 @@ export async function anularMesa(
     return actionError("Solo encargado o admin pueden anular una mesa.");
   }
 
+  // spec 096 · H-30 — la mesa que YA está libre no se anula, y el corte va acá
+  // arriba: más abajo ya se auditó y se notificó.
+  //
+  // `canTransition('libre','libre')` es true por el caso `from === to`, y la
+  // guarda de rol (`isAnulacion`) sólo cubre `from` ocupada/pidio_cuenta — o sea
+  // que sobre una mesa ya libre **también se caía el chequeo de encargado**. El
+  // UPDATE no matcheaba nada y nadie miraba el resultado vacío: igual se
+  // auditaba, se notificaba y se devolvía «Mesa anulada.». Lo que pasaba: el
+  // mozo cobra la 12 y el encargado le da Anular casi en simultáneo; el
+  // encargado se queda tranquilo y al mozo le llega «te anularon la Mesa 12».
+  //
+  // issue #296 — este corte estaba escrito contra la **cuenta** («si no hay
+  // orden abierta, no hay nada que anular») en vez de contra el **estado de la
+  // mesa**, y así se llevaba puesta la mesa ocupada sin cuenta abierta: la que
+  // deja el walk-in cuando el insert de la orden falla (`openTable` lo hace
+  // best-effort a propósito), o la que se quedó sin cuenta por cualquier otro
+  // camino. Esa mesa es justo la que hay que poder cerrar de un toque —no se le
+  // cargó nada, anular ahí es deshacer un click (spec 071)— y no tenía ninguna
+  // salida en el plano: quedaba ocupada hasta que el cierre de caja barría el
+  // salón. Sin cuenta que cancelar, anular es liberar: la mesa igual se libera,
+  // se audita y la reserva `seated` se cierra.
+  if (from === "libre") {
+    return actionError("La mesa ya está libre.");
+  }
+
   // ¿Tiene consumo? Se pregunta a la DB, no al cliente (ver doc de arriba).
   const { data: openOrders, error: openErr } = await service
     .from("orders")
@@ -488,22 +513,6 @@ export async function anularMesa(
   // de stock— y derivaba los ítems a cancelar **desde las comandas activas**,
   // así que las bebidas (`station_id` null, nunca entran a `comanda_items`) y lo
   // cargado-sin-enviar quedaban vivos. En el cloud: 29 ítems por $606.200.
-  // spec 096 · H-30 — si no hay ninguna orden abierta, no hay nada que anular.
-  //
-  // `canTransition('libre','libre')` es true por el caso `from === to`, y la
-  // guarda de rol (`isAnulacion`) sólo cubre `from` ocupada/pidio_cuenta — o sea
-  // que sobre una mesa ya libre **también se caía el chequeo de encargado**. El
-  // UPDATE no matcheaba nada y nadie miraba el resultado vacío: igual se
-  // auditaba, se notificaba y se devolvía «Mesa anulada.».
-  //
-  // Lo que pasaba: el mozo cobra la 12 y el encargado le da Anular casi en
-  // simultáneo. El encargado ve «Mesa anulada.» y se queda tranquilo; el mozo
-  // recibe «te anularon la Mesa 12». No se anuló nada. La función hermana
-  // (`updateTableOperationalStatus`) sí tiene este corte — era una omisión.
-  if (openOrderIdsPrev.length === 0) {
-    return actionError("La mesa no tiene una cuenta abierta para anular.");
-  }
-
   const nowIso = new Date().toISOString();
   const openOrderIds = openOrderIdsPrev;
   for (const orderId of openOrderIds) {

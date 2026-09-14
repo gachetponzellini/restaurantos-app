@@ -499,9 +499,11 @@ export function MozoClient({
     !!selectedSync &&
     (selectedStatus !== "libre" || isOtherMozosTable) &&
     (role !== "mozo" || selectedSync.mozo_id === currentUserId || isOtherMozosTable);
+  // `pidio_cuenta` incluido (issue #296): la mesa que pidió la cuenta y no
+  // consumió nada no se cobra, y sin «Anular» no tenía cómo cerrarse.
   const canShowAnularButton =
     !!selectedSync &&
-    selectedStatus === "ocupada" &&
+    selectedStatus !== "libre" &&
     !isOtherMozosTable &&
     canTransitionMesa(role, selectedStatus, "libre");
   // Si la mesa es de otro mozo, no se puede pedir/cobrar — primero transferir.
