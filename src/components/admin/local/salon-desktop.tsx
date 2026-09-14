@@ -696,7 +696,15 @@ export function SalonDesktop({
           // El catálogo lo resuelve `useCatalogBundle` (cache + revalidación).
           // Acá sólo se pide el estado de ESTA mesa: comandas + «Lo pedido».
           const tr = await loadTableComandas(slug, table.id);
-          setPedirState(tr.ok ? tr.data : { comandas: [], loPedido: null });
+          // Un error del loader NO es una mesa vacía (#294). Antes se
+          // disfrazaba de «la mesa todavía no tiene nada cargado», y con una
+          // mesa ocupada eso es una invitación a mandar la tanda dos veces.
+          if (!tr.ok) {
+            toast.error(tr.error);
+            setPedirTable(null);
+            return;
+          }
+          setPedirState(tr.data);
         } catch (e) {
           toast.error(
             e instanceof Error ? e.message : "No pudimos abrir el pedido.",

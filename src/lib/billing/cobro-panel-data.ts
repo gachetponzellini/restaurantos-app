@@ -2,6 +2,7 @@
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { canFiar } from "@/lib/permissions/can";
+import { canSee } from "@/lib/permissions/sections";
 import { getClientesParaFiar } from "@/lib/caja/cuenta-corriente-queries";
 import { getInvoiceForOrder } from "@/lib/afip/queries";
 import type { Invoice } from "@/lib/afip/types";
@@ -137,7 +138,9 @@ export async function loadCobroForTable(
       getPaymentMethodConfigs(business.id),
     ]);
 
-  // Autorización: admin / encargado / platform admin (mismo gate que la página).
+  // Autorización: la matriz de secciones, la misma que abre el plano (#294).
+  // La lista a mano —admin o encargado— dejaba afuera a la `terminal`, que
+  // ve el salón pero recibía «No tenés permisos» al tocar «Cobrar».
   const isPlatformAdmin =
     (profileRes.data as { is_platform_admin: boolean } | null)
       ?.is_platform_admin ?? false;
@@ -149,7 +152,7 @@ export async function loadCobroForTable(
   const disabled = !!membership?.disabled_at;
   const authorized =
     isPlatformAdmin ||
-    (!disabled && (role === "admin" || role === "encargado"));
+    (!disabled && canSee("operacion", role, { isPlatformAdmin }));
   if (!authorized) return actionError("No tenés permisos.");
 
   if (tableLabel === null) return actionError("Mesa no encontrada.");
@@ -260,7 +263,7 @@ export async function loadCuentaForTable(
   const disabled = !!membership?.disabled_at;
   const authorized =
     isPlatformAdmin ||
-    (!disabled && (role === "admin" || role === "encargado"));
+    (!disabled && canSee("operacion", role, { isPlatformAdmin }));
   if (!authorized) return actionError("No tenés permisos.");
 
   if (tableLabel === null) return actionError("Mesa no encontrada.");

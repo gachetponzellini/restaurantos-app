@@ -2,7 +2,6 @@
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { currentDayOfWeek } from "@/lib/day-of-week";
-import { ensureAdminAccess } from "@/lib/admin/context";
 import { requireMozoActionContext } from "@/lib/mozo/auth";
 import {
   getActiveOrderByTable,
@@ -10,7 +9,10 @@ import {
   getStationsByBusiness,
   type ComandaConItems,
 } from "@/lib/comandas/queries";
-import { getCatalogForMozo, type CatalogForMozo } from "@/lib/mozo/catalog-query";
+import {
+  getCatalogForMozo,
+  type CatalogForMozo,
+} from "@/lib/mozo/catalog-query";
 import {
   getDailyMenusForToday,
   type DailyMenuForMozo,
@@ -18,6 +20,7 @@ import {
 import type { LoPedido } from "@/lib/mozo/lo-pedido";
 import { getLoPedido } from "@/lib/mozo/lo-pedido-query";
 import { getTopProductIds } from "@/lib/mozo/top-products";
+import { canSee } from "@/lib/permissions/sections";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
 
@@ -43,15 +46,26 @@ export type PedirCatalogBundle = {
   dailyMenus: DailyMenuForMozo[];
 };
 
-async function gateAdmin(slug: string) {
+/**
+ * Gate del panel de UNA mesa: **quien ve el plano, ve sus mesas** (#294).
+ *
+ * Acá había una lista de roles escrita a mano —admin o encargado— que la spec
+ * 167 ya había sacado de `operacion/actions.ts` pero no de este archivo. La
+ * `terminal` (spec 140) abre el plano, toca una mesa con tres comandas en
+ * cocina y el loader le contestaba «No tenés permisos»; como el salón
+ * convertía ese error en estado vacío, lo que veía era **«la mesa todavía no
+ * tiene nada cargado»**. Ni cobrar podía: sin enviados no hay «Cobrar».
+ *
+ * La matriz es una sola: si `sectionAccess("operacion")` abre la página, sus
+ * datos también.
+ */
+async function gateOperacion(slug: string) {
   const business = await getBusiness(slug);
   if (!business) return { ok: false as const, error: "Negocio no encontrado." };
-  const ctx = await ensureAdminAccess(business.id, slug);
-  if (
-    !ctx.isPlatformAdmin &&
-    ctx.role !== "admin" &&
-    ctx.role !== "encargado"
-  ) {
+  const ctx = await requireMozoActionContext(business.id);
+  if (!ctx.ok) return { ok: false as const, error: ctx.error };
+  const { role, isPlatformAdmin } = ctx.data;
+  if (!canSee("operacion", role, { isPlatformAdmin })) {
     return { ok: false as const, error: "No tenés permisos." };
   }
   return { ok: true as const, business };
@@ -118,7 +132,7 @@ export async function loadTableComandas(
   slug: string,
   tableId: string,
 ): Promise<ActionResult<TableOrderState>> {
-  const gate = await gateAdmin(slug);
+  const gate = await gateOperacion(slug);
   if (!gate.ok) return actionError(gate.error);
   const { business } = gate;
 

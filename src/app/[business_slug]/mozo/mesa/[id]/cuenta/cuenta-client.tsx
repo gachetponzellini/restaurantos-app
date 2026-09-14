@@ -217,13 +217,19 @@ export function CuentaClient({
     });
   };
 
-  const tramoDescuento =
-    role === "mozo" ? "10%" : role === "encargado" ? "25%" : "sin límite";
+  // La terminal tiene el tope del mozo (`canApplyDiscount`, spec 140): el
+  // cartel le decía «sin límite» y el server le rechazaba el 15 % (#294).
+  const topeDeMozo = role === "mozo" || role === "terminal";
+  const tramoDescuento = topeDeMozo
+    ? "10%"
+    : role === "encargado"
+      ? "25%"
+      : "sin límite";
 
   // A quién hay que ir a buscar cuando el descuento se pasa del tramo. Estaba
   // escrito «pedile al encargado» para todos, así que la encargada leía que se
   // pidiera permiso a sí misma (issue #188). Arriba del encargado está el dueño.
-  const quienAutoriza = role === "mozo" ? "l encargado" : "l dueño";
+  const quienAutoriza = topeDeMozo ? "l encargado" : "l dueño";
 
   // ↑/↓ recorren los controles de la cuenta —líneas, dividir, propina,
   // descuento, Cobrar— sin cambiar a Tab (spec 075, FR-017). Sólo en el panel
