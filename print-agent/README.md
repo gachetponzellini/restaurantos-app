@@ -1,14 +1,26 @@
-# Print agent (referencia — spec 28 / 33 / 35)
+# Print agent (referencia — spec 28 / 33 / 35 / 183)
 
 Programita que corre en una PC del local: lee las comandas `pendiente` de la app
 y las imprime. Loop **pull → imprimir → confirmar**. No es parte del build de
 Next; corre suelto con Node (`node print-agent/agent.mjs`).
 
-Además del pull, cada tick manda un **heartbeat** (`POST /api/print-agent/heartbeat`,
-spec 35) para que operación vea el agente como "conectado". Es best-effort: si
-falla no corta la impresión, solo aparece "sin conexión". La **reimpresión**
-(spec 35) no requiere nada del agente: el server incluye las comandas con
-reimpresión pedida en el mismo GET, así que el agente imprime lo que recibe.
+**Un solo request por vuelta** desde la spec 183 · D1: el pull ES el latido de
+salud. El server lo registra como efecto del mismo GET y lee la versión del
+agente de `x-agent-version`. El `POST /api/print-agent/heartbeat` (spec 35)
+sigue existiendo para los `.exe` viejos, que lo mandan aparte, pero está
+deprecado. La **reimpresión** (spec 35) no requiere nada del agente: el server
+incluye las comandas con reimpresión pedida en el mismo GET.
+
+**El GET puede tardar ~25 s y eso es normal** (spec 183 · D5): cuando no hay
+nada para imprimir, el server **retiene la respuesta** mirando la cola y
+contesta apenas aparece algo. Un agente ocioso queda preguntando cada ~30 s
+—diez veces menos tráfico— y cuando hay trabajo la comanda sale en ~2-3 s, más
+rápido que antes. No es un cuelgue; no le pongas timeout corto al fetch.
+
+**La cadencia la manda el server** (spec 183 · D2): la respuesta trae
+`next_poll_ms` y el agente duerme eso. Si no viene —server viejo, rollback— usa
+el `pollMs` del config. Así se tunea un local con un deploy en vez de una
+visita.
 
 ## Config (`config.json`)
 
@@ -19,7 +31,7 @@ reimpresión pedida en el mismo GET, así que el agente imprime lo que recibe.
 | `businessId` | UUID del negocio cuyas comandas imprime |
 | `transport` | `windows` (driver/Out-Printer) o `network` (socket TCP ESC/POS) |
 | `printerName` | sólo para `windows`: nombre exacto de la impresora instalada |
-| `pollMs` | cada cuánto consulta (ms). **3000** desde la spec 183 · D3 — lo escribe el panel, no se toca a mano |
+| `pollMs` | cada cuánto consulta (ms). **3000** desde la spec 183 · D3 — lo escribe el panel, no se toca a mano. Desde la D2 es sólo el **fallback**: manda el `next_poll_ms` del server. Y desde la D5 importa poco: la retención del GET pacea el loop sola |
 
 - **`network`** = producción on-site: usa la `printer_ip`/`printer_port` que cada
   comanda trae en el GET (configurada en Configuración → Comanderas). Cero mapeo local.
@@ -43,6 +55,13 @@ Flags: `--once` (una pasada), `--dry-run` (no imprime ni confirma),
 ---
 
 ## Cambiar la cadencia de un local ya instalado
+
+> **Desde la spec 183 · D2 esto casi nunca hace falta.** El server manda
+> `next_poll_ms` en cada respuesta y la retención de la D5 pacea al agente sin
+> que el config importe: con la retención viva, golf (`pollMs` 10000) quedó en
+> un período de 36 s y kcc (1000) en 27 s **sin tocar ninguna de las dos PCs**.
+> Este procedimiento queda para un `.exe` anterior a 2026-09-15 al que haya que
+> cambiarle el fallback, o para bajar un instalador nuevo.
 
 El `.exe` lee `config.json` **una sola vez, al arrancar**, y no tiene default
 propio: el valor sale del `config.json` que generó el panel

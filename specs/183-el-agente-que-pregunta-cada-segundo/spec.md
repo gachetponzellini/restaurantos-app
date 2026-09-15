@@ -2,7 +2,10 @@
 
 **Issue:** [#302](https://github.com/gachetponzellini/RestaurantOS-app/issues/302) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** D3 implementada (2026-09-14). D1, D2 y D4, pendientes.
+**Estado:** implementada y verificada en producción (2026-09-15). D3, D5, D1 y
+D2 hechas; D4 es un no-hacer. **El tráfico del print-agent bajó 90% sin tocar
+ninguna de las dos PCs de los locales** — medido contra la base, ver «Lo medido
+después» al final.
 
 **Input:** Juan, 2026-09-14: *"esta gastando mucha plata en vercel este
 projecto, revisemos porque esta pasando esto"*. Contando invocaciones en el
@@ -155,7 +158,7 @@ pendiente por otro motivo.
 
 ## Decisiones
 
-### D1 · El latido viaja adentro del pull
+### D1 · El latido viaja adentro del pull — ✅ hecho (2026-09-15)
 
 El GET pasa a registrar el latido como efecto de la misma llamada. Ya tiene todo
 lo que necesita: autenticó, sabe qué agente es, y `version` puede viajar en un
@@ -178,7 +181,15 @@ llamando los agentes viejos, y mientras haya uno instalado tiene que seguir
 respondiendo. Se marca como deprecado en el docstring, con la fecha de la
 versión que dejó de necesitarlo.
 
-### D2 · La cadencia la decide el server, no el `.exe`
+**Cómo quedó.** El upsert salió a `lib/print-agent/heartbeat.ts`
+(`registrarLatido`), compartido por las dos puertas: mientras convivan agentes
+viejos y nuevos, la fila tiene que significar lo mismo sin importar por dónde
+entró el latido — incluida la regla de la #278 de no pisar la versión guardada
+cuando no viene. Se agregó `beat=0`, que no late: el `--dry-run` del agente de
+referencia antes simplemente no llamaba al heartbeat, y probar desde una máquina
+de desarrollo no tiene que hacer que el panel del local diga «conectado».
+
+### D2 · La cadencia la decide el server, no el `.exe` — ✅ hecho (2026-09-15)
 
 El GET devuelve `next_poll_ms` junto con las comandas. El agente lo respeta si
 viene; si no viene (server viejo, rollback), usa su `cfg.pollMs` de siempre.
@@ -212,6 +223,20 @@ comanda después de un rato muerto tarda hasta 5 segundos más en salir por la
 comandera. Del segundo ticket en adelante el servicio ya está en la ventana
 rápida. Contra el alternativo —*todo* el tiempo a 1s— es un intercambio que se
 hace solo.
+
+**Y con la D5 encima ese peor caso casi no se paga**: si el agente está
+retenido, la comanda no espera el sleep — sale a los ~2-3 s (verificado: 3,2 s
+de punta a punta, ver abajo). El `next_poll_ms` sólo se cobra cuando el agente
+justo estaba durmiendo.
+
+**Verificado en producción** con una credencial temporal contra el negocio
+`demo`: un pull con trabajo devuelve `next_poll_ms: 1000`, y uno vacío sobre un
+sector sin cola devuelve `5000` (abierto, sin movimiento). Un negocio **sin
+`business_hours` cargados cuenta como abierto** — el horario es config de la
+carta online, no del salón, y tratarlo como cerrado mandaría 20 s en pleno
+servicio. Del lado del agente, `next_poll_ms` se acota a [500 ms, 60 s] antes de
+dormirlo: este `.exe` se actualiza a mano y va a seguir corriendo contra deploys
+que todavía no existen.
 
 ### D3 · El mínimo que se puede hacer hoy, sin tocar el binario — ✅ hecho
 
@@ -271,7 +296,7 @@ es justo lo contrario de lo que la security review #4 pidió cuando se retiró l
 par de veces por minuto, no una vez por segundo: el problema se disuelve solo y
 no hace falta pagar el riesgo.
 
-### D5 · El server retiene la respuesta cuando no hay nada — *propuesta*
+### D5 · El server retiene la respuesta cuando no hay nada — ✅ hecho (2026-09-15)
 
 Juan, 2026-09-15: *"creo que podríamos hacer que sea cada 30 segundos, no hace
 falta que sea instantánea la comanda"*. Tiene razón sobre la comanda, y está
@@ -323,26 +348,73 @@ Dos arreglos chicos la acompañan, o la cadencia lenta rompe lo que ya estaba:
    `pollMs × 5` ([`agent.mjs:67`](../../print-agent/agent.mjs)), que a 10 s ya
    son 50 s para avisar que una comanda no salió.
 
+#### Cómo quedó implementada
+
+Todos los números viven juntos en `lib/print-agent/cadence.ts` —retención,
+intervalo de sondeo, la tabla de la D2 y el umbral del panel— porque se leen de
+a tres y separarlos es exactamente lo que produjo el bug del umbral. Son puros y
+testeados con los **valores fijados**, no sólo la forma: que alguien devuelva la
+retención a cero tiene que romper CI, no aparecer en la factura tres semanas
+después (la lección de la D3, donde el `pollMs: 1000` vivió un año porque nada
+lo miraba).
+
+- **Retención 25 s, sondeo cada 2 s.** El sondeo es la latencia real de una
+  comanda cuando el agente está retenido: 2 s, mejor que el período de 10,99 s
+  que golf tenía. `wait_ms` en la query lo acota (`0` = sin retención, lo usa
+  `--once`) y es la salida de emergencia si hubiera que desactivarla sin
+  revertir.
+- **La sonda mira el timestamp, no sólo el estado.** Dos `count` con `head`
+  contra `comandas` y `print_jobs` —las dos únicas tablas de las que sale
+  papel— filtrando por «apareció después de que empezó esta retención». Sin esa
+  marca de agua, una fila `pendiente` que quedó colgada de antes —comandera
+  apagada, negocio sin impresora de control— haría positivo cada sondeo y
+  rearmaríamos el payload cada 2 s para nada. La sintaxis del doble `or=` (que
+  PostgREST combina con AND) se verificó contra el cloud antes de escribirla:
+  81 ∧ 44 → 18.
+- **Ante un error de sonda contesta «puede que haya»** y rearma el payload. El
+  modo de fallar que importa no es gastar una query: es una sonda que dice «no
+  hay» con una comanda esperando.
+- **Techo de 3 reconstrucciones por request.** La sonda es del negocio y el
+  payload es del agente: en un negocio con dos PCs, el papel del otro agente
+  hace positiva la sonda de este, y sin techo serían 12 rearmados en una sola
+  request — más caro que no retener. Al agotarse contesta vacío, o sea el
+  comportamiento de antes de esta spec. (Hoy los dos negocios tienen un agente
+  cada uno, así que este camino no se ejerce en producción todavía.)
+- **`maxDuration = 60`** declarado en la ruta: un timeout más corto que la
+  retención mataría el pull y el agente vería un 504 por vuelta (no pierde
+  comandas —siguen `pendiente`— pero el ahorro se va).
+- **El umbral del panel se deriva**: 3 × el peor período ocioso (25 + 20 + 1) =
+  **138 s**, en vez de los 60 s que estaban clavados en *dos* componentes
+  distintos. El precio es que un agente realmente muerto tarda ~2,3 min en
+  cantarse en vez de 1. Si eso es mucho, lo que hay que bajar es la retención,
+  no el umbral: bajarlo trae de vuelta la falsa alarma.
+- **La gracia del aviso de fallo pasa a medirse en tiempo**: 10 s y al menos 2
+  intentos, en vez de 5 vueltas del loop. Atarla al poll era atarla a algo que
+  el local ya no controla.
+
 ## Alcance
 
-1. `GET /api/print-agent`: registra el latido (upsert de `print_agent_status`)
-   con el `agent_id` que ya resolvió, leyendo la versión de `x-agent-version`.
-2. El mismo GET calcula y devuelve `next_poll_ms` según la tabla de D2.
-3. `agent.mjs`: `tick()` deja de llamar `sendHeartbeat()`; manda
-   `x-agent-version`; el `while` usa `nextPollMs ?? cfg.pollMs`. Nuevo
-   `AGENT_VERSION`.
-4. `heartbeat/route.ts`: docstring de deprecación. Sin cambios de comportamiento.
-5. Tests: la tabla de D2 como test de unidad de la función que elige la
-   cadencia (pura, sin Supabase); un test de que el GET late; un test de que un
-   agente sin `x-agent-version` no pisa la versión guardada (la regla de la #278).
+1. ✅ `GET /api/print-agent`: registra el latido (upsert de
+   `print_agent_status`) con el `agent_id` que ya resolvió, leyendo la versión
+   de `x-agent-version`.
+2. ✅ El mismo GET calcula y devuelve `next_poll_ms` según la tabla de D2.
+3. ✅ `agent.mjs`: `tick()` deja de llamar `sendHeartbeat()`; manda
+   `x-agent-version`; el `while` usa `nextPollMs ?? cfg.pollMs`.
+   `AGENT_VERSION = 2026-09-15`.
+4. ✅ `heartbeat/route.ts`: docstring de deprecación. Sin cambios de
+   comportamiento (el upsert pasó al módulo compartido).
+5. ✅ Tests: la tabla de D2 como unidad (pura, sin Supabase); el GET late; un
+   agente sin `x-agent-version` no pisa la versión guardada (#278); la retención
+   espera, contesta apenas aparece trabajo, respeta `wait_ms`, no rearma 12
+   veces y no sigue sondeando si el agente cortó.
 6. ✅ **D3, hecha:** `POLL_MS_DEFAULT = 3000` + `buildAgentConfig` (puro) en
    `lib/print-agent/credentials.ts`; `getPrintAgentInstaller` la usa; test que
    fija el valor; el README documenta cómo lo toma un local ya instalado.
    **Operativo, en curso:** golf ya está en 10 s (verificado, período 10,99 s);
    kcc sigue en 1 s. El valor de `POLL_MS_DEFAULT` queda en 3000 hasta que la
    D5 esté: con retención, lo que el config diga importa mucho menos.
-7. **D5 (propuesta):** retención en el GET + `OFFLINE_THRESHOLD_MS` derivado de
-   la cadencia + `FAIL_THRESHOLD` desacoplado de `pollMs`.
+7. ✅ **D5, hecha:** retención en el GET + `OFFLINE_THRESHOLD_MS` derivado de
+   la cadencia + gracia del aviso de fallo medida en tiempo.
 
 ## No-objetivos
 
@@ -373,3 +445,71 @@ Dos arreglos chicos la acompañan, o la cadencia lenta rompe lo que ya estaba:
   horario mal configurado se iría a 20s en pleno servicio. Mitigación: la regla
   de los 3 minutos gana sobre la de horario — si hay comandas, es rápido,
   diga lo que diga la config.
+
+---
+
+## Lo medido después — 2026-09-15, en producción
+
+El deploy de la D5 + D1 se hizo efectivo a las **12:45 UTC**. Contando requests
+a la base por minuto (`edge_logs` del proyecto cloud), el escalón no necesita
+interpretación:
+
+| | antes (12:33–12:44) | después (12:45–12:59) | |
+|---|---:|---:|---|
+| latidos a la base (`POST print_agent_status`) | 39/min | 7,6/min | |
+| pulls (`GET comandas`) | 39/min | 3,8/min | |
+| **ticks de agente** (los dos locales juntos) | **39/min** | **3,8/min** | **−90%** |
+| **invocaciones en Vercel** | **78/min** | **7,6/min** | **−90%** |
+| sondas de la retención (`HEAD`) | 0 | ~95/min | (nuevo, va a Supabase) |
+
+Y el período por local, contando latidos distintos en una ventana fija (el `do`
+con `pg_sleep` contra el cloud):
+
+| local | `pollMs` | antes | después | predicho |
+|---|---:|---:|---:|---:|
+| `golf-jcr` | 10.000 | 10,99 s | **36,25 s** | 36,2 s |
+| `kcc` | 1.000 | 1,72 s | **26,8–29,3 s** | 27,4 s |
+
+**La fórmula aguantó otra vez**: `período = retención + pollMs + RTT` predijo
+36,2 s contra 36,25 s medidos en golf. Y el punto que importa: **esto se logró
+sin tocar ninguna de las dos PCs.** Los dos `.exe` siguen siendo los mismos
+binarios pre-set-2026 con `agent_version` NULL.
+
+Los latidos salen de a pares separados por ~0,5 s —el `POST /heartbeat` del
+binario viejo más el latido que ahora registra el GET— y después un hueco de un
+período entero. Cuando los binarios se actualicen, el par se vuelve uno solo:
+otro −50% de invocaciones (78 → 3,8/min contra el estado original).
+
+### Verificado de punta a punta
+
+Con una credencial temporal contra el negocio `demo` (creada, usada con
+`beat=0` para no escribir nada, y borrada):
+
+| qué | esperado | medido |
+|---|---|---|
+| pull con trabajo | rápido, `next_poll_ms: 1000` | **0,6 s**, 1000 ✅ |
+| pull vacío, retención default | ~25 s | **25,74 s** ✅ |
+| pull vacío, `wait_ms=6000` | ~6 s | **6,86 s** ✅ |
+| pull vacío, `wait_ms=0` | inmediato | **0,9 s** ✅ |
+| `next_poll_ms` sin movimiento, negocio abierto | 5000 | **5000** ✅ |
+| **trabajo que aparece a mitad de la retención** | contesta ahí, no a los 25 s | pedido a los 5,1 s de empezar → **contestó a los 8,3 s**, o sea **3,2 s después**, con el ticket de reimpresión adentro ✅ |
+
+Esa última fila es la decisión entera: **el agente ocioso pregunta cada 30 s y
+la comanda igual sale en 3 s.** No hubo que elegir.
+
+### Lo que queda por mirar
+
+- **Provisioned Memory en el dashboard de Vercel.** La apuesta de la D5 es que
+  retener no cuesta porque Fluid cobra CPU activa y las instancias ya estaban
+  vivas de corrido. **Si Provisioned Memory subió, la decisión estaba mal y hay
+  que revertirla.** No tengo acceso al dashboard desde acá: lo tiene que mirar
+  alguien con la cuenta. El indicador es limpio — el deploy fue a las 12:45 UTC
+  del 2026-09-15 y el resto del tráfico no cambió.
+- **Las sondas son carga nueva sobre Supabase**: ~95 `HEAD`/min (dos por sondeo,
+  cada 2 s por agente retenido) donde antes había 0. Es el intercambio
+  deliberado —lo caro era mirar la invocación en Vercel, no consultar Postgres—
+  pero si molesta, se baja a la mitad juntando las dos tablas en un RPC, o se
+  sube `PROBE_MS` a costa de latencia.
+- **Actualizar los dos `.exe`** sigue pendiente y ahora rinde menos que antes:
+  vale el −50% de invocaciones que queda y el `agent_version` en el panel, no el
+  ahorro grande, que ya está cobrado.
