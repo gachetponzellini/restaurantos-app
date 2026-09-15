@@ -84,5 +84,19 @@ si ya existe una con el mismo `street`.
 
 ## Estado
 
-CSV generado (152 filas) y **pendiente de validación del local**. La importación
-todavía **no se corrió**.
+✅ **Corrido el 2026-09-15 contra la nube** (`--env .env.cloud --apply`): 152
+clientes nuevos y 152 lotes. `kcc` quedó con 158 clientes (los 6 de prueba
+seguían ahí) y 155 direcciones, ningún cliente sin nombre y ningún teléfono
+repetido.
+
+Se corrió sin esperar la validación del local. Lo que queda por mirar con ellos,
+con el CSV en la mano:
+
+- el lote de los que salieron del `codigo` — la regla más débil de las tres;
+- la única fila marcada `revisar` (un teléfono de 11 dígitos).
+
+Se corrige re-corriendo el script con el dato arreglado: busca por
+`(business_id, phone)` y no duplica.
+
+**Ojo con el `.env`:** `.env.local` apunta al stack local, donde `kcc` no existe.
+El import a la nube va con `--env .env.cloud`.
