@@ -45,7 +45,20 @@ vi.mock("@/lib/supabase/service", () => ({
       // El GET late como efecto del pull (spec 183 · D1). Acá sólo hace falta
       // que no explote: el latido se testea en route.test.ts.
       upsert: () => Promise.resolve({ error: null }),
-      select: () => {
+      select: (_cols?: string, opts?: { head?: boolean }) => {
+        // La sonda de la retención y el count de actividad de la cadencia
+        // (spec 183 · D5/D2) son las queries con `head: true`: no traen filas.
+        if (opts?.head) {
+          const sonda = {
+            eq: () => sonda,
+            or: () => sonda,
+            gt: () => sonda,
+            limit: () => sonda,
+            then: (resolve: (v: { count: number; error: null }) => unknown) =>
+              resolve({ count: 0, error: null }),
+          };
+          return sonda;
+        }
         // El mock tiene que distinguir por `kind`: desde spec 084 el GET
         // consulta `print_jobs` tres veces (control / cuenta / factura) y sin
         // esto las filas de control se colarían por las otras dos ramas.
@@ -57,6 +70,7 @@ vi.mock("@/lib/supabase/service", () => ({
           },
           in: () => b,
           or: () => b,
+          gt: () => b,
           order: () => b,
           maybeSingle: async () => ({
             data:
@@ -74,12 +88,12 @@ vi.mock("@/lib/supabase/service", () => ({
                 table === "business_users"
                   ? businessUsersRows
                   : table !== "print_jobs"
-                  ? []
-                  : kind === "control"
-                    ? controlRows
-                    : kind === "cuenta"
-                      ? cuentaRows
-                      : [],
+                    ? []
+                    : kind === "control"
+                      ? controlRows
+                      : kind === "cuenta"
+                        ? cuentaRows
+                        : [],
               error: null,
             }),
         };
@@ -253,7 +267,12 @@ describe("GET · controles de pedido", () => {
   it("un control del sistema (sin requested_by) sigue yendo a la del negocio", async () => {
     controlRows = [ticket({ requested_by: null })];
     businessUsersRows = [
-      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+      {
+        user_id: "term1",
+        role: "terminal",
+        control_printer_ip: "local:CONTROL-T1",
+        control_printer_port: null,
+      },
     ];
     const body = await (await GET(getReq())).json();
     expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
@@ -262,7 +281,12 @@ describe("GET · controles de pedido", () => {
   it("una terminal SIN impresora propia cae a la del negocio", async () => {
     controlRows = [ticket({ requested_by: "term2" })];
     businessUsersRows = [
-      { user_id: "term2", role: "terminal", control_printer_ip: null, control_printer_port: null },
+      {
+        user_id: "term2",
+        role: "terminal",
+        control_printer_ip: null,
+        control_printer_port: null,
+      },
     ];
     const body = await (await GET(getReq())).json();
     expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
@@ -273,9 +297,17 @@ describe("GET · controles de pedido", () => {
     // `[]` y listo. Con terminales, el negocio puede no tener control central.
     agentScope = ["local:CONTROL-T1"];
     businessRow = { ...businessRow!, control_printer_ip: null };
-    controlRows = [ticket({ requested_by: "term1" }), ticket({ id: "ct2", requested_by: null })];
+    controlRows = [
+      ticket({ requested_by: "term1" }),
+      ticket({ id: "ct2", requested_by: null }),
+    ];
     businessUsersRows = [
-      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+      {
+        user_id: "term1",
+        role: "terminal",
+        control_printer_ip: "local:CONTROL-T1",
+        control_printer_port: null,
+      },
     ];
     const body = await (await GET(getReq())).json();
     // El de la terminal sale; el del sistema no tiene destino y queda pendiente.
@@ -284,9 +316,17 @@ describe("GET · controles de pedido", () => {
 
   it("el agente de cocina (alcance por IP) no recibe el control de la terminal", async () => {
     agentScope = ["192.168.10.0/24"];
-    controlRows = [ticket({ requested_by: "term1" }), ticket({ id: "ct2", requested_by: null })];
+    controlRows = [
+      ticket({ requested_by: "term1" }),
+      ticket({ id: "ct2", requested_by: null }),
+    ];
     businessUsersRows = [
-      { user_id: "term1", role: "terminal", control_printer_ip: "local:CONTROL-T1", control_printer_port: null },
+      {
+        user_id: "term1",
+        role: "terminal",
+        control_printer_ip: "local:CONTROL-T1",
+        control_printer_port: null,
+      },
     ];
     const body = await (await GET(getReq())).json();
     // Sólo el del sistema, que va a la comandera de control del negocio (.60).
@@ -296,7 +336,12 @@ describe("GET · controles de pedido", () => {
   it("la impresora de una persona (no terminal) no se usa: no es un puesto", async () => {
     controlRows = [ticket({ requested_by: "sofia" })];
     businessUsersRows = [
-      { user_id: "sofia", role: "encargado", control_printer_ip: "local:X", control_printer_port: null },
+      {
+        user_id: "sofia",
+        role: "encargado",
+        control_printer_ip: "local:X",
+        control_printer_port: null,
+      },
     ];
     const body = await (await GET(getReq())).json();
     expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
@@ -430,7 +475,9 @@ describe("POST · confirmación de un control", () => {
 
   it("un id que no es ni comanda ni control da 404", async () => {
     controlPostRow = null;
-    const res = await POST(postReq({ comanda_id: "nope", business_id: "biz1" }));
+    const res = await POST(
+      postReq({ comanda_id: "nope", business_id: "biz1" }),
+    );
     expect(res.status).toBe(404);
   });
 });

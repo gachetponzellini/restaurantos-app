@@ -23,7 +23,14 @@ vi.mock("@/lib/notifications/events", () => ({
 vi.mock("@/lib/print-agent/credentials", () => ({
   listPrintAgentCredentials: async (businessId: string) =>
     businessId === "biz1"
-      ? [{ id: "agente-biz1", apiKey: "test-key", label: null, printerScope: null }]
+      ? [
+          {
+            id: "agente-biz1",
+            apiKey: "test-key",
+            label: null,
+            printerScope: null,
+          },
+        ]
       : [],
 }));
 
@@ -33,7 +40,20 @@ vi.mock("@/lib/supabase/service", () => ({
       // El GET late como efecto del pull (spec 183 · D1). Acá sólo hace falta
       // que no explote: el latido se testea en route.test.ts.
       upsert: () => Promise.resolve({ error: null }),
-      select: () => {
+      select: (_cols?: string, opts?: { head?: boolean }) => {
+        // La sonda de la retención y el count de actividad de la cadencia
+        // (spec 183 · D5/D2) son las queries con `head: true`: no traen filas.
+        if (opts?.head) {
+          const sonda = {
+            eq: () => sonda,
+            or: () => sonda,
+            gt: () => sonda,
+            limit: () => sonda,
+            then: (resolve: (v: { count: number; error: null }) => unknown) =>
+              resolve({ count: 0, error: null }),
+          };
+          return sonda;
+        }
         let kind: string | null = null;
         const b = {
           eq: (col: string, val: unknown) => {
@@ -179,7 +199,9 @@ describe("POST · el resultado de la prueba", () => {
       print_failed_at: "2026-09-09T21:00:00.000Z",
       reprint_requested_at: null,
     };
-    await POST(postReq({ comanda_id: "pj1", business_id: "biz1", result: "ok" }));
+    await POST(
+      postReq({ comanda_id: "pj1", business_id: "biz1", result: "ok" }),
+    );
     const upd = captured.find((u) => u.table === "print_jobs");
     expect(upd?.vals.status).toBe("impreso");
     expect(upd?.vals.last_error).toBeNull();

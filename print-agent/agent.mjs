@@ -524,7 +524,26 @@ async function fetchComandas() {
   });
   if (!res.ok) throw new Error(`GET ${res.status} ${res.statusText}`);
   const data = await res.json();
-  return data.comandas ?? [];
+  return {
+    comandas: data.comandas ?? [],
+    // La cadencia la decide el server (spec 183 · D2). Si no viene —server
+    // viejo, rollback— se usa el `pollMs` del config, que es el comportamiento
+    // de siempre.
+    nextPollMs: sanearPollMs(data.next_poll_ms),
+  };
+}
+
+/**
+ * Acota lo que manda el server antes de dormirlo. No es desconfianza del
+ * server: es que este `.exe` se actualiza a mano y va a seguir corriendo
+ * contra deploys que todavía no existen. Un `next_poll_ms` en 0 por un bug
+ * dejaría al local martillando la API, y uno gigante dejaría la cocina sin
+ * comandas hasta que alguien reinicie el agente.
+ */
+function sanearPollMs(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.max(Math.trunc(n), 500), 60_000);
 }
 
 /**
@@ -621,15 +640,22 @@ async function printOne(c) {
   }
 }
 
+/**
+ * Una vuelta del loop. Devuelve el sleep que pidió el server (`next_poll_ms`,
+ * spec 183 · D2) o `null` si no vino.
+ */
 async function tick() {
   // Un solo request por vuelta (spec 183 · D1): el pull ES el latido. El
   // `POST /api/print-agent/heartbeat` de la spec 35 sigue existiendo en el
   // server para los `.exe` viejos, pero este agente no lo llama.
-  const comandas = await fetchComandas();
+  //
+  // Y si no hay nada para imprimir, este `await` puede tardar ~25 s: el server
+  // retiene la respuesta y contesta apenas aparece algo (D5). No es un cuelgue.
+  const { comandas, nextPollMs } = await fetchComandas();
   const pend = comandas.length;
   if (pend === 0) {
     console.log("· sin comandas pendientes");
-    return;
+    return nextPollMs;
   }
   const toPrint = comandas.slice(0, LIMIT);
   console.log(
@@ -644,6 +670,7 @@ async function tick() {
       );
     }
   }
+  return nextPollMs;
 }
 
 console.log(
@@ -663,14 +690,21 @@ if (ONCE) {
   // fetch todavía cerrándose crashea libuv en Windows (Assertion async.c:94).
   // Al terminar el top-level, el loop de eventos drena solo y el proceso cierra.
 } else {
-  console.log(`loop cada ${cfg.pollMs}ms — Ctrl+C para cortar\n`);
+  console.log(
+    `loop cada ${cfg.pollMs}ms (o lo que diga el server) — Ctrl+C para cortar\n`,
+  );
+  let dormir = cfg.pollMs;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      await tick();
+      // El server manda la cadencia (spec 183 · D2). Si no la manda, vale el
+      // `pollMs` del config de siempre.
+      dormir = (await tick()) ?? cfg.pollMs;
     } catch (e) {
       console.error(`✗ ${e.message}`);
+      // Un error no dice nada sobre la cadencia buena: se vuelve al config.
+      dormir = cfg.pollMs;
     }
-    await new Promise((r) => setTimeout(r, cfg.pollMs));
+    await new Promise((r) => setTimeout(r, dormir));
   }
 }

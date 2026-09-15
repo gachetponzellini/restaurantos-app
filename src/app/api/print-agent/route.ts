@@ -33,7 +33,14 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
 
-import { PROBE_MS, retencionMs } from "@/lib/print-agent/cadence";
+import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
+import {
+  ACTIVIDAD_RECIENTE_MS,
+  POLL_RAPIDO_MS,
+  PROBE_MS,
+  proximoPollMs,
+  retencionMs,
+} from "@/lib/print-agent/cadence";
 import { registrarLatido } from "@/lib/print-agent/heartbeat";
 import type { PrintAgentCredential } from "@/lib/print-agent/credentials";
 
@@ -170,19 +177,98 @@ export async function GET(req: Request) {
   // un `await` sin trabajo no consume. Si Provisioned Memory sube en el
   // dashboard después de deployar esto, la decisión estaba mal.
   if (trabajos.length === 0) {
+    const retenidos = await retenerHastaQueHayaTrabajo(
+      req,
+      service,
+      businessId,
+      agente,
+      stationId,
+      retencionMs(url.searchParams.get("wait_ms")),
+    );
     return NextResponse.json({
-      comandas: await retenerHastaQueHayaTrabajo(
-        req,
+      comandas: retenidos,
+      next_poll_ms: await elegirCadencia(
         service,
         businessId,
-        agente,
-        stationId,
-        retencionMs(url.searchParams.get("wait_ms")),
+        retenidos.length > 0,
       ),
     });
   }
 
-  return NextResponse.json({ comandas: trabajos });
+  // ── La cadencia la decide el server (spec 183 · D2) ───────────────────────
+  // Campo aditivo: un agente viejo lo ignora y sigue con su `cfg.pollMs`. Este
+  // pull trajo trabajo, así que no hace falta preguntarle nada a la base — el
+  // servicio está en marcha y el agente vuelve rápido.
+  return NextResponse.json({
+    comandas: trabajos,
+    next_poll_ms: POLL_RAPIDO_MS,
+  });
+}
+
+/**
+ * El `next_poll_ms` de esta respuesta (spec 183 · D2). Con trabajo en la mano
+ * no consulta nada; sin trabajo mira dos cosas baratas: si hubo movimiento en
+ * los últimos 3 minutos y si el negocio está dentro de su horario.
+ *
+ * Corre una vez por request —o sea, con la retención, ~2 veces por minuto por
+ * agente—, así que las tres queries de acá cuestan menos que una vuelta del
+ * loop de antes.
+ */
+async function elegirCadencia(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+  hayTrabajo: boolean,
+): Promise<number> {
+  if (hayTrabajo) return POLL_RAPIDO_MS;
+
+  const desde = new Date(Date.now() - ACTIVIDAD_RECIENTE_MS).toISOString();
+  const [actividad, negocio, horarios] = await Promise.all([
+    // «Hubo alguna comanda hace poco»: un count acotado, sin traer filas. No
+    // importa en qué estado está —si la cocina se movió, el agente vuelve
+    // rápido—, y la ventana es generosa a propósito: una mesa que pide entrada
+    // y después plato entra entera, y equivocarse para el lado rápido no
+    // cuesta nada.
+    service
+      .from("comandas")
+      .select("id, orders!inner(business_id)", { head: true, count: "exact" })
+      .eq("orders.business_id", businessId)
+      .gt("emitted_at", desde)
+      .limit(1),
+    service
+      .from("businesses")
+      .select("timezone")
+      .eq("id", businessId)
+      .maybeSingle(),
+    service
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at")
+      .eq("business_id", businessId),
+  ]);
+
+  if (actividad.error) {
+    // Sin poder saber si hubo movimiento, se elige el lado rápido: el modo de
+    // fallar que importa es dejar al local sin imprimir a tiempo.
+    console.error("print-agent cadencia · actividad", actividad.error);
+    return POLL_RAPIDO_MS;
+  }
+
+  const filas = (horarios.data ?? []) as BusinessHour[];
+  // Un negocio SIN horarios cargados cuenta como abierto: el horario es una
+  // config de la carta online, no del salón, y muchos negocios no la tienen.
+  // Tratarlo como cerrado mandaría 20 s en pleno servicio.
+  const abierto =
+    filas.length === 0 ||
+    computeIsOpen(
+      filas,
+      (negocio.data as { timezone?: string } | null)?.timezone ||
+        "America/Argentina/Buenos_Aires",
+    );
+
+  return proximoPollMs({
+    hayTrabajo: false,
+    hayActividadReciente: (actividad.count ?? 0) > 0,
+    abierto,
+  });
 }
 
 /**

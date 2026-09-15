@@ -19,6 +19,13 @@ let sondaError: { message: string } | null;
 let sondaCalls: string[];
 // Latidos que registró el GET (spec 183 · D1): el pull ES el latido.
 let upserts: { table: string; vals: Record<string, unknown>; opts: unknown }[];
+// `business_hours` del negocio, para la cadencia de la D2. Vacío = sin horario
+// cargado, que el server trata como ABIERTO (es config de la carta online, no
+// del salón).
+let horarioRows: Record<string, unknown>[];
+// Comandas del negocio en los últimos 3 min (D2) y qué counts pidió la cadencia.
+let actividadCount: number;
+let cadenciaCalls: string[];
 
 vi.mock("@/lib/notifications/events", () => ({
   notifyPrintFailed: async (p: { businessId: string; comandaId: string }) => {
@@ -55,9 +62,18 @@ vi.mock("@/lib/supabase/service", () => ({
         // `head: true`: no trae filas, sólo el count. Se responde aparte para
         // que su `.or()` no se mezcle con el del payload.
         if (opts?.head) {
+          // Dos queries distintas usan `head`: la SONDA de la retención (D5),
+          // que filtra por estado con `.or()`, y el count de actividad de la
+          // cadencia (D2), que sólo acota por fecha con `.gt()`. Se separan por
+          // eso: los tests de retención cuentan sondeos, no cadencias.
+          let conOr = false;
           const sonda = {
             eq: () => sonda,
-            or: () => sonda,
+            or: () => {
+              conOr = true;
+              return sonda;
+            },
+            gt: () => sonda,
             limit: () => sonda,
             then: (
               resolve: (v: {
@@ -65,11 +81,15 @@ vi.mock("@/lib/supabase/service", () => ({
                 error: { message: string } | null;
               }) => unknown,
             ) => {
-              sondaCalls.push(table);
-              return resolve({
-                count: sondaCounts[table] ?? 0,
-                error: sondaError,
-              });
+              if (conOr) {
+                sondaCalls.push(table);
+                return resolve({
+                  count: sondaCounts[table] ?? 0,
+                  error: sondaError,
+                });
+              }
+              cadenciaCalls.push(table);
+              return resolve({ count: actividadCount, error: null });
             },
           };
           return sonda;
@@ -81,6 +101,8 @@ vi.mock("@/lib/supabase/service", () => ({
           not: () => b,
           neq: () => b,
           limit: () => b,
+          gt: () => b,
+          gte: () => b,
           or: (filter: string) => {
             captured.orFilters.push(filter);
             return b;
@@ -89,7 +111,12 @@ vi.mock("@/lib/supabase/service", () => ({
           maybeSingle: async () => ({ data: postRow }),
           then: (resolve: (v: { data: Row[]; error: null }) => unknown) =>
             resolve({
-              data: table === "order_items" ? itemRows : rows,
+              data:
+                table === "order_items"
+                  ? itemRows
+                  : table === "business_hours"
+                    ? horarioRows
+                    : rows,
               error: null,
             }),
         };
@@ -242,6 +269,9 @@ beforeEach(() => {
   sondaError = null;
   sondaCalls = [];
   upserts = [];
+  horarioRows = [];
+  actividadCount = 0;
+  cadenciaCalls = [];
 });
 
 describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
@@ -1109,5 +1139,84 @@ describe("GET /api/print-agent — el pull registra el latido (D1)", () => {
     );
     expect(res.status).toBe(401);
     expect(upserts).toHaveLength(0);
+  });
+});
+
+// ── next_poll_ms: la cadencia la decide el server (spec 183 · D2) ──────────
+// Campo aditivo en la respuesta del GET: un agente viejo lo ignora y sigue con
+// su `cfg.pollMs`. Lo que compra es que tunear la cadencia de un local sea un
+// deploy y no una sesión de PowerShell elevado en la PC de la caja.
+describe("GET /api/print-agent — next_poll_ms (D2)", () => {
+  function getReqSinRetencion() {
+    return new Request(
+      "http://localhost/api/print-agent?business_id=biz1&wait_ms=0",
+      { headers: { authorization: "Bearer test-key" } },
+    );
+  }
+
+  it("el pull que trae comandas vuelve en 1 s, sin preguntarle nada a la base", async () => {
+    const res = await GET(getReqSinRetencion());
+    const body = (await res.json()) as { next_poll_ms: number };
+    expect(body.next_poll_ms).toBe(1_000);
+    // Con trabajo en la mano no hace falta saber si el negocio está abierto.
+    expect(cadenciaCalls).toHaveLength(0);
+  });
+
+  it("sin trabajo pero con movimiento hace menos de 3 min → 1 s", async () => {
+    rows = [];
+    actividadCount = 1;
+    const body = (await (await GET(getReqSinRetencion())).json()) as {
+      next_poll_ms: number;
+    };
+    expect(body.next_poll_ms).toBe(1_000);
+  });
+
+  it("sin trabajo y sin movimiento, negocio abierto → 5 s", async () => {
+    rows = [];
+    actividadCount = 0;
+    // Sin horarios cargados = abierto (es config de la carta, no del salón).
+    horarioRows = [];
+    const body = (await (await GET(getReqSinRetencion())).json()) as {
+      next_poll_ms: number;
+    };
+    expect(body.next_poll_ms).toBe(5_000);
+  });
+
+  it("negocio cerrado (fuera de su horario cargado) → 20 s", async () => {
+    rows = [];
+    actividadCount = 0;
+    // Una única ventana de un minuto, un domingo: afuera de ella siempre —
+    // salvo que el test corra ese minuto exacto, que es domingo 00:00.
+    horarioRows = [
+      { day_of_week: 0, opens_at: "00:00:00", closes_at: "00:01:00" },
+    ];
+    const body = (await (await GET(getReqSinRetencion())).json()) as {
+      next_poll_ms: number;
+    };
+    expect(body.next_poll_ms).toBe(20_000);
+  });
+
+  it("el horario mal cargado no deja al local lento: si hay movimiento, gana el movimiento", async () => {
+    // El riesgo de la D2. Negocio «cerrado» según la config, pero con comandas
+    // hace un minuto: manda la realidad.
+    rows = [];
+    actividadCount = 3;
+    horarioRows = [
+      { day_of_week: 0, opens_at: "00:00:00", closes_at: "00:01:00" },
+    ];
+    const body = (await (await GET(getReqSinRetencion())).json()) as {
+      next_poll_ms: number;
+    };
+    expect(body.next_poll_ms).toBe(1_000);
+  });
+
+  it("la respuesta vacía también lo trae (es la que pacea al agente ocioso)", async () => {
+    rows = [];
+    const body = (await (await GET(getReqSinRetencion())).json()) as {
+      comandas: unknown[];
+      next_poll_ms: number;
+    };
+    expect(body.comandas).toHaveLength(0);
+    expect(body.next_poll_ms).toBeGreaterThan(0);
   });
 });

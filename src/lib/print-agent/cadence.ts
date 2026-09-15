@@ -119,3 +119,43 @@ export function retencionMs(waitMsPedido?: string | number | null): number {
   if (!Number.isFinite(n) || n < 0) return HOLD_MS;
   return Math.min(Math.trunc(n), HOLD_MS);
 }
+
+/** Lo que el server necesita saber del negocio para elegir la cadencia. */
+export type SituacionDelNegocio = {
+  /** Este pull trajo trabajo. */
+  hayTrabajo: boolean;
+  /** Hubo alguna comanda en los últimos `ACTIVIDAD_RECIENTE_MS`. */
+  hayActividadReciente: boolean;
+  /** El negocio está dentro de su horario cargado. */
+  abierto: boolean;
+};
+
+/**
+ * Cuánto tiene que dormir el agente después de esta respuesta (spec 183 · D2).
+ * Viaja como `next_poll_ms` en el GET; un agente viejo lo ignora y usa su
+ * `cfg.pollMs`.
+ *
+ * Es un **sleep, no un período**: el período es esto más el RTT del request
+ * (~0,7 s), y más la retención si la respuesta vino vacía. Quien toque estos
+ * números tiene que acordarse de sumarle el piso antes de comparar contra una
+ * medición.
+ *
+ * Lo importante de la decisión no es la tabla, es quién la decide: tunear la
+ * cadencia deja de requerir una visita al local. Cambiar el 1000 por 3000 en
+ * golf costó tres intentos, PowerShell elevado y una caída de 3 minutos (D3).
+ *
+ * El orden de las reglas importa y es el mitigante del riesgo: **el movimiento
+ * gana sobre el horario**. Un negocio con los `business_hours` mal cargados se
+ * iría a 20 s en pleno servicio; si hay comandas, es rápido, diga lo que diga
+ * la config. Y el peor caso —la primera comanda después de un rato muerto—
+ * pasa de 1 s a 5 s de espera, que con la retención de la D5 ya no se paga casi
+ * nunca: si el agente está retenido, la comanda sale en ~2 s.
+ */
+export function proximoPollMs({
+  hayTrabajo,
+  hayActividadReciente,
+  abierto,
+}: SituacionDelNegocio): number {
+  if (hayTrabajo || hayActividadReciente) return POLL_RAPIDO_MS;
+  return abierto ? POLL_OCIOSO_MS : POLL_CERRADO_MS;
+}

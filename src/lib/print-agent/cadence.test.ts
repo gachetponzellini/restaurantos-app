@@ -11,6 +11,7 @@ import {
   PROBE_MS,
   RTT_PISO_MS,
   cadenciaOciosaMaxMs,
+  proximoPollMs,
   retencionMs,
 } from "./cadence";
 
@@ -75,13 +76,13 @@ describe("retencionMs — el `wait_ms` del llamador", () => {
 
 describe("umbral de «sin conexión» derivado de la cadencia (D5, arreglo 1)", () => {
   it("el peor período ocioso es retención + sleep de cerrado + RTT", () => {
-    expect(cadenciaOciosaMaxMs()).toBe(
-      HOLD_MS + POLL_CERRADO_MS + RTT_PISO_MS,
-    );
+    expect(cadenciaOciosaMaxMs()).toBe(HOLD_MS + POLL_CERRADO_MS + RTT_PISO_MS);
   });
 
   it("el umbral son 3 períodos del peor caso — ya no 60 s clavados", () => {
-    expect(OFFLINE_THRESHOLD_MS).toBe(PERIODOS_DE_GRACIA * cadenciaOciosaMaxMs());
+    expect(OFFLINE_THRESHOLD_MS).toBe(
+      PERIODOS_DE_GRACIA * cadenciaOciosaMaxMs(),
+    );
     expect(PERIODOS_DE_GRACIA).toBe(3);
   });
 
@@ -106,5 +107,66 @@ describe("los sleeps que manda el server (D2)", () => {
 
   it("la ventana de «movimiento reciente» son 3 minutos", () => {
     expect(ACTIVIDAD_RECIENTE_MS).toBe(180_000);
+  });
+});
+
+// ── La cadencia la decide el server (D2) ───────────────────────────────────
+// `next_poll_ms` viaja en la respuesta del GET y el agente lo respeta. Lo
+// importante de la decisión: tunear la cadencia deja de requerir una visita al
+// local. Cambiar el 1000 por 3000 en golf costó tres intentos, una caída de 3
+// minutos y PowerShell elevado (D3); ahora es un deploy.
+describe("proximoPollMs — la tabla de la D2", () => {
+  const cerrado = {
+    hayTrabajo: false,
+    hayActividadReciente: false,
+    abierto: false,
+  };
+
+  it("este pull trajo comandas → vuelve en 1 s", () => {
+    expect(proximoPollMs({ ...cerrado, hayTrabajo: true })).toBe(
+      POLL_RAPIDO_MS,
+    );
+  });
+
+  it("hubo movimiento en los últimos 3 min → 1 s", () => {
+    expect(proximoPollMs({ ...cerrado, hayActividadReciente: true })).toBe(
+      POLL_RAPIDO_MS,
+    );
+  });
+
+  it("abierto pero sin movimiento → 5 s", () => {
+    expect(proximoPollMs({ ...cerrado, abierto: true })).toBe(POLL_OCIOSO_MS);
+  });
+
+  it("cerrado → 20 s", () => {
+    expect(proximoPollMs(cerrado)).toBe(POLL_CERRADO_MS);
+  });
+
+  it("el trabajo gana sobre el horario: un pull con comandas es rápido aunque el negocio se crea cerrado", () => {
+    // El riesgo real de la D2: un negocio con el horario mal cargado se iría a
+    // 20 s en pleno servicio. La regla del movimiento gana sobre la del
+    // horario, diga lo que diga la config.
+    expect(proximoPollMs({ ...cerrado, hayTrabajo: true })).toBe(
+      POLL_RAPIDO_MS,
+    );
+    expect(
+      proximoPollMs({ ...cerrado, hayActividadReciente: true, abierto: false }),
+    ).toBe(POLL_RAPIDO_MS);
+  });
+
+  it("nunca manda menos de 1 s ni más de 20 s", () => {
+    for (const hayTrabajo of [true, false]) {
+      for (const hayActividadReciente of [true, false]) {
+        for (const abierto of [true, false]) {
+          const ms = proximoPollMs({
+            hayTrabajo,
+            hayActividadReciente,
+            abierto,
+          });
+          expect(ms).toBeGreaterThanOrEqual(POLL_RAPIDO_MS);
+          expect(ms).toBeLessThanOrEqual(POLL_CERRADO_MS);
+        }
+      }
+    }
   });
 });
