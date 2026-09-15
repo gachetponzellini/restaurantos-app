@@ -6,6 +6,8 @@ import {
   horaInicial,
   horasDelDia,
   momentoDe,
+  nombreEnMesa,
+  renglonesDeMesa,
   sinMesa,
   type ReservaEnPlano,
 } from "./plano-del-dia";
@@ -176,10 +178,26 @@ describe("sinMesa", () => {
       reserva({ id: "g3", table_id: null, status: "cancelled" }),
       reserva({ id: "conmesa" }),
     ];
-    expect(sinMesa(new Date("2026-09-05T23:30:00Z"), rs)).toEqual({
-      cantidad: 2,
-      cubiertos: 11,
-    });
+    const res = sinMesa(new Date("2026-09-05T23:30:00Z"), rs);
+    expect(res.cantidad).toBe(2);
+    expect(res.cubiertos).toBe(11);
+  });
+
+  // Spec 189 — con el plano de entrada, el contador tiene que poder abrirse:
+  // devuelve las filas, ordenadas por hora.
+  it("devuelve las genéricas ordenadas por hora de inicio", () => {
+    const rs = [
+      reserva({
+        id: "g-tarde",
+        table_id: null,
+        starts_at: "2026-09-05T23:30:00Z",
+        ends_at: "2026-09-06T01:00:00Z",
+      }),
+      reserva({ id: "g-temprano", table_id: null }), // 20:00 ART
+      reserva({ id: "conmesa" }),
+    ];
+    const res = sinMesa(new Date("2026-09-05T23:40:00Z"), rs);
+    expect(res.reservas.map((r) => r.id)).toEqual(["g-temprano", "g-tarde"]);
   });
 });
 
@@ -219,5 +237,40 @@ describe("encuadreDeMesas (spec 144)", () => {
 
   it("sin mesas devuelve un encuadre neutro en vez de NaN", () => {
     expect(encuadreDeMesas([])).toBe("0 0 100 100");
+  });
+});
+
+describe("renglonesDeMesa", () => {
+  // Spec 189 — la mesa dice de quién es sin que la toquen; el parque va de 35
+  // a 160 unidades de ancho, así que el detalle se cae con orden.
+  const r = reserva({ id: "r1", party_size: 4, customer_name: "Juan Pérez" });
+
+  it("una mesa holgada muestra hora, cubiertos y nombre", () => {
+    expect(renglonesDeMesa({ width: 70, height: 70 }, r, TZ)).toEqual([
+      "20:00 · 4p",
+      "Juan",
+    ]);
+  });
+
+  it("una mesa angosta pierde la hora, nunca los cubiertos", () => {
+    expect(renglonesDeMesa({ width: 35, height: 60 }, r, TZ)[0]).toBe("4p");
+  });
+
+  it("una mesa baja se queda con un solo renglón", () => {
+    expect(renglonesDeMesa({ width: 70, height: 40 }, r, TZ)).toHaveLength(1);
+  });
+
+  it("la mesa libre no dice nada", () => {
+    expect(renglonesDeMesa({ width: 70, height: 70 }, null, TZ)).toEqual([]);
+  });
+});
+
+describe("nombreEnMesa", () => {
+  it("usa el nombre de pila", () => {
+    expect(nombreEnMesa("Juan Pérez", 70)).toBe("Juan");
+  });
+
+  it("corta con elipsis lo que no entra", () => {
+    expect(nombreEnMesa("Maximiliano", 40)).toBe("Maxim…");
   });
 });

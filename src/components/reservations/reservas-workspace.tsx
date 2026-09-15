@@ -6,6 +6,7 @@ import { AdminDayList, type AdminRow } from "@/components/reservations/admin-day
 import { PlanoDelDia } from "@/components/reservations/plano-del-dia";
 import { SolicitudesInbox } from "@/components/reservations/solicitudes-inbox";
 import type { SolicitudEnBandeja } from "@/lib/reservations/pending-inbox";
+import { cn } from "@/lib/utils";
 import type {
   DayServiceOption,
   FloorTable,
@@ -55,7 +56,9 @@ export function ReservasWorkspace({
     nombre: string;
     partySize: number;
   } | null>(null);
-  const [vista, setVista] = useState<"lista" | "plano">("lista");
+  /** Spec 189 — se abre en el plano: la primera pregunta del encargado es
+   *  «cómo queda el salón», y la lista sigue a un tap. */
+  const [vista, setVista] = useState<"lista" | "plano">("plano");
 
   /** Spec 138 — pedir mesa trae el plano al frente: el modo se prende donde se
    *  resuelve, no donde quedó la vista. */
@@ -68,9 +71,20 @@ export function ReservasWorkspace({
     setVista("plano");
   }
 
+  // Spec 189 — en el plano la bandeja baja. Al lado se come 340px y el salón
+  // queda dibujado a media escala: el nombre y la hora dentro de la mesa no se
+  // leen, que es justo lo que el plano tiene que contestar de un vistazo. En la
+  // lista, donde el ancho sobra, la bandeja vuelve a la derecha (spec 136).
+  const apilado = vista === "plano";
+
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      <div className="order-2 min-w-0 flex-1 lg:order-1">
+    <div
+      className={cn(
+        "flex flex-col gap-6",
+        !apilado && "lg:flex-row lg:items-start",
+      )}
+    >
+      <div className={cn("order-2 min-w-0 flex-1", !apilado && "lg:order-1")}>
         <AdminDayList
           slug={slug}
           date={date}
@@ -97,13 +111,23 @@ export function ReservasWorkspace({
               reservas={rows}
               mesas={activeTables}
               floorPlans={floorPlans}
+              mode={mode}
+              services={services}
               asignando={asignando}
               onAsignarFin={() => setAsignando(null)}
             />
           }
         />
       </div>
-      <aside className="order-1 w-full lg:order-2 lg:sticky lg:top-6 lg:w-[340px] lg:shrink-0">
+      <aside
+        className={cn(
+          "order-1 w-full",
+          !apilado && "lg:order-2 lg:sticky lg:top-6 lg:w-[340px] lg:shrink-0",
+          // Apilada, la bandeja va DEBAJO del plano: arriba empujaría el salón
+          // fuera de pantalla cada vez que entra una solicitud.
+          apilado && "order-3",
+        )}
+      >
         <div className="mb-2.5 flex items-center gap-2">
           <h2 className="text-sm font-semibold text-zinc-900">A confirmar</h2>
           {solicitudes.length > 0 && (

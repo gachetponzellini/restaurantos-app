@@ -235,7 +235,10 @@ export function AdminDayList({
   const [pending, start] = useTransition();
 
   const [filter, setFilter] = useState<Filter>("all");
-  const [vistaInterna, setVistaInterna] = useState<"lista" | "plano">("lista");
+  // Spec 189 — el plano es la vista de entrada cuando hay plano que mostrar.
+  const [vistaInterna, setVistaInterna] = useState<"lista" | "plano">(
+    plano ? "plano" : "lista",
+  );
   const vista = vistaControlada ?? vistaInterna;
   const setVista = (v: "lista" | "plano") =>
     onVistaChange ? onVistaChange(v) : setVistaInterna(v);
