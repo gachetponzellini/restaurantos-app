@@ -271,6 +271,58 @@ es justo lo contrario de lo que la security review #4 pidió cuando se retiró l
 par de veces por minuto, no una vez por segundo: el problema se disuelve solo y
 no hace falta pagar el riesgo.
 
+### D5 · El server retiene la respuesta cuando no hay nada — *propuesta*
+
+Juan, 2026-09-15: *"creo que podríamos hacer que sea cada 30 segundos, no hace
+falta que sea instantánea la comanda"*. Tiene razón sobre la comanda, y está
+mal sobre el resto de la cola.
+
+**Por qué 30 s fijos no se puede hoy.** El `GET /api/print-agent` no sirve sólo
+comandas: sirve también `print_jobs`
+([`route.ts:548`](../../src/app/api/print-agent/route.ts)), y ahí adentro están
+la prueba de impresora, la reimpresión de factura, el control de delivery y el
+papel del cierre de caja. En todos esos hay **una persona parada frente a la
+impresora**. Medio minuto ahí no se lee como "tarda", se lee como "no anda", y
+la reacción natural es apretar de nuevo.
+
+Y algo se rompe de verdad: `OFFLINE_THRESHOLD_MS = 60_000`
+([`print-agent-card.tsx:17`](../../src/components/admin/settings/print-agent-card.tsx)).
+Con un período de 30,8 s entran **dos latidos** antes del umbral, así que un
+solo tick lento hace que el panel diga «comandera sin conexión». Falsa alarma
+recurrente, que es la peor clase de alarma: enseña a ignorarlas.
+
+**La decisión.** Cuando no hay nada para imprimir, el GET **no contesta vacío al
+toque: espera**. Mira la cola durante la retención y contesta apenas aparece
+algo, o vacío al llegar al tope.
+
+Eso da las dos cosas a la vez: el agente ocioso pregunta cada ~30 s —barato— y
+**cuando hay trabajo la respuesta sale al instante**, o sea que la comanda y el
+ticket de prueba salen *más rápido que hoy*, no más lento. Se cae el único
+argumento en contra de los 30 s.
+
+Tres cosas que la hacen posible y que hay que verificar antes de escribirla:
+
+- **Esperar no se factura.** #304 confirmó que el proyecto está en Fluid, que
+  cobra **CPU activa**: un `await` sin trabajo no consume. Y las instancias ya
+  están vivas de corrido, así que retener un par de requests no agrega
+  horas-instancia. Verificar igual mirando Provisioned Memory después de
+  deployar: si sube, la decisión estaba mal.
+- **`functionDefaultTimeout: 300`** deja lugar de sobra para una retención de
+  30 s.
+- **Funciona con el `.exe` que ya está instalado.** El loop del agente es
+  `tick(); sleep(pollMs)` y `tick()` **espera la respuesta HTTP** — por eso el
+  período medido es `pollMs + RTT`. Retener del lado del server alarga el
+  período sin que el local se entere. **Esta es la única decisión de la spec que
+  no necesita binario nuevo**, y por eso probablemente vaya antes que la D2.
+
+Dos arreglos chicos la acompañan, o la cadencia lenta rompe lo que ya estaba:
+
+1. `OFFLINE_THRESHOLD_MS` deja de ser una constante suelta y pasa a derivarse de
+   la cadencia esperada (~3 períodos).
+2. `FAIL_THRESHOLD` del agente se desacopla de `pollMs`: hoy la gracia es
+   `pollMs × 5` ([`agent.mjs:67`](../../print-agent/agent.mjs)), que a 10 s ya
+   son 50 s para avisar que una comanda no salió.
+
 ## Alcance
 
 1. `GET /api/print-agent`: registra el latido (upsert de `print_agent_status`)
@@ -286,7 +338,11 @@ no hace falta pagar el riesgo.
 6. ✅ **D3, hecha:** `POLL_MS_DEFAULT = 3000` + `buildAgentConfig` (puro) en
    `lib/print-agent/credentials.ts`; `getPrintAgentInstaller` la usa; test que
    fija el valor; el README documenta cómo lo toma un local ya instalado.
-   **Pendiente operativo:** que golf y kcc bajen el config nuevo.
+   **Operativo, en curso:** golf ya está en 10 s (verificado, período 10,99 s);
+   kcc sigue en 1 s. El valor de `POLL_MS_DEFAULT` queda en 3000 hasta que la
+   D5 esté: con retención, lo que el config diga importa mucho menos.
+7. **D5 (propuesta):** retención en el GET + `OFFLINE_THRESHOLD_MS` derivado de
+   la cadencia + `FAIL_THRESHOLD` desacoplado de `pollMs`.
 
 ## No-objetivos
 
