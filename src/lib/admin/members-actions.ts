@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { isValidPrinterHost } from "@/lib/catalog/schemas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildAccessMessage } from "@/lib/admin/access-message";
@@ -705,25 +704,17 @@ export async function updateControlPrinter(
     .object({
       business_slug: z.string().min(1),
       user_id: z.string().uuid(),
-      control_printer_ip: z.string().trim().max(255).nullable(),
-      control_printer_port: z.number().int().min(1).max(65535).nullable(),
+      /** `null` = la comandera del negocio (el caso de casi todos). */
+      control_printer_id: z.string().uuid().nullable(),
     })
     .safeParse(input);
   if (!parsed.success) {
     return actionError(parsed.error.issues[0]?.message ?? "Datos inválidos.");
   }
-  const { business_slug, user_id, control_printer_ip, control_printer_port } =
-    parsed.data;
+  const { business_slug, user_id, control_printer_id } = parsed.data;
 
   const guard = await assertCanManage(business_slug);
   if (!guard.ok) return actionError(guard.error);
-
-  const ip = control_printer_ip?.trim() || null;
-  if (ip && !isValidPrinterHost(ip)) {
-    return actionError(
-      "Destino inválido: una IP privada (192.168.…), un nombre de red, o `local:NOMBRE` para una impresora USB de esa compu.",
-    );
-  }
 
   const service = svc();
   const { data: member } = await service
@@ -741,17 +732,29 @@ export async function updateControlPrinter(
     );
   }
 
+  // La comandera tiene que ser de ESTE negocio (spec 190). Sin este chequeo, un
+  // id de otro local mandaría el papel a una impresora ajena.
+  if (control_printer_id) {
+    const { data: printer } = await service
+      .from("control_printers")
+      .select("id, is_active")
+      .eq("id", control_printer_id)
+      .eq("business_id", guard.businessId)
+      .maybeSingle();
+    if (!printer) return actionError("Esa comandera no es de este negocio.");
+    if (!(printer as { is_active: boolean }).is_active) {
+      return actionError("Esa comandera está desactivada.");
+    }
+  }
+
   const { error } = await service
     .from("business_users")
-    .update({
-      control_printer_ip: ip,
-      control_printer_port: ip ? control_printer_port : null,
-    })
+    .update({ control_printer_id })
     .eq("business_id", guard.businessId)
     .eq("user_id", user_id);
   if (error) {
     console.error("updateControlPrinter", error);
-    return actionError("No pudimos guardar la impresora.");
+    return actionError("No pudimos guardar la comandera.");
   }
 
   revalidateEmpleados(business_slug);

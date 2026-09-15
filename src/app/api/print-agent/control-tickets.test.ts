@@ -71,6 +71,8 @@ vi.mock("@/lib/supabase/service", () => ({
           in: () => b,
           or: () => b,
           gt: () => b,
+          // Spec 190: el resolver filtra los usuarios sin comandera elegida.
+          not: () => b,
           order: () => b,
           maybeSingle: async () => ({
             data:
@@ -254,9 +256,11 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "term1",
-        role: "terminal",
-        control_printer_ip: "local:CONTROL-T1",
-        control_printer_port: null,
+        control_printers: {
+          printer_ip: "local:CONTROL-T1",
+          printer_port: null,
+          is_active: true,
+        },
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -269,9 +273,11 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "term1",
-        role: "terminal",
-        control_printer_ip: "local:CONTROL-T1",
-        control_printer_port: null,
+        control_printers: {
+          printer_ip: "local:CONTROL-T1",
+          printer_port: null,
+          is_active: true,
+        },
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -283,9 +289,7 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "term2",
-        role: "terminal",
-        control_printer_ip: null,
-        control_printer_port: null,
+        control_printers: null,
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -304,9 +308,11 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "term1",
-        role: "terminal",
-        control_printer_ip: "local:CONTROL-T1",
-        control_printer_port: null,
+        control_printers: {
+          printer_ip: "local:CONTROL-T1",
+          printer_port: null,
+          is_active: true,
+        },
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -323,9 +329,11 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "term1",
-        role: "terminal",
-        control_printer_ip: "local:CONTROL-T1",
-        control_printer_port: null,
+        control_printers: {
+          printer_ip: "local:CONTROL-T1",
+          printer_port: null,
+          is_active: true,
+        },
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -343,9 +351,11 @@ describe("GET · controles de pedido", () => {
     businessUsersRows = [
       {
         user_id: "sofia",
-        role: "encargado",
-        control_printer_ip: "local:CAJA2",
-        control_printer_port: null,
+        control_printers: {
+          printer_ip: "local:CAJA2",
+          printer_port: null,
+          is_active: true,
+        },
       },
     ];
     const body = await (await GET(getReq())).json();
@@ -353,14 +363,31 @@ describe("GET · controles de pedido", () => {
     expect(body.comandas[0].printer_ip).toBe("local:CAJA2");
   });
 
+  it("una comandera DESACTIVADA no se usa: cae a la del negocio (spec 190)", async () => {
+    // Apagarla sin acordarse de a quién se la habías asignado no puede dejar
+    // ese papel sin salir: sale por la del local.
+    agentScope = [];
+    controlRows = [ticket({ requested_by: "sofia" })];
+    businessUsersRows = [
+      {
+        user_id: "sofia",
+        control_printers: {
+          printer_ip: "local:CAJA2",
+          printer_port: null,
+          is_active: false,
+        },
+      },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.10.60");
+  });
+
   it("un encargado sin impresora propia cae a la del negocio, como siempre", async () => {
     controlRows = [ticket({ requested_by: "sofia" })];
     businessUsersRows = [
       {
         user_id: "sofia",
-        role: "encargado",
-        control_printer_ip: null,
-        control_printer_port: null,
+        control_printers: null,
       },
     ];
     const body = await (await GET(getReq())).json();

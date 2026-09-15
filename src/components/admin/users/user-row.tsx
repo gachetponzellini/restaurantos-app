@@ -15,7 +15,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { RolePicker } from "@/components/admin/users/role-picker";
-import { ControlPrinterField } from "@/components/admin/users/control-printer-field";
+import {
+  ControlPrinterField,
+  type ControlPrinterOption,
+} from "@/components/admin/users/control-printer-field";
 import {
   generateAccessLink,
   type AccessLinkPayload,
@@ -37,12 +40,15 @@ export function UserRow({
   canManage,
   isCurrentUser,
   lastClockIn,
+  comanderas = [],
 }: {
   slug: string;
   member: BusinessMember;
   canManage: boolean;
   isCurrentUser: boolean;
   lastClockIn?: string | null;
+  /** Las comanderas de control del negocio, para elegir (spec 190). */
+  comanderas?: ControlPrinterOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -276,8 +282,8 @@ export function UserRow({
           slug={slug}
           userId={member.user_id}
           esTerminal={member.role === "terminal"}
-          initialIp={member.control_printer_ip}
-          initialPort={member.control_printer_port}
+          comanderas={comanderas}
+          initialId={member.control_printer_id}
           editable={canManage}
         />
       )}

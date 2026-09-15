@@ -25,6 +25,8 @@ import {
 } from "@/components/admin/settings/fiscal-printers-form";
 import { ComandasPrintingToggleForm } from "@/components/admin/settings/comandas-printing-toggle-form";
 import { PrintAgentCard } from "@/components/admin/settings/print-agent-card";
+import { ControlPrintersList } from "@/components/admin/settings/control-printers-list";
+import { listControlPrinters } from "@/lib/print/control-printers";
 import { SettingsSection } from "@/components/admin/settings/settings-section";
 import {
   StationPrintersForm,
@@ -54,6 +56,7 @@ export default async function ConfiguracionLocalPage({
     { data: floorPlans },
     { data: cajas },
     agentes,
+    controlPrinters,
   ] = await Promise.all([
     listClockOrigins(business.id),
     service
@@ -88,6 +91,9 @@ export default async function ConfiguracionLocalPage({
       .eq("is_administrative" as "is_default", false as unknown as boolean)
       .order("sort_order"),
     listPrintAgents(business_slug),
+    // Spec 190 — las comanderas de control por puesto, con cuánta gente
+    // imprime en cada una.
+    listControlPrinters(business.id),
   ]);
 
   const printAgentKeySet = Boolean(
@@ -172,6 +178,14 @@ export default async function ConfiguracionLocalPage({
         description="Además de las comandas de cocina, cada delivery y cada retiro imprime un «control de pedido» — el papel que se lleva el repartidor: el pedido completo con precios, cliente, dirección, horario de entrega y cuánta plata cobrar. Dejá la IP vacía para no imprimirlos."
       >
         <ControlPrinterForm slug={business_slug} initial={controlPrinter} />
+      </SettingsSection>
+
+      <SettingsSection
+        icon={<ClipboardList className="size-5" />}
+        title="Comanderas de control por puesto"
+        description="La de arriba es la del local. Acá se cargan las otras —la de la caja 2, la de una terminal— con nombre y destino, y en Empleados cada uno elige la suya. Con una impresora USB, el destino es «local:» y el nombre que tiene en Windows."
+      >
+        <ControlPrintersList slug={business_slug} initial={controlPrinters} />
       </SettingsSection>
 
       <SettingsSection

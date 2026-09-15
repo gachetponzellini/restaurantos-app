@@ -6,6 +6,7 @@ import { Clock, Eye, EyeOff, UserPlus, Users } from "lucide-react";
 
 import { InviteUserForm } from "@/components/admin/users/invite-user-form";
 import { UserRow } from "@/components/admin/users/user-row";
+import type { ControlPrinterOption } from "@/components/admin/users/control-printer-field";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { RoleFilter } from "@/components/admin/rrhh/role-filter";
 import { SearchInput } from "@/components/admin/rrhh/search-input";
@@ -28,6 +29,7 @@ export function EquipoTab({
   currentUserId,
   includeDisabled,
   employeeClockData,
+  comanderas = [],
 }: {
   slug: string;
   businessName?: string;
@@ -35,6 +37,8 @@ export function EquipoTab({
   currentUserId: string;
   includeDisabled: boolean;
   employeeClockData?: MonthlySummaryRow[];
+  /** Comanderas de control del negocio, para el selector de cada fila (190). */
+  comanderas?: ControlPrinterOption[];
 }) {
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -73,7 +77,8 @@ export function EquipoTab({
             {activeCount} activos
             {disabledCount > 0 && (
               <span className="font-normal text-zinc-500">
-                {" "}· {disabledCount} deshabilitados
+                {" "}
+                · {disabledCount} deshabilitados
               </span>
             )}
           </p>
@@ -167,6 +172,7 @@ export function EquipoTab({
                 canManage
                 isCurrentUser={m.user_id === currentUserId}
                 clockData={clock}
+                comanderas={comanderas}
               />
             );
           })}
@@ -182,12 +188,14 @@ function EmployeeCard({
   canManage,
   isCurrentUser,
   clockData,
+  comanderas,
 }: {
   slug: string;
   member: BusinessMember;
   canManage: boolean;
   isCurrentUser: boolean;
   clockData?: MonthlySummaryRow;
+  comanderas: ControlPrinterOption[];
 }) {
   return (
     <div className="space-y-2">
@@ -197,26 +205,27 @@ function EmployeeCard({
         canManage={canManage}
         isCurrentUser={isCurrentUser}
         lastClockIn={clockData?.lastClockIn ?? null}
+        comanderas={comanderas}
       />
       {/* Monthly stats bar */}
       {clockData && (
         <div className="flex flex-wrap gap-x-5 gap-y-1 pl-[52px] text-xs text-zinc-500">
           <span className="inline-flex items-center gap-1">
             <Clock className="size-3 text-zinc-400" />
-            <span className="font-semibold tabular-nums text-zinc-700">
+            <span className="font-semibold text-zinc-700 tabular-nums">
               {formatHoursDecimal(clockData.totalMinutes)}
             </span>{" "}
             este mes
           </span>
           <span>
-            <span className="font-semibold tabular-nums text-zinc-700">
+            <span className="font-semibold text-zinc-700 tabular-nums">
               {clockData.daysWorked}
             </span>{" "}
             días
           </span>
           <span>
             Prom{" "}
-            <span className="font-semibold tabular-nums text-zinc-700">
+            <span className="font-semibold text-zinc-700 tabular-nums">
               {formatHours(clockData.avgMinutesPerDay)}
             </span>
             /día

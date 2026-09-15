@@ -953,21 +953,32 @@ async function buildPrintableControlTickets(
   ];
   const impresoraDelPedidor = new Map<string, { ip: string; port: number }>();
   if (pedidores.length > 0) {
+    // Spec 190 — la comandera es una fila de `control_printers` que el usuario
+    // eligió, no un string escrito en su ficha. Una desactivada no se usa: cae
+    // a la del negocio, que es lo que pasa cuando alguien la apaga sin
+    // acordarse de a quién se la había asignado.
     const { data: miembros } = await service
       .from("business_users")
-      .select("user_id, control_printer_ip, control_printer_port")
+      .select(
+        "user_id, control_printers:control_printer_id(printer_ip, printer_port, is_active)",
+      )
       .eq("business_id", businessId)
-      .in("user_id", pedidores);
-    for (const u of (miembros ?? []) as {
+      .in("user_id", pedidores)
+      .not("control_printer_id", "is", null);
+    for (const u of (miembros ?? []) as unknown as {
       user_id: string;
-      control_printer_ip: string | null;
-      control_printer_port: number | null;
+      control_printers: {
+        printer_ip: string | null;
+        printer_port: number | null;
+        is_active: boolean;
+      } | null;
     }[]) {
-      const ip = u.control_printer_ip?.trim();
-      if (ip) {
+      const p = u.control_printers;
+      const ip = p?.printer_ip?.trim();
+      if (ip && p?.is_active) {
         impresoraDelPedidor.set(u.user_id, {
           ip,
-          port: u.control_printer_port ?? 9100,
+          port: p.printer_port ?? 9100,
         });
       }
     }

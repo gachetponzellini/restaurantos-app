@@ -1,10 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import {
-  PageHeader,
-  PageShell,
-} from "@/components/admin/shell/page-shell";
+import { PageHeader, PageShell } from "@/components/admin/shell/page-shell";
 import { RrhhShell, type RrhhTab } from "@/components/admin/rrhh/rrhh-shell";
 import { AsistenciaTab } from "@/components/admin/rrhh/asistencia-tab";
 import { EquipoTab } from "@/components/admin/rrhh/equipo-tab";
@@ -12,6 +9,7 @@ import { ensureAdminAccess } from "@/lib/admin/context";
 import { canEditarAsistencia } from "@/lib/permissions/can";
 import { canSee, sectionAccess } from "@/lib/permissions/sections";
 import { listBusinessMembers } from "@/lib/admin/members-query";
+import { listControlPrinters } from "@/lib/print/control-printers";
 import {
   getClockHistory,
   getMonthlyOverview,
@@ -48,8 +46,9 @@ export default async function RrhhPage({
   // tiene PINs, roles y altas, que son llaves del negocio y siguen siendo del
   // admin. Pedir `?tab=equipo` a mano cae en Asistencia, sin error.
   const veEquipo =
-    sectionAccess("rrhh", ctx.role, { isPlatformAdmin: ctx.isPlatformAdmin }) ===
-    "full";
+    sectionAccess("rrhh", ctx.role, {
+      isPlatformAdmin: ctx.isPlatformAdmin,
+    }) === "full";
   const activeTab: RrhhTab =
     tab === "equipo" && veEquipo ? "equipo" : "asistencia";
   // El platform admin impersona sin rol de negocio (`role` null): edita igual.
@@ -62,7 +61,7 @@ export default async function RrhhPage({
   const monthStart = parseMonthStart(month, timezone);
   const currentMonth = monthKey(monthStart, timezone);
 
-  const [monthly, members, dayEntries] = await Promise.all([
+  const [monthly, members, dayEntries, comanderas] = await Promise.all([
     getMonthlyOverview(business.id, monthStart, timezone),
     // Equipo los lista; Asistencia los necesita para «Agregar fichada» (179).
     activeTab === "equipo" || puedeEditar
@@ -75,6 +74,11 @@ export default async function RrhhPage({
           timezone,
         })
       : Promise.resolve(undefined),
+    // Spec 190 — para el selector de comandera de cada fila. Sólo en Equipo:
+    // Asistencia no lo muestra.
+    activeTab === "equipo"
+      ? listControlPrinters(business.id)
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -108,6 +112,7 @@ export default async function RrhhPage({
               currentUserId={ctx.userId}
               includeDisabled={disabled === "1"}
               employeeClockData={monthly.perEmployee}
+              comanderas={comanderas}
             />
           )}
         </RrhhShell>
