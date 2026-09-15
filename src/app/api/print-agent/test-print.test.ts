@@ -95,7 +95,7 @@ describe("GET · papel de prueba", () => {
   it("sale con la IP de la fila y el contenido ya renderizado", async () => {
     const body = await (
       await GET(
-        new Request("http://x/api/print-agent?business_id=biz1", {
+        new Request("http://x/api/print-agent?business_id=biz1&wait_ms=0", {
           headers: AUTH,
         }),
       )
@@ -113,7 +113,7 @@ describe("GET · papel de prueba", () => {
 
   it("sólo pide las pruebas de los últimos minutos", async () => {
     await GET(
-      new Request("http://x/api/print-agent?business_id=biz1", {
+      new Request("http://x/api/print-agent?business_id=biz1&wait_ms=0", {
         headers: AUTH,
       }),
     );
@@ -128,7 +128,7 @@ describe("GET · papel de prueba", () => {
     pruebaRows = [job({ test_printer_ip: "  " })];
     const body = await (
       await GET(
-        new Request("http://x/api/print-agent?business_id=biz1", {
+        new Request("http://x/api/print-agent?business_id=biz1&wait_ms=0", {
           headers: AUTH,
         }),
       )

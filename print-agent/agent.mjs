@@ -62,11 +62,22 @@ const LIMIT = limitArg ? parseInt(limitArg.slice("--limit=".length), 10) : Infin
 const base = String(cfg.serverUrl).replace(/\/$/, "");
 const authHeaders = { authorization: `Bearer ${cfg.printAgentKey}` };
 
-// Tras N fallos consecutivos de impresión de una comanda, se avisa al local
-// (spec 33). El server deduplica igual (comandas.print_failed_at), pero el
-// umbral evita avisar por un blip (≈ pollMs * FAIL_THRESHOLD de gracia).
-const FAIL_THRESHOLD = 5;
-const failCounts = new Map(); // comanda_id → fallos consecutivos
+// Tras fallar la impresión de una comanda se avisa al local (spec 33). El
+// server deduplica igual (comandas.print_failed_at), pero la gracia evita
+// avisar por un blip de red de la comandera.
+//
+// Spec 183 · D5: la gracia se mide en TIEMPO, no en vueltas del loop. Antes era
+// `FAIL_THRESHOLD = 5` intentos, o sea ≈ pollMs × 5: con el poll en 1 s eran 5
+// segundos, pero con golf en 10 s pasaron a ser 50 — cincuenta segundos para
+// avisar que una comanda no salió, con la cocina esperándola. Y la cadencia
+// ahora la decide el server (next_poll_ms), así que atar el aviso al poll es
+// atarlo a algo que ya no controla el local.
+//
+// Dos condiciones, las dos necesarias: que haya reintentado al menos una vez
+// (un solo fallo puede ser el blip) y que hayan pasado 10 s desde el primero.
+const FAIL_GRACE_MS = 10_000;
+const FAIL_MIN_INTENTOS = 2;
+const failState = new Map(); // comanda_id → { intentos, desde, avisado }
 
 // ── Formato del ticket (FALLBACK) ─────────────────────────────────────────
 // Spec 051: el render primario vive en el server (`src/lib/print/ticket.ts`,
@@ -581,12 +592,23 @@ async function printOne(c) {
       await printWindows(plain, cfg.printerName);
     }
   } catch (e) {
-    const n = (failCounts.get(c.comanda_id) ?? 0) + 1;
-    failCounts.set(c.comanda_id, n);
+    const st = failState.get(c.comanda_id) ?? {
+      intentos: 0,
+      desde: Date.now(),
+      avisado: false,
+    };
+    st.intentos += 1;
+    failState.set(c.comanda_id, st);
+    const seg = Math.round((Date.now() - st.desde) / 1000);
     console.error(
-      `  ✗ no imprimió #${String(c.comanda_id).slice(0, 8)} (${c.station_name}): ${e.message} [intento ${n}]`,
+      `  ✗ no imprimió #${String(c.comanda_id).slice(0, 8)} (${c.station_name}): ${e.message} [intento ${st.intentos}, ${seg}s]`,
     );
-    if (n === FAIL_THRESHOLD) {
+    if (
+      !st.avisado &&
+      st.intentos >= FAIL_MIN_INTENTOS &&
+      Date.now() - st.desde >= FAIL_GRACE_MS
+    ) {
+      st.avisado = true;
       const ok = await report(c.comanda_id, "failed", e.message);
       console.error(
         `     ${ok ? "⚠ avisado al local (notificación de fallo)" : "✗ no se pudo avisar"}`,
@@ -595,8 +617,8 @@ async function printOne(c) {
     return;
   }
 
-  // Imprimió OK: limpia el contador y confirma.
-  failCounts.delete(c.comanda_id);
+  // Imprimió OK: limpia el estado de fallos y confirma.
+  failState.delete(c.comanda_id);
   console.log(
     `  🖨  impresa #${String(c.comanda_id).slice(0, 8)} · ${c.station_name} · ${c.table_label}`,
   );

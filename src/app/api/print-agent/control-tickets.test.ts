@@ -97,7 +97,7 @@ const { GET, POST } = await import("./route");
 const AUTH = { authorization: "Bearer test-key" };
 
 function getReq() {
-  return new Request("http://x/api/print-agent?business_id=biz1", {
+  return new Request("http://x/api/print-agent?business_id=biz1&wait_ms=0", {
     headers: AUTH,
   });
 }

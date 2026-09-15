@@ -33,6 +33,9 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
 
+import { PROBE_MS, retencionMs } from "@/lib/print-agent/cadence";
+import type { PrintAgentCredential } from "@/lib/print-agent/credentials";
+
 import { unauthorized, autenticarAgente } from "./agent-auth";
 
 /**
@@ -80,6 +83,23 @@ function horaDeCocina(iso: string | null): string | null {
   }).format(d);
 }
 
+/**
+ * La retención de la D5 (spec 183) deja la request abierta hasta 25 s, así que
+ * el techo se declara acá en vez de confiar en el default de la plataforma: un
+ * timeout más corto que la retención mataría el pull y el agente vería un 504
+ * cada vuelta (no pierde comandas —siguen `pendiente`— pero el ahorro se va).
+ * El proyecto tiene `functionDefaultTimeout: 300`; 60 s deja lugar de sobra
+ * para la retención más el armado del payload.
+ */
+export const maxDuration = 60;
+
+/**
+ * Un papel listo para imprimir, como sale del GET. Sale del propio armador —
+ * es la unión de las seis familias (comandas + los cinco `print_jobs`) y lo
+ * único que el resto de este archivo necesita saber de ellas es su `printer_ip`.
+ */
+type Trabajo = NonNullable<Awaited<ReturnType<typeof buildTrabajos>>>[number];
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const businessId = url.searchParams.get("business_id");
@@ -92,6 +112,178 @@ export async function GET(req: Request) {
   }
 
   const service = createSupabaseServiceClient();
+  const stationId = url.searchParams.get("station_id");
+
+  let trabajos = await buildTrabajos(service, businessId, agente, stationId);
+  if (trabajos === null) {
+    return NextResponse.json({ error: "query failed" }, { status: 500 });
+  }
+
+  // ── Retención (spec 183 · D5) ─────────────────────────────────────────────
+  // El 99% de las respuestas de este endpoint son «no hay nada para imprimir»,
+  // y contestarlas al toque es lo que hacía que el agente preguntara de nuevo
+  // 2,4 s después: 3,24M invocaciones por mes, el 70% de la factura de Vercel
+  // en eventos de observability (#304).
+  //
+  // Así que cuando no hay nada, el GET **espera mirando la cola** y contesta
+  // apenas aparece algo. Las dos cosas a la vez: el agente ocioso pregunta cada
+  // ~30 s —barato— y cuando hay trabajo la comanda sale en ~2 s, o sea MÁS
+  // rápido que el período de 10,99 s que golf tiene hoy.
+  //
+  // Funciona con los dos `.exe` ya instalados (los dos con `agent_version`
+  // NULL): su loop espera la respuesta HTTP antes de dormir, así que retener
+  // alarga el período sin que el local se entere. Es la única decisión de la
+  // spec que no necesita una visita al local.
+  //
+  // Esperar no se factura: el proyecto está en Fluid, que cobra CPU activa, y
+  // un `await` sin trabajo no consume. Si Provisioned Memory sube en el
+  // dashboard después de deployar esto, la decisión estaba mal.
+  if (trabajos.length === 0) {
+    trabajos = await retenerHastaQueHayaTrabajo(
+      req,
+      service,
+      businessId,
+      agente,
+      stationId,
+      retencionMs(url.searchParams.get("wait_ms")),
+    );
+  }
+
+  return NextResponse.json({ comandas: trabajos });
+}
+
+/**
+ * Cuántas veces se rearma el payload dentro de una misma retención.
+ *
+ * La sonda es del NEGOCIO y el payload del AGENTE: en un negocio con dos PCs
+ * (golf: una por caja), el trabajo del otro agente hace positiva la sonda de
+ * este. Sin techo, eso serían 12 reconstrucciones por request —más caro que no
+ * retener—. Al agotarse, se contesta vacío y el agente vuelve como siempre:
+ * peor caso, el comportamiento de antes de esta spec.
+ */
+const RECONSTRUCCIONES_MAX = 3;
+
+/**
+ * Espera hasta `holdMs` a que aparezca trabajo para ESTE agente, mirando la
+ * cola cada `PROBE_MS`. Devuelve lo que encontró, o `[]` si se agotó la
+ * retención (que es la respuesta que el agente ya sabe manejar).
+ */
+async function retenerHastaQueHayaTrabajo(
+  req: Request,
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+  agente: PrintAgentCredential,
+  stationId: string | null,
+  holdMs: number,
+): Promise<Trabajo[]> {
+  if (holdMs <= 0) return [];
+
+  const limite = Date.now() + holdMs;
+  // Marca de agua: sólo despierta la sonda el trabajo que aparezca DESPUÉS de
+  // este instante. Sin ella, un `print_job` que quedó `pendiente` sin poder
+  // imprimirse nunca —comandera apagada, negocio sin impresora de control—
+  // haría positiva cada sonda y rearmaríamos el payload cada 2 s para nada.
+  const desde = new Date().toISOString();
+  let reconstrucciones = 0;
+
+  while (Date.now() < limite) {
+    await new Promise((r) =>
+      setTimeout(r, Math.min(PROBE_MS, limite - Date.now())),
+    );
+    // El agente cortó (timeout de su fetch, o lo pararon en el local): no hay a
+    // quién contestarle y seguir sondeando es gastar por gusto.
+    if (req.signal?.aborted) return [];
+
+    if (!(await hayTrabajoNuevo(service, businessId, desde))) continue;
+
+    const trabajos = await buildTrabajos(
+      service,
+      businessId,
+      agente,
+      stationId,
+    );
+    if (trabajos && trabajos.length > 0) return trabajos;
+
+    // Apareció trabajo, pero no es para este agente (o es una comanda a medio
+    // crear, que se completa en el próximo sondeo). Se reintenta un par de
+    // veces y después se contesta vacío.
+    if (++reconstrucciones >= RECONSTRUCCIONES_MAX) return [];
+  }
+
+  return [];
+}
+
+/**
+ * ¿Apareció algo para imprimir en este negocio después de `desdeIso`?
+ *
+ * Es la sonda de la retención: dos `count` con `head` —sin traer filas y sin
+ * tocar los seis niveles de join del payload— contra las dos únicas tablas de
+ * las que sale papel, `comandas` y `print_jobs`.
+ *
+ * Mira el timestamp y no sólo el estado a propósito: lo que interesa es el
+ * trabajo NUEVO. Una fila `pendiente` que quedó colgada de antes no tiene que
+ * despertar la retención en cada sondeo.
+ *
+ * Ante un error de query contesta `true` —«puede que haya»—. El modo de fallar
+ * que importa es el otro: una sonda que dice «no hay» con una comanda
+ * esperando deja a la cocina sin el ticket hasta que se agote la retención.
+ */
+async function hayTrabajoNuevo(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+  desdeIso: string,
+): Promise<boolean> {
+  // Pendiente o con reimpresión pedida, Y aparecido después de la marca de
+  // agua. Dos `.or()` seguidos se combinan con AND en PostgREST, que es
+  // exactamente eso. El timestamp va entre comillas porque lleva `:` y `.`.
+  const nuevo = `emitted_at.gt."${desdeIso}",reprint_requested_at.gt."${desdeIso}"`;
+  const enCola = "status.eq.pendiente,reprint_requested_at.not.is.null";
+
+  const [comandas, jobs] = await Promise.all([
+    service
+      .from("comandas")
+      .select("id, orders!inner(business_id)", { head: true, count: "exact" })
+      .eq("orders.business_id", businessId)
+      .or(enCola)
+      .or(nuevo)
+      .limit(1),
+    service
+      .from("print_jobs")
+      .select("id", { head: true, count: "exact" })
+      .eq("business_id", businessId)
+      .or(enCola)
+      .or(nuevo)
+      .limit(1),
+  ]);
+
+  if (comandas.error || jobs.error) {
+    console.error(
+      "print-agent sonda de retención",
+      comandas.error ?? jobs.error,
+    );
+    return true;
+  }
+
+  return (comandas.count ?? 0) > 0 || (jobs.count ?? 0) > 0;
+}
+
+/**
+ * Arma TODO lo que este agente tiene que imprimir ahora: comandas de cocina +
+ * las cuatro familias de papel de `print_jobs`, ya filtradas por su alcance.
+ *
+ * Está separada del handler porque la retención de la D5 (spec 183) la vuelve
+ * a llamar cuando la sonda detecta trabajo nuevo: el payload se arma dos veces
+ * en la misma request y una sola vez por tick del agente.
+ *
+ * `null` = la query de comandas falló (→ 500). Un `[]` es «no hay nada», que es
+ * un resultado legítimo y el 99% de las respuestas.
+ */
+async function buildTrabajos(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+  agente: PrintAgentCredential,
+  stationId: string | null,
+) {
 
   // `parent:parent_order_item_id(product_name)` — de qué menú viene el plato
   // (spec 145). El embed self-referencial se resuelve por COLUMNA y no por el
@@ -144,7 +336,6 @@ export async function GET(req: Request) {
     .eq("orders.business_id", businessId)
     .order("emitted_at", { ascending: true });
 
-  const stationId = url.searchParams.get("station_id");
   if (stationId) {
     query = query.eq("station_id", stationId);
   }
@@ -152,7 +343,7 @@ export async function GET(req: Request) {
   const { data: comandas, error } = await query;
   if (error) {
     console.error("print-agent GET", error);
-    return NextResponse.json({ error: "query failed" }, { status: 500 });
+    return null;
   }
 
   // «Combina con»: con qué combina lo de este sector. Se arma desde los `order_items`
@@ -343,7 +534,7 @@ export async function GET(req: Request) {
     (t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip),
   );
 
-  return NextResponse.json({ comandas: trabajos });
+  return trabajos;
 }
 
 /** Item de un pedido con su sector, para el bloque «COMBINA CON» de los tickets. */

@@ -53,15 +53,21 @@ import { EditarItemsModal } from "@/components/shared/editar-items-modal";
 
 /**
  * Umbral (ms) para considerar "caído" al print agent: sin heartbeat hace más
- * de esto → "sin conexión" (spec 35). Definido acá (client) y no importado de
- * `local-query` para no arrastrar su `import "server-only"` al bundle del
- * cliente. El loader server (`getPrintAgentHealth`) solo devuelve `last_seen_at`;
- * la derivación conectado/caído vive en el cliente con reloj vivo.
+ * de esto → "sin conexión" (spec 35). No se importa de `local-query` para no
+ * arrastrar su `import "server-only"` al bundle del cliente. El loader server
+ * (`getPrintAgentHealth`) solo devuelve `last_seen_at`; la derivación
+ * conectado/caído vive en el cliente con reloj vivo.
+ *
+ * Spec 183 · D5: sale de `cadence.ts` —módulo puro, sin server-only— porque se
+ * DERIVA de la cadencia del agente. Estaba clavado en 60 s acá y en el card de
+ * settings, los dos dimensionados para el poll de 1 s de la spec 28: con la
+ * retención del GET eso era una falsa alarma garantizada.
  */
-const PRINT_AGENT_OFFLINE_THRESHOLD_MS = 60_000;
+const PRINT_AGENT_OFFLINE_THRESHOLD_MS = OFFLINE_THRESHOLD_MS;
 import { useOptimisticAction } from "@/lib/ui/use-optimistic-action";
 import { useOnActivate } from "@/lib/ui/use-tab-param";
 import { mozoPalette } from "@/lib/mozo/colors";
+import { OFFLINE_THRESHOLD_MS } from "@/lib/print-agent/cadence";
 import type { MozoMember } from "@/lib/mozo/queries";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 

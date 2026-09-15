@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // El GET hace pull de comandas `pendiente` con su `printer_ip` por sector (spec
 // 28). El POST confirma la impresión (`ok` → en_preparacion) o reporta un fallo
@@ -12,6 +12,11 @@ let postRow: Row | null; // fila del select del POST (maybeSingle)
 let captured: { updates: Record<string, unknown>[]; orFilters: string[] };
 let notifyCalls: { businessId: string; comandaId: string }[];
 let scopeDelAgente: string[] | null; // `printer_scope` del agente de biz1 (spec 124)
+// Sonda de la retención (spec 183 · D5): cuántas filas NUEVAS ve por tabla y
+// si la query falla. `sondaCalls` deja ver cuántas veces se sondeó.
+let sondaCounts: Record<string, number>;
+let sondaError: { message: string } | null;
+let sondaCalls: string[];
 
 vi.mock("@/lib/notifications/events", () => ({
   notifyPrintFailed: async (p: { businessId: string; comandaId: string }) => {
@@ -43,13 +48,37 @@ vi.mock("@/lib/print-agent/credentials", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: () => ({
     from: (table: string) => ({
-      select: () => {
+      select: (_cols?: string, opts?: { head?: boolean; count?: string }) => {
+        // La sonda de la retención (spec 183 · D5) es la ÚNICA query con
+        // `head: true`: no trae filas, sólo el count. Se responde aparte para
+        // que su `.or()` no se mezcle con el del payload.
+        if (opts?.head) {
+          const sonda = {
+            eq: () => sonda,
+            or: () => sonda,
+            limit: () => sonda,
+            then: (
+              resolve: (v: {
+                count: number | null;
+                error: { message: string } | null;
+              }) => unknown,
+            ) => {
+              sondaCalls.push(table);
+              return resolve({
+                count: sondaCounts[table] ?? 0,
+                error: sondaError,
+              });
+            },
+          };
+          return sonda;
+        }
         const b = {
           eq: () => b,
           in: () => b,
           is: () => b,
           not: () => b,
           neq: () => b,
+          limit: () => b,
           or: (filter: string) => {
             captured.orFilters.push(filter);
             return b;
@@ -164,7 +193,7 @@ function itemDePedido(
 }
 
 function getReq(auth = "Bearer test-key") {
-  return new Request("http://localhost/api/print-agent?business_id=biz1", {
+  return new Request("http://localhost/api/print-agent?business_id=biz1&wait_ms=0", {
     headers: auth ? { authorization: auth } : {},
   });
 }
@@ -194,6 +223,9 @@ beforeEach(() => {
   captured = { updates: [], orFilters: [] };
   notifyCalls = [];
   scopeDelAgente = null;
+  sondaCounts = {};
+  sondaError = null;
+  sondaCalls = [];
 });
 
 describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
@@ -792,5 +824,128 @@ describe("GET /api/print-agent — de qué menú viene el plato (spec 145)", () 
       comandas: { items: { combo_name: string | null }[] }[];
     };
     expect(body.comandas[0]?.items[0]?.combo_name).toBe("Menu Ninos");
+  });
+});
+
+// ── Retención del GET (spec 183 · D5) ──────────────────────────────────────
+// Cuando no hay nada para imprimir, el GET no contesta vacío al toque: espera
+// mirando la cola y contesta apenas aparece algo. Es lo que baja el período del
+// agente a ~30 s SIN tocar el `.exe` instalado, y a la vez hace que la comanda
+// salga más rápido que hoy (2 s de sondeo contra 10,99 s de período en golf).
+describe("GET /api/print-agent — retención cuando no hay nada (D5)", () => {
+  /** Request sin `wait_ms`: retención por default, como la del agente real. */
+  function getReqRetenido() {
+    return new Request("http://localhost/api/print-agent?business_id=biz1", {
+      headers: { authorization: "Bearer test-key" },
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("nada para imprimir → no contesta, espera", async () => {
+    rows = [];
+    let contestó = false;
+    const p = GET(getReqRetenido()).then((r) => {
+      contestó = true;
+      return r;
+    });
+
+    // Un sondeo entero (2 s) sin novedades: sigue esperando.
+    await vi.advanceTimersByTimeAsync(2_100);
+    expect(sondaCalls.length).toBeGreaterThan(0);
+    expect(contestó).toBe(false);
+
+    // Se agota la retención (25 s) → contesta vacío, que es lo que el agente
+    // ya sabe manejar.
+    await vi.advanceTimersByTimeAsync(24_000);
+    const body = (await (await p).json()) as { comandas: unknown[] };
+    expect(contestó).toBe(true);
+    expect(body.comandas).toHaveLength(0);
+  });
+
+  it("aparece una comanda a mitad de la retención → contesta ahí mismo", async () => {
+    rows = [];
+    const p = GET(getReqRetenido());
+    await vi.advanceTimersByTimeAsync(2_100); // un sondeo en falso
+
+    // Alguien marcha una mesa: la sonda la ve y el payload sale.
+    rows = [makeRow("Cocina", "192.168.10.50")];
+    sondaCounts = { comandas: 1 };
+    await vi.advanceTimersByTimeAsync(2_100);
+
+    const body = (await (await p).json()) as {
+      comandas: { station_name: string }[];
+    };
+    expect(body.comandas).toHaveLength(1);
+    expect(body.comandas[0].station_name).toBe("Cocina");
+    // Dentro de la retención, no después: la comanda no esperó los 25 s.
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("`wait_ms=0` contesta vacío al toque (es lo que usa `--once`)", async () => {
+    rows = [];
+    const res = await GET(
+      new Request(
+        "http://localhost/api/print-agent?business_id=biz1&wait_ms=0",
+        { headers: { authorization: "Bearer test-key" } },
+      ),
+    );
+    const body = (await res.json()) as { comandas: unknown[] };
+    expect(body.comandas).toHaveLength(0);
+    expect(sondaCalls).toHaveLength(0);
+  });
+
+  it("si la sonda falla, rearma el payload en vez de dejar la comanda esperando", async () => {
+    // El modo de fallar que importa: una sonda que dice «no hay» con una
+    // comanda en la cola deja a la cocina sin ticket. Ante el error contesta
+    // «puede que haya» y se rearma el payload.
+    rows = [];
+    sondaError = { message: "PGRST100" };
+    const p = GET(getReqRetenido());
+    await vi.advanceTimersByTimeAsync(2_100);
+    rows = [makeRow("Cocina", "192.168.10.50")];
+    await vi.advanceTimersByTimeAsync(2_100);
+    const body = (await (await p).json()) as { comandas: unknown[] };
+    expect(body.comandas).toHaveLength(1);
+  });
+
+  it("trabajo que este agente no alcanza → contesta vacío sin rearmar 12 veces", async () => {
+    // Negocio con dos PCs (golf): el papel del otro agente hace positiva la
+    // sonda de este. Sin techo serían 12 reconstrucciones del payload en una
+    // sola request — más caro que no retener.
+    scopeDelAgente = ["10.0.0.0/24"]; // la comanda de abajo está en 192.168.x
+    rows = [makeRow("Cocina", "192.168.10.50")];
+    sondaCounts = { comandas: 1 };
+
+    const p = GET(getReqRetenido());
+    await vi.advanceTimersByTimeAsync(25_100);
+    const body = (await (await p).json()) as { comandas: unknown[] };
+    expect(body.comandas).toHaveLength(0);
+    // 3 reconstrucciones = 3 sondeos × 2 tablas.
+    expect(sondaCalls).toHaveLength(6);
+  });
+
+  it("el agente que corta la conexión no se sigue sondeando", async () => {
+    rows = [];
+    const ctrl = new AbortController();
+    const p = GET(
+      new Request("http://localhost/api/print-agent?business_id=biz1", {
+        headers: { authorization: "Bearer test-key" },
+        signal: ctrl.signal,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(2_100);
+    const sondeosAntes = sondaCalls.length;
+    ctrl.abort();
+    await vi.advanceTimersByTimeAsync(10_000);
+    const body = (await (await p).json()) as { comandas: unknown[] };
+    expect(body.comandas).toHaveLength(0);
+    expect(sondaCalls).toHaveLength(sondeosAntes);
   });
 });

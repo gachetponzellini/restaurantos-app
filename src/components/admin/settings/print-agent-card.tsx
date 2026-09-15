@@ -13,8 +13,11 @@ import {
   type PrintAgentSummary,
 } from "@/lib/print-agent/credentials-actions";
 import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
-
-const OFFLINE_THRESHOLD_MS = 60_000;
+// El umbral se DERIVA de la cadencia (spec 183 · D5): con la retención del GET
+// el período ocioso llega a ~46 s, y los 60 s que estaban clavados acá dejaban
+// entrar un solo latido antes de cantar «sin conexión». Un tick lento y el
+// panel mentía. Vive en `cadence.ts`, al lado de la retención que lo define.
+import { OFFLINE_THRESHOLD_MS } from "@/lib/print-agent/cadence";
 
 function relativeTime(fromIso: string, now: number): string {
   const diff = Math.max(0, now - new Date(fromIso).getTime());
