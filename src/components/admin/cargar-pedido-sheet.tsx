@@ -666,7 +666,13 @@ export function CargarPedidoSheet({
           deliveryType === "delivery"
             ? deliveryAddress.trim() || undefined
             : undefined,
-        delivery_notes: deliveryNotes.trim() || undefined,
+        // Igual que la dirección: en retiro el campo ya no existe en la
+        // hoja (spec 196), así que una nota tipeada en delivery y después
+        // cambiada a retiro no puede viajar invisible al ticket.
+        delivery_notes:
+          deliveryType === "delivery"
+            ? deliveryNotes.trim() || undefined
+            : undefined,
         kitchen_notes: kitchenNotes.trim() || undefined,
         items: cart.map((c) =>
           isItemLibreCartLine(c)
@@ -997,40 +1003,32 @@ export function CargarPedidoSheet({
                         )}
                       </div>
                     )}
-                    <div>
-                      <label className="text-xs font-semibold text-zinc-600">
-                        Nota para el pedido (opcional)
-                      </label>
-                      <input
-                        type="text"
-                        value={deliveryNotes}
-                        onChange={(e) => setDeliveryNotes(e.target.value)}
-                        placeholder="ej: tocar timbre, portón negro…"
-                        className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
-                      />
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Va en el ticket de control, con los datos de la entrega:
-                        cocina no la ve.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-zinc-600">
-                        Nota para cocina (opcional)
-                      </label>
-                      <input
-                        type="text"
-                        value={kitchenNotes}
-                        onChange={(e) => setKitchenNotes(e.target.value)}
-                        maxLength={120}
-                        placeholder="ej: junto con la mesa 5…"
-                        className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
-                      />
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Sale arriba de la comanda, para cocina. La hora va en
-                        los campos de abajo; para «sin cebolla», usá la nota del
-                        producto.
-                      </p>
-                    </div>
+                    {/* Spec 196: la indicación de la entrega vive pegada a
+                        la dirección, que es lo que describe, y sólo existe en
+                        delivery — en retiro no hay timbre que tocar. La nota
+                        para cocina se fue con el pedido en armado. */}
+                    {deliveryType === "delivery" && (
+                      <div>
+                        <label
+                          htmlFor="cargar-nota-entrega"
+                          className="text-xs font-semibold text-zinc-600"
+                        >
+                          Indicaciones para la entrega (opcional)
+                        </label>
+                        <input
+                          id="cargar-nota-entrega"
+                          type="text"
+                          value={deliveryNotes}
+                          onChange={(e) => setDeliveryNotes(e.target.value)}
+                          placeholder="ej: tocar timbre, portón negro…"
+                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                        />
+                        <p className="mt-1 text-[11px] text-zinc-500">
+                          Para el que reparte. Sale en el ticket de control,
+                          junto con la dirección: cocina no la ve.
+                        </p>
+                      </div>
+                    )}
                   </section>
 
                   {/* ─── ¿Para cuándo? (spec 127) ───
@@ -1040,7 +1038,14 @@ export function CargarPedidoSheet({
                   solo, antes de la hora de cocina.
 
                   Las dos horas son a mano: el sistema no calcula ninguna ni
-                  pre-llena la segunda con la primera. Vacías = para ahora. */}
+                  pre-llena la segunda con la primera. Vacías = para ahora.
+
+                  Spec 196: este bloque pide las dos horas y nada más. Tenía
+                  arriba las dos notas, y cuatro campos apilados se leían como
+                  el mismo dato pedido dos veces — cuál de las dos salía en la
+                  comanda no se sabía sin leer el gris. Cada nota se fue con lo
+                  que describe: la de entrega con la dirección, la de cocina
+                  con el pedido. */}
                   <section className="space-y-2.5 rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
                     <h3 className="text-[11px] font-bold tracking-wide text-zinc-500 uppercase">
                       ¿Para cuándo?
@@ -1115,9 +1120,9 @@ export function CargarPedidoSheet({
                           onChange={setHoraCocina}
                           className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
-                        <p className="mt-1 text-[11px] text-zinc-500">
-                          Para cuándo tiene que estar listo. Sale impresa en la
-                          comanda.
+                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                          Para cuándo tiene que estar listo. Sale impresa{" "}
+                          <strong className="font-semibold">en la comanda</strong>.
                         </p>
                       </div>
                       <div>
@@ -1133,8 +1138,12 @@ export function CargarPedidoSheet({
                           onChange={setHoraPedido}
                           className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
-                        <p className="mt-1 text-[11px] text-zinc-500">
-                          Cuándo lo retira o lo recibe el cliente.
+                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                          Cuándo lo retira o lo recibe el cliente. Sale{" "}
+                          <strong className="font-semibold">
+                            en el ticket de control
+                          </strong>
+                          .
                         </p>
                       </div>
                     </div>
@@ -1254,6 +1263,33 @@ export function CargarPedidoSheet({
                     <span className="tabular-nums text-zinc-700">
                       {formatCurrency(envioCents)}
                     </span>
+                  </div>
+                )}
+                {/* Spec 196: la nota para cocina vive con los productos — es
+                    sobre cómo sacar ESTA comida, no sobre cuándo. En modo
+                    agregar no va: el pedido ya existe y su nota ya se definió;
+                    pisarla desde acá sería un efecto lateral invisible. */}
+                {!agregarA && (
+                  <div className="border-t border-zinc-100 pt-2.5">
+                    <label
+                      htmlFor="cargar-nota-cocina"
+                      className="text-xs font-semibold text-zinc-600"
+                    >
+                      Nota para cocina (opcional)
+                    </label>
+                    <input
+                      id="cargar-nota-cocina"
+                      type="text"
+                      value={kitchenNotes}
+                      onChange={(e) => setKitchenNotes(e.target.value)}
+                      maxLength={120}
+                      placeholder="ej: junto con la mesa 5…"
+                      className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                    />
+                    <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                      Sale arriba de la comanda. Para «sin cebolla», usá la
+                      nota del producto.
+                    </p>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-zinc-100 pt-2.5">
