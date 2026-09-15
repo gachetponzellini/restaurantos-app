@@ -30,6 +30,9 @@ vi.mock("@/lib/print-agent/credentials", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: () => ({
     from: (table: string) => ({
+      // El GET late como efecto del pull (spec 183 · D1). Acá sólo hace falta
+      // que no explote: el latido se testea en route.test.ts.
+      upsert: () => Promise.resolve({ error: null }),
       select: () => {
         let kind: string | null = null;
         const b = {

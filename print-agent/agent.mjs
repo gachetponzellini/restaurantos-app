@@ -2,6 +2,10 @@
 // Print agent de referencia (spec 28). Loop: pull → imprimir → confirmar.
 //
 //   GET  /api/print-agent?business_id=…   (Bearer PRINT_AGENT_KEY)
+//        → es también el latido de salud (spec 183 · D1): un request por vuelta,
+//          con la versión del agente en `x-agent-version`. Si no hay nada para
+//          imprimir, el server RETIENE la respuesta hasta ~25 s y contesta
+//          apenas aparece algo (D5): el loop se pacea solo, sin tocar pollMs.
 //   por cada comanda `pendiente` → imprimir el ticket
 //   POST /api/print-agent { comanda_id }  → pendiente → en_preparacion
 //
@@ -50,7 +54,7 @@ const cfg = JSON.parse(fs.readFileSync(path.join(cfgDir, "config.json"), "utf8")
  * SUBIRLA al empaquetar un .exe nuevo. Si no se sube, el panel va a decir que
  * el local corre una versión que no corre — peor que no mostrar nada.
  */
-const AGENT_VERSION = "2026-09-09";
+const AGENT_VERSION = "2026-09-15";
 
 const args = process.argv.slice(2);
 const ONCE = args.includes("--once");
@@ -500,40 +504,27 @@ function printNetwork(payload, ip, port) {
   });
 }
 
+/**
+ * Pull de trabajos. Es TAMBIÉN el latido de salud (spec 183 · D1): el server lo
+ * registra como efecto de esta misma llamada, con la versión que va en
+ * `x-agent-version`. Antes eran dos requests por vuelta —el `POST /heartbeat` y
+ * este GET— y la mitad de las invocaciones del proyecto eran eso.
+ *
+ * `--once` pide `wait_ms=0`: sin eso el server retiene la respuesta hasta 25 s
+ * cuando no hay nada (D5) y una corrida manual parecería colgada. `--dry-run`
+ * pide `beat=0`: probar desde una máquina de desarrollo no tiene que hacer que
+ * el panel del local diga «conectado».
+ */
 async function fetchComandas() {
-  const res = await fetch(
-    `${base}/api/print-agent?business_id=${encodeURIComponent(cfg.businessId)}`,
-    { headers: authHeaders },
-  );
+  const q = new URLSearchParams({ business_id: String(cfg.businessId) });
+  if (ONCE) q.set("wait_ms", "0");
+  if (DRY) q.set("beat", "0");
+  const res = await fetch(`${base}/api/print-agent?${q}`, {
+    headers: { ...authHeaders, "x-agent-version": AGENT_VERSION },
+  });
   if (!res.ok) throw new Error(`GET ${res.status} ${res.statusText}`);
   const data = await res.json();
   return data.comandas ?? [];
-}
-
-/**
- * Latido de salud (spec 35). Best-effort: si falla, no corta el loop — solo
- * significa que operación verá el agente como "sin conexión" hasta el próximo
- * latido OK. Un agente viejo (sin esta llamada) sigue imprimiendo igual.
- *
- * Issue #278 — va también la versión. Cuando golf avisó que la nota de cocina
- * no salía en la comanda, el server la mandaba bien y el sospechoso era el
- * .exe del local, pero desde el panel era indistinguible: el latido sólo decía
- * "estoy vivo". Hubo que deducir la versión cruzando fechas de commit contra
- * las notas del setup. El campo es aditivo — un server viejo lo ignora.
- */
-async function sendHeartbeat() {
-  try {
-    await fetch(`${base}/api/print-agent/heartbeat`, {
-      method: "POST",
-      headers: { ...authHeaders, "content-type": "application/json" },
-      body: JSON.stringify({
-        business_id: cfg.businessId,
-        version: AGENT_VERSION,
-      }),
-    });
-  } catch {
-    /* best-effort: el próximo tick reintenta */
-  }
 }
 
 /**
@@ -631,8 +622,9 @@ async function printOne(c) {
 }
 
 async function tick() {
-  // Latido de salud antes del pull (spec 35). No bloquea la impresión.
-  if (!DRY) await sendHeartbeat();
+  // Un solo request por vuelta (spec 183 · D1): el pull ES el latido. El
+  // `POST /api/print-agent/heartbeat` de la spec 35 sigue existiendo en el
+  // server para los `.exe` viejos, pero este agente no lo llama.
   const comandas = await fetchComandas();
   const pend = comandas.length;
   if (pend === 0) {

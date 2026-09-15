@@ -34,6 +34,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
 
 import { PROBE_MS, retencionMs } from "@/lib/print-agent/cadence";
+import { registrarLatido } from "@/lib/print-agent/heartbeat";
 import type { PrintAgentCredential } from "@/lib/print-agent/credentials";
 
 import { unauthorized, autenticarAgente } from "./agent-auth";
@@ -114,7 +115,37 @@ export async function GET(req: Request) {
   const service = createSupabaseServiceClient();
   const stationId = url.searchParams.get("station_id");
 
-  let trabajos = await buildTrabajos(service, businessId, agente, stationId);
+  // ── El latido viaja adentro del pull (spec 183 · D1) ──────────────────────
+  // El agente mandaba DOS requests por vuelta: un `POST /heartbeat` y este GET.
+  // Acá ya está todo lo que el latido necesita —autenticado, y la key dice qué
+  // agente es—, así que se registra como efecto de la misma llamada y la
+  // versión viaja en un header en vez de un body aparte.
+  //
+  // La spec 35 ya decía esto: su docstring afirma que el latido «desacopla la
+  // señal de salud del ritmo del poll». El desacople existía en la prosa; el
+  // agente lo mandaba en cada tick igual. Atado al pull, el latido contesta
+  // exactamente la pregunta que el panel hace: «¿este agente está pidiendo
+  // comandas?».
+  //
+  // Va en paralelo con el armado del payload: es un upsert que no bloquea nada
+  // y su error no puede tumbar la impresión (best-effort, como en el POST).
+  // `beat=0` no late. Es para el `--dry-run` del agente de referencia, que
+  // antes de la D1 simplemente no llamaba al heartbeat: probar desde una
+  // máquina de desarrollo no tiene que hacer que el panel del local diga
+  // «conectado» mientras el agente de verdad está caído.
+  const late = url.searchParams.get("beat") !== "0";
+
+  const [trabajos, latido] = await Promise.all([
+    buildTrabajos(service, businessId, agente, stationId),
+    late
+      ? registrarLatido(service, {
+          businessId,
+          agentId: agente.id,
+          version: req.headers.get("x-agent-version"),
+        })
+      : Promise.resolve({ error: null }),
+  ]);
+  if (latido.error) console.error("print-agent GET · latido", latido.error);
   if (trabajos === null) {
     return NextResponse.json({ error: "query failed" }, { status: 500 });
   }
@@ -139,14 +170,16 @@ export async function GET(req: Request) {
   // un `await` sin trabajo no consume. Si Provisioned Memory sube en el
   // dashboard después de deployar esto, la decisión estaba mal.
   if (trabajos.length === 0) {
-    trabajos = await retenerHastaQueHayaTrabajo(
-      req,
-      service,
-      businessId,
-      agente,
-      stationId,
-      retencionMs(url.searchParams.get("wait_ms")),
-    );
+    return NextResponse.json({
+      comandas: await retenerHastaQueHayaTrabajo(
+        req,
+        service,
+        businessId,
+        agente,
+        stationId,
+        retencionMs(url.searchParams.get("wait_ms")),
+      ),
+    });
   }
 
   return NextResponse.json({ comandas: trabajos });
@@ -284,7 +317,6 @@ async function buildTrabajos(
   agente: PrintAgentCredential,
   stationId: string | null,
 ) {
-
   // `parent:parent_order_item_id(product_name)` — de qué menú viene el plato
   // (spec 145). El embed self-referencial se resuelve por COLUMNA y no por el
   // nombre del constraint: con el hint `order_items_parent_order_item_id_fkey`
@@ -491,25 +523,25 @@ async function buildTrabajos(
   // endpoint y la única que, si falla, para el local.
   const [controls, cuentas, facturas, cierres, pruebas, rendiciones] =
     await Promise.all([
-    safePrintables("control", () =>
-      buildPrintableControlTickets(service, businessId),
-    ),
-    safePrintables("cuenta", () =>
-      buildPrintableCuentaTickets(service, businessId),
-    ),
-    safePrintables("factura", () =>
-      buildPrintableFacturaTickets(service, businessId),
-    ),
-    safePrintables("cierre", () =>
-      buildPrintableCierreTickets(service, businessId),
-    ),
-    safePrintables("prueba", () =>
-      buildPrintableTestTickets(service, businessId),
-    ),
-    safePrintables("rendicion", () =>
-      buildPrintableRendicionTickets(service, businessId),
-    ),
-  ]);
+      safePrintables("control", () =>
+        buildPrintableControlTickets(service, businessId),
+      ),
+      safePrintables("cuenta", () =>
+        buildPrintableCuentaTickets(service, businessId),
+      ),
+      safePrintables("factura", () =>
+        buildPrintableFacturaTickets(service, businessId),
+      ),
+      safePrintables("cierre", () =>
+        buildPrintableCierreTickets(service, businessId),
+      ),
+      safePrintables("prueba", () =>
+        buildPrintableTestTickets(service, businessId),
+      ),
+      safePrintables("rendicion", () =>
+        buildPrintableRendicionTickets(service, businessId),
+      ),
+    ]);
 
   // ── Alcance del agente (spec 124) ─────────────────────────────────────────
   // Un negocio puede tener varias PCs con print-agent, en LANs distintas: cada
@@ -530,9 +562,7 @@ async function buildTrabajos(
     ...cierres,
     ...pruebas,
     ...rendiciones,
-  ].filter(
-    (t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip),
-  );
+  ].filter((t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip));
 
   return trabajos;
 }
@@ -732,7 +762,10 @@ async function buildPrintableControlTickets(
   // sí tener dos terminales con la suya (KCC).
   const controlDelNegocio =
     biz.control_printer_ip?.trim() && biz.control_printer_enabled !== false
-      ? { ip: biz.control_printer_ip.trim(), port: biz.control_printer_port ?? 9100 }
+      ? {
+          ip: biz.control_printer_ip.trim(),
+          port: biz.control_printer_port ?? 9100,
+        }
       : null;
 
   const { data: tickets, error } = await service
@@ -806,16 +839,21 @@ async function buildPrintableControlTickets(
     }[]) {
       const ip = u.control_printer_ip?.trim();
       if (u.role === "terminal" && ip) {
-        impresoraDeTerminal.set(u.user_id, { ip, port: u.control_printer_port ?? 9100 });
+        impresoraDeTerminal.set(u.user_id, {
+          ip,
+          port: u.control_printer_port ?? 9100,
+        });
       }
     }
   }
 
   const out = [];
   for (const t of tickets ?? []) {
-    const pedidor = (t as { requested_by?: string | null }).requested_by ?? null;
+    const pedidor =
+      (t as { requested_by?: string | null }).requested_by ?? null;
     const printer =
-      (pedidor ? impresoraDeTerminal.get(pedidor) : undefined) ?? controlDelNegocio;
+      (pedidor ? impresoraDeTerminal.get(pedidor) : undefined) ??
+      controlDelNegocio;
     // Sin destino no se entrega: queda pendiente para cuando lo configuren.
     if (!printer) continue;
 
@@ -1400,8 +1438,7 @@ async function buildPrintableCierreTickets(
         ingresos_cents: r.desglose_esperado.ingresos_cents,
         sangrias_cents: r.desglose_esperado.sangrias_cents,
         // Los cortes anteriores a la spec 177 no lo tienen en su snapshot.
-        propinas_pagadas_cents:
-          r.desglose_esperado.propinas_pagadas_cents ?? 0,
+        propinas_pagadas_cents: r.desglose_esperado.propinas_pagadas_cents ?? 0,
         esperado_cents: r.expected_cash_cents,
         contado_cents: r.closing_cash_cents,
         diferencia_cents: r.difference_cents,

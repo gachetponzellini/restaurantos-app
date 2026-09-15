@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { registrarLatido } from "@/lib/print-agent/heartbeat";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { unauthorized, autenticarAgente } from "../agent-auth";
@@ -8,10 +9,21 @@ import { unauthorized, autenticarAgente } from "../agent-auth";
  * POST /api/print-agent/heartbeat
  * Body: { business_id: string }
  *
- * Latido del print agent on-site (spec 35). El agente lo llama cada ~15s con su
- * key. Upsertea `print_agent_status.last_seen_at`; operación deriva "conectada"
- * (now - last_seen < 60s) vs "sin conexión hace X". Desacopla la señal de salud
- * del ritmo del poll del GET.
+ * **DEPRECADO desde el agente 2026-09-15** (spec 183 · D1): el latido pasó a
+ * viajar adentro del `GET /api/print-agent`, que ya autentica, ya sabe qué
+ * agente es y recibe la versión en `x-agent-version`. Un agente nuevo no llama
+ * esta ruta.
+ *
+ * No se toca y no se borra: es lo que siguen llamando los `.exe` instalados
+ * —los dos locales tienen `agent_version` NULL, o sea binarios anteriores a
+ * set-2026— y mientras haya uno instalado tiene que seguir contestando. El día
+ * que `agent_version` diga 2026-09-15 o más en todos los agentes del panel,
+ * esta ruta se puede retirar.
+ *
+ * Latido del print agent on-site (spec 35). Upsertea
+ * `print_agent_status.last_seen_at`; operación deriva "conectada" vs "sin
+ * conexión hace X" con el umbral de `lib/print-agent/cadence.ts`, que se deriva
+ * de la cadencia esperada (ya no son 60 s clavados).
  *
  * Issue #278: el latido trae también la versión del agente. Es opcional a
  * propósito — un agente viejo no la manda, y ese NULL es justamente el dato
@@ -39,26 +51,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "missing business_id" }, { status: 400 });
   }
 
-  // La versión es texto libre que manda el local: se acota acá, antes de la
-  // base. Vacía cuenta como ausente — un agente que manda "" no dice nada.
-  const version =
-    typeof body.version === "string" ? body.version.trim().slice(0, 40) : "";
-
+  // El upsert es compartido con el GET (spec 183 · D1): las dos puertas tienen
+  // que escribir la MISMA fila con las mismas reglas —incluida la de no pisar
+  // la versión guardada— mientras agentes viejos y nuevos convivan.
   const service = createSupabaseServiceClient();
-  const { error } = await service
-    .from("print_agent_status")
-    .upsert(
-      {
-        business_id: businessId,
-        agent_id: agente.id,
-        last_seen_at: new Date().toISOString(),
-        // Sin versión NO se pisa la que ya había: un agente viejo latiendo al
-        // lado de uno nuevo no puede borrarle el dato al otro. Cada fila es de
-        // un agente, así que el único que la escribe es su propio dueño.
-        ...(version ? { agent_version: version } : {}),
-      },
-      { onConflict: "business_id,agent_id" },
-    );
+  const { error } = await registrarLatido(service, {
+    businessId,
+    agentId: agente.id,
+    version: body.version,
+  });
 
   if (error) {
     console.error("print-agent heartbeat", error);

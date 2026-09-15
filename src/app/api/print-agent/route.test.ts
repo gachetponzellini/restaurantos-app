@@ -17,6 +17,8 @@ let scopeDelAgente: string[] | null; // `printer_scope` del agente de biz1 (spec
 let sondaCounts: Record<string, number>;
 let sondaError: { message: string } | null;
 let sondaCalls: string[];
+// Latidos que registró el GET (spec 183 · D1): el pull ES el latido.
+let upserts: { table: string; vals: Record<string, unknown>; opts: unknown }[];
 
 vi.mock("@/lib/notifications/events", () => ({
   notifyPrintFailed: async (p: { businessId: string; comandaId: string }) => {
@@ -92,6 +94,10 @@ vi.mock("@/lib/supabase/service", () => ({
             }),
         };
         return b;
+      },
+      upsert: (vals: Record<string, unknown>, opts: unknown) => {
+        upserts.push({ table, vals, opts });
+        return Promise.resolve({ error: null });
       },
       update: (vals: Record<string, unknown>) => ({
         eq: () => {
@@ -185,7 +191,10 @@ function itemDePedido(
       ? [
           {
             comanda_id: comandaId,
-            comandas: { emitted_at: comandaEmittedAt, cancelled_at: cancelledAt },
+            comandas: {
+              emitted_at: comandaEmittedAt,
+              cancelled_at: cancelledAt,
+            },
           },
         ]
       : [],
@@ -193,9 +202,12 @@ function itemDePedido(
 }
 
 function getReq(auth = "Bearer test-key") {
-  return new Request("http://localhost/api/print-agent?business_id=biz1&wait_ms=0", {
-    headers: auth ? { authorization: auth } : {},
-  });
+  return new Request(
+    "http://localhost/api/print-agent?business_id=biz1&wait_ms=0",
+    {
+      headers: auth ? { authorization: auth } : {},
+    },
+  );
 }
 
 function postReq(body: unknown, auth = "Bearer test-key") {
@@ -203,7 +215,10 @@ function postReq(body: unknown, auth = "Bearer test-key") {
   // lo inyectamos por defecto cuando el body no lo trae. Un test que necesite
   // probar mismatch/ausencia pasa el `business_id` explícito (o arma su Request).
   const merged =
-    body && typeof body === "object" && !Array.isArray(body) && !("business_id" in body)
+    body &&
+    typeof body === "object" &&
+    !Array.isArray(body) &&
+    !("business_id" in body)
       ? { business_id: "biz1", ...(body as object) }
       : body;
   return new Request("http://localhost/api/print-agent", {
@@ -226,6 +241,7 @@ beforeEach(() => {
   sondaCounts = {};
   sondaError = null;
   sondaCalls = [];
+  upserts = [];
 });
 
 describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
@@ -233,7 +249,11 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     const res = await GET(getReq());
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      comandas: { station_name: string; printer_ip: string | null; printer_port: number }[];
+      comandas: {
+        station_name: string;
+        printer_ip: string | null;
+        printer_port: number;
+      }[];
     };
     const cocina = body.comandas.find((c) => c.station_name === "Cocina");
     expect(cocina?.printer_ip).toBe("192.168.10.50");
@@ -332,7 +352,9 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     expect(typeof cocina?.content_escpos_b64).toBe("string");
     expect(cocina!.content_escpos_b64.length).toBeGreaterThan(0);
     // ...y el base64 decodifica (latin1) a un stream ESC/POS con el contenido.
-    const escpos = Buffer.from(cocina!.content_escpos_b64, "base64").toString("latin1");
+    const escpos = Buffer.from(cocina!.content_escpos_b64, "base64").toString(
+      "latin1",
+    );
     expect(escpos.startsWith("\x1b@")).toBe(true); // init ESC @
     expect(escpos).toContain("COCINA");
     expect(cocina?.content_plain).toContain("COCINA");
@@ -359,7 +381,10 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     const res = await GET(getReq());
     const body = (await res.json()) as {
       comandas: {
-        otros_sectores: { station_name: string; items: { product_name: string }[] }[];
+        otros_sectores: {
+          station_name: string;
+          items: { product_name: string }[];
+        }[];
         content_plain: string;
       }[];
     };
@@ -372,8 +397,9 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     expect(cocina.content_plain).toContain("PARRILLA");
     expect(cocina.content_plain).toContain("- 1x Entrecot");
     // Lo propio del sector no se duplica abajo.
-    expect(cocina.otros_sectores.flatMap((s) => s.items.map((i) => i.product_name)))
-      .not.toContain("Ensalada Queso Azul");
+    expect(
+      cocina.otros_sectores.flatMap((s) => s.items.map((i) => i.product_name)),
+    ).not.toContain("Ensalada Queso Azul");
   });
 
   // Spec 180 · D3 — con varias comanderas por producto, las papas de fritera
@@ -385,13 +411,26 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
       itemDePedido("Ensalada Queso Azul", "st-Cocina", "Cocina"),
       // Papas: sector principal Fritera, pero vinculadas a la comanda de
       // COCINA (cocina es su 2ª comandera). Es propio de este papel.
-      itemDePedido("Papas Fritas", "st-Fritera", "Fritera", MISMO_ENVIO, null, null, "c-Cocina"),
+      itemDePedido(
+        "Papas Fritas",
+        "st-Fritera",
+        "Fritera",
+        MISMO_ENVIO,
+        null,
+        null,
+        "c-Cocina",
+      ),
       // Entrecot: sólo parrilla. Sí combina.
       itemDePedido("Entrecot", "st-Parrilla", "Parrilla", MISMO_ENVIO),
     ];
     const res = await GET(getReq());
     const body = (await res.json()) as {
-      comandas: { otros_sectores: { station_name: string; items: { product_name: string }[] }[] }[];
+      comandas: {
+        otros_sectores: {
+          station_name: string;
+          items: { product_name: string }[];
+        }[];
+      }[];
     };
     const combina = body.comandas[0]!.otros_sectores.flatMap((s) =>
       s.items.map((i) => i.product_name),
@@ -411,17 +450,28 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
     ];
     const res = await GET(getReq());
     const body = (await res.json()) as {
-      comandas: { otros_sectores: { station_name: string }[]; content_plain: string }[];
+      comandas: {
+        otros_sectores: { station_name: string }[];
+        content_plain: string;
+      }[];
     };
     const parrilla = body.comandas[0]!;
-    expect(parrilla.otros_sectores.map((s) => s.station_name)).toEqual(["Fritera"]);
+    expect(parrilla.otros_sectores.map((s) => s.station_name)).toEqual([
+      "Fritera",
+    ]);
     expect(parrilla.content_plain).not.toContain("Picada");
   });
 
   it("combina con: ignora los items cuya comanda está anulada", async () => {
     rows = [makeRow("Parrilla", "192.168.10.50")];
     itemRows = [
-      itemDePedido("Flan", "st-Cocina", "Cocina", MISMO_ENVIO, "2026-01-01T00:00:05Z"),
+      itemDePedido(
+        "Flan",
+        "st-Cocina",
+        "Cocina",
+        MISMO_ENVIO,
+        "2026-01-01T00:00:05Z",
+      ),
     ];
     const res = await GET(getReq());
     const body = (await res.json()) as {
@@ -443,7 +493,9 @@ describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {
       }),
     ];
     const res = await GET(getReq());
-    const body = (await res.json()) as { comandas: { content_plain: string }[] };
+    const body = (await res.json()) as {
+      comandas: { content_plain: string }[];
+    };
     expect(body.comandas[0]!.content_plain).toContain("MOSTRADOR");
     expect(body.comandas[0]!.content_plain).not.toContain("MESA");
   });
@@ -502,7 +554,9 @@ describe("GET /api/print-agent — con qué arma la cocina el pedido", () => {
 
   it("el ticket renderizado dice «PEDIDO 7», no el hash de la comanda", async () => {
     const res = await GET(getReq());
-    const body = (await res.json()) as { comandas: { content_plain: string }[] };
+    const body = (await res.json()) as {
+      comandas: { content_plain: string }[];
+    };
     expect(body.comandas[0]?.content_plain).toContain("PEDIDO 7");
     expect(body.comandas[0]?.content_plain).not.toContain("Comanda #");
   });
@@ -522,7 +576,9 @@ describe("GET /api/print-agent — con qué arma la cocina el pedido", () => {
               notes: "sin cebolla, ¡ojo!",
               unit_price_cents: 1000,
               products: { name: "Ñoquis" },
-              order_item_modifiers: [{ modifiers: { name: "con crema — extra" } }],
+              order_item_modifiers: [
+                { modifiers: { name: "con crema — extra" } },
+              ],
             },
           },
         ],
@@ -532,7 +588,11 @@ describe("GET /api/print-agent — con qué arma la cocina el pedido", () => {
     const body = (await res.json()) as {
       comandas: {
         station_name: string;
-        items: { product_name: string; notes: string | null; modifiers: string[] }[];
+        items: {
+          product_name: string;
+          notes: string | null;
+          modifiers: string[];
+        }[];
       }[];
     };
     const c = body.comandas[0];
@@ -626,7 +686,10 @@ describe("POST /api/print-agent — confirmación y reporte de fallo (spec 33)",
       orders: { business_id: "biz1" },
     };
     const res = await POST(postReq({ comanda_id: "c1", result: "failed" }));
-    const body = (await res.json()) as { notified: boolean; alreadyFlagged: boolean };
+    const body = (await res.json()) as {
+      notified: boolean;
+      alreadyFlagged: boolean;
+    };
     expect(body.notified).toBe(false);
     expect(body.alreadyFlagged).toBe(true);
     expect(notifyCalls).toHaveLength(0);
@@ -709,7 +772,10 @@ describe("POST /api/print-agent — confirmación y reporte de fallo (spec 33)",
     };
     const req = new Request("http://localhost/api/print-agent", {
       method: "POST",
-      headers: { authorization: "Bearer test-key", "content-type": "application/json" },
+      headers: {
+        authorization: "Bearer test-key",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({ comanda_id: "c1" }),
     });
     const res = await POST(req);
@@ -749,14 +815,23 @@ describe("GET /api/print-agent — de qué menú viene el plato (spec 145)", () 
       }),
     ];
     itemRows = [
-      itemDePedido("Puré", "st-cocina", "Cocina", MISMO_ENVIO, null, "Menu Ejecutivo"),
+      itemDePedido(
+        "Puré",
+        "st-cocina",
+        "Cocina",
+        MISMO_ENVIO,
+        null,
+        "Menu Ejecutivo",
+      ),
     ];
   });
 
   it("el ítem viaja con el nombre del menú del padre", async () => {
     const res = await GET(getReq());
     const body = (await res.json()) as {
-      comandas: { items: { product_name: string; combo_name: string | null }[] }[];
+      comandas: {
+        items: { product_name: string; combo_name: string | null }[];
+      }[];
     };
     expect(body.comandas[0]?.items[0]).toMatchObject({
       product_name: "Milanesa",
@@ -766,11 +841,15 @@ describe("GET /api/print-agent — de qué menú viene el plato (spec 145)", () 
 
   it("el ticket impreso lo dice: la Fritera deja de mandar la de la carta", async () => {
     const res = await GET(getReq());
-    const body = (await res.json()) as { comandas: { content_plain: string }[] };
+    const body = (await res.json()) as {
+      comandas: { content_plain: string }[];
+    };
     const plain = body.comandas[0]?.content_plain ?? "";
     expect(plain).toContain("MENU EJECUTIVO");
     // Arriba del plato, que es lo que cambia cómo se lee el nombre.
-    expect(plain.indexOf("MENU EJECUTIVO")).toBeLessThan(plain.indexOf("Milanesa"));
+    expect(plain.indexOf("MENU EJECUTIVO")).toBeLessThan(
+      plain.indexOf("Milanesa"),
+    );
   });
 
   it("el «COMBINA CON» identifica la guarnición del mismo menú", async () => {
@@ -789,8 +868,11 @@ describe("GET /api/print-agent — de qué menú viene el plato (spec 145)", () 
       combo_name: "Menu Ejecutivo",
     });
     // En el papel: «- 1x Pure (Menu Ejecutivo)», cortado a 24 col por palabra.
-    const bloque = (body.comandas[0]?.content_plain ?? "").split("COMBINA CON")[1] ?? "";
-    expect(bloque.replace(/\r\n/g, " ")).toContain("- 1x Pure (Menu Ejecutivo)");
+    const bloque =
+      (body.comandas[0]?.content_plain ?? "").split("COMBINA CON")[1] ?? "";
+    expect(bloque.replace(/\r\n/g, " ")).toContain(
+      "- 1x Pure (Menu Ejecutivo)",
+    );
   });
 
   it("un producto suelto no lleva marca: el ticket sale como siempre", async () => {
@@ -947,5 +1029,85 @@ describe("GET /api/print-agent — retención cuando no hay nada (D5)", () => {
     const body = (await (await p).json()) as { comandas: unknown[] };
     expect(body.comandas).toHaveLength(0);
     expect(sondaCalls).toHaveLength(sondeosAntes);
+  });
+});
+
+// ── El latido viaja adentro del pull (spec 183 · D1) ───────────────────────
+// El agente mandaba dos requests por vuelta: `POST /heartbeat` + `GET`. El GET
+// ya autenticó y ya sabe qué agente es, así que registra el latido él mismo y
+// la versión viaja en un header. Mitad de las invocaciones por tick, y el
+// latido queda atado a la pregunta que el panel quiere contestar: «¿este agente
+// está pidiendo comandas?».
+describe("GET /api/print-agent — el pull registra el latido (D1)", () => {
+  function getReqConVersion(version?: string) {
+    return new Request(
+      "http://localhost/api/print-agent?business_id=biz1&wait_ms=0",
+      {
+        headers: {
+          authorization: "Bearer test-key",
+          ...(version ? { "x-agent-version": version } : {}),
+        },
+      },
+    );
+  }
+
+  it("upsertea print_agent_status con el agent_id que ya resolvió la key", async () => {
+    await GET(getReqConVersion("2026-09-15"));
+    const latido = upserts.find((u) => u.table === "print_agent_status");
+    expect(latido).toBeTruthy();
+    expect(latido!.vals.business_id).toBe("biz1");
+    expect(latido!.vals.agent_id).toBe("agente-biz1");
+    expect(latido!.vals).toHaveProperty("last_seen_at");
+    expect(latido!.opts).toEqual({ onConflict: "business_id,agent_id" });
+  });
+
+  it("guarda la versión que viene en x-agent-version", async () => {
+    await GET(getReqConVersion("2026-09-15"));
+    const latido = upserts.find((u) => u.table === "print_agent_status");
+    expect(latido!.vals.agent_version).toBe("2026-09-15");
+  });
+
+  it("sin x-agent-version NO pisa la versión guardada (regla de la #278)", async () => {
+    // Los dos agentes instalados tienen `agent_version` NULL. Cuando uno se
+    // actualiza y el otro no, el viejo no puede borrarle el dato al nuevo — y
+    // el NULL es información: «este .exe es anterior a set-2026».
+    await GET(getReqConVersion());
+    const latido = upserts.find((u) => u.table === "print_agent_status");
+    expect(latido).toBeTruthy();
+    expect(latido!.vals).not.toHaveProperty("agent_version");
+  });
+
+  it("una versión vacía cuenta como ausente", async () => {
+    await GET(getReqConVersion("   "));
+    const latido = upserts.find((u) => u.table === "print_agent_status");
+    expect(latido!.vals).not.toHaveProperty("agent_version");
+  });
+
+  it("late aunque no haya nada para imprimir — es el caso del 99%", async () => {
+    rows = [];
+    await GET(getReqConVersion("2026-09-15"));
+    expect(
+      upserts.filter((u) => u.table === "print_agent_status"),
+    ).toHaveLength(1);
+  });
+
+  it("`beat=0` no late (es el `--dry-run`, que no tiene que mentirle al panel)", async () => {
+    await GET(
+      new Request(
+        "http://localhost/api/print-agent?business_id=biz1&wait_ms=0&beat=0",
+        { headers: { authorization: "Bearer test-key" } },
+      ),
+    );
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("el 401 no late: sin key no hay agente al que atribuirle el latido", async () => {
+    const res = await GET(
+      new Request("http://localhost/api/print-agent?business_id=biz1", {
+        headers: { authorization: "Bearer key-ajena" },
+      }),
+    );
+    expect(res.status).toBe(401);
+    expect(upserts).toHaveLength(0);
   });
 });

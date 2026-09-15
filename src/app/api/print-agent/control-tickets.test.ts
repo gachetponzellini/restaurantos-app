@@ -42,6 +42,9 @@ vi.mock("@/lib/print-agent/credentials", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createSupabaseServiceClient: () => ({
     from: (table: string) => ({
+      // El GET late como efecto del pull (spec 183 · D1). Acá sólo hace falta
+      // que no explote: el latido se testea en route.test.ts.
+      upsert: () => Promise.resolve({ error: null }),
       select: () => {
         // El mock tiene que distinguir por `kind`: desde spec 084 el GET
         // consulta `print_jobs` tres veces (control / cuenta / factura) y sin
