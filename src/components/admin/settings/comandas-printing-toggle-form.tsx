@@ -4,16 +4,18 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { setPrintingEnabled } from "@/lib/catalog/station-actions";
+import { setComandasPrintingEnabled } from "@/lib/catalog/station-actions";
 import { cn } from "@/lib/utils";
 
 /**
- * Interruptor único: apaga TODA la impresión del negocio de un toque (spec
- * 185) — no toca `stations.printer_enabled` ni los demás switches, así que al
- * reactivarlo cada impresora vuelve a su config de siempre. Guarda al toque,
- * sin botón "Guardar" aparte: es un solo control, no un formulario.
+ * Interruptor único: apaga las comandas de cocina de TODOS los sectores de un
+ * toque (spec 185) — no toca `stations.printer_enabled` por sector, así que
+ * al reactivarlo cada sector vuelve a su config de siempre. No afecta control,
+ * cuenta ni factura: esas comanderas se manejan abajo, en sus propias
+ * secciones. Guarda al toque, sin botón "Guardar" aparte: es un solo control,
+ * no un formulario.
  */
-export function PrintingToggleForm({
+export function ComandasPrintingToggleForm({
   slug,
   enabled: initialEnabled,
 }: {
@@ -25,12 +27,12 @@ export function PrintingToggleForm({
 
   const handleToggle = (next: boolean) => {
     startSave(async () => {
-      const r = await setPrintingEnabled(slug, next);
+      const r = await setComandasPrintingEnabled(slug, next);
       if (r.ok) {
         toast.success(
           next
-            ? "Impresión reactivada."
-            : "Impresión desactivada en todo el local.",
+            ? "Comandas de cocina reactivadas."
+            : "Comandas de cocina desactivadas en todos los sectores.",
         );
         router.refresh();
       } else {
@@ -48,12 +50,14 @@ export function PrintingToggleForm({
     >
       <div className="min-w-0">
         <p className="text-sm font-semibold text-zinc-900">
-          {initialEnabled ? "Impresión activa" : "Impresión desactivada"}
+          {initialEnabled
+            ? "Comandas de cocina activas"
+            : "Comandas de cocina desactivadas"}
         </p>
         <p className="text-xs text-zinc-500">
           {initialEnabled
-            ? "Comandas, control, cuentas y facturas salen según la config de cada impresora, abajo."
-            : "Nada se imprime en este local: ni comandas de cocina, ni control, ni cuentas, ni facturas. La config de cada impresora sigue guardada."}
+            ? "Cada sector imprime según su propia comandera, abajo. Este switch las apaga a todas juntas."
+            : "Ningún sector imprime comanda de cocina, aunque tenga su comandera configurada como activa abajo. Control, cuentas y facturas no se ven afectados."}
         </p>
       </div>
 
@@ -64,9 +68,9 @@ export function PrintingToggleForm({
           checked={initialEnabled}
           disabled={saving}
           onChange={(e) => handleToggle(e.target.checked)}
-          aria-label="Impresión activa en todo el local"
+          aria-label="Comandas de cocina activas en todos los sectores"
         />
-        {saving ? "Guardando…" : initialEnabled ? "Activa" : "Apagada"}
+        {saving ? "Guardando…" : initialEnabled ? "Activas" : "Apagadas"}
       </label>
     </div>
   );

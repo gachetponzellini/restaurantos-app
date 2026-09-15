@@ -1221,15 +1221,17 @@ describe("GET /api/print-agent — next_poll_ms (D2)", () => {
   });
 });
 
-// ── Interruptor maestro de impresión (spec 185) ─────────────────────────────
-// `businesses.printing_enabled = false` apaga las seis familias de papel de
-// una, sin tocar `stations.printer_enabled` ni el resto. El mock comparte
-// `postRow` entre el `.maybeSingle()` de este flag y el de las familias
-// business-level (control/cuenta/factura) — no colisiona porque esos tests
-// no lo tocan y acá no nos importan sus columnas.
-describe("GET /api/print-agent — interruptor maestro (spec 185)", () => {
-  it("printing_enabled=false → comandas:[] aunque haya comandas pendiente", async () => {
-    postRow = { printing_enabled: false };
+// ── Interruptor de comandas de cocina (spec 185) ────────────────────────────
+// `businesses.comandas_printer_enabled = false` apaga las comandas de TODOS
+// los sectores de una, sin tocar `stations.printer_enabled` por sector ni
+// control/cuenta/factura/cierre/rendición — esas familias no se enteran del
+// flag (siguen construyéndose igual; acá dan `[]` sólo porque estos tests no
+// configuran ninguna). El mock comparte `postRow` entre el `.maybeSingle()`
+// de este flag y el de las familias business-level — no colisiona porque
+// esos tests no lo tocan y acá no nos importan sus columnas.
+describe("GET /api/print-agent — interruptor de comandas de cocina (spec 185)", () => {
+  it("comandas_printer_enabled=false → comandas:[] aunque haya comandas pendiente", async () => {
+    postRow = { comandas_printer_enabled: false };
     rows = [makeRow("Cocina", "192.168.10.50")];
     const body = (await (await GET(getReq())).json()) as {
       comandas: unknown[];
@@ -1237,30 +1239,26 @@ describe("GET /api/print-agent — interruptor maestro (spec 185)", () => {
     expect(body.comandas).toHaveLength(0);
   });
 
-  it("con el flag apagado, next_poll_ms es el del negocio cerrado (no hace falta apurar)", async () => {
-    postRow = { printing_enabled: false };
+  it("con el flag apagado, la retención sigue corriendo igual que con cualquier otra respuesta vacía", async () => {
+    // No se corta antes de la D5: apagar cocina no dice nada sobre si va a
+    // aparecer un control/cuenta/factura para retener. `wait_ms=0` (default de
+    // `getReq`) hace que resuelva al toque de cualquier forma.
+    postRow = { comandas_printer_enabled: false };
     rows = [makeRow("Cocina", "192.168.10.50")];
     const body = (await (await GET(getReq())).json()) as {
       next_poll_ms: number;
     };
-    expect(body.next_poll_ms).toBe(20_000);
+    expect(body.next_poll_ms).toBeGreaterThan(0);
   });
 
   it("igual registra el latido — el agente sigue pidiendo, no está caído", async () => {
-    postRow = { printing_enabled: false };
+    postRow = { comandas_printer_enabled: false };
     await GET(getReq());
     expect(upserts.some((u) => u.table === "print_agent_status")).toBe(true);
   });
 
-  it("no se sondea la retención: la respuesta ya se sabe de antemano", async () => {
-    postRow = { printing_enabled: false };
-    rows = [];
-    await GET(getReq());
-    expect(sondaCalls).toHaveLength(0);
-  });
-
-  it("sin fila en `businesses` (o printing_enabled=true explícito) sigue imprimiendo — fail-open", async () => {
-    postRow = { printing_enabled: true };
+  it("sin fila en `businesses` (o comandas_printer_enabled=true explícito) sigue imprimiendo — fail-open", async () => {
+    postRow = { comandas_printer_enabled: true };
     rows = [makeRow("Cocina", "192.168.10.50")];
     const body = (await (await GET(getReq())).json()) as {
       comandas: unknown[];

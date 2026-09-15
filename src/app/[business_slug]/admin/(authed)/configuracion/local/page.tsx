@@ -5,7 +5,6 @@ import {
   FileText,
   Fingerprint,
   MonitorDown,
-  Power,
   Printer,
   Receipt,
 } from "lucide-react";
@@ -24,8 +23,8 @@ import {
   FiscalPrintersForm,
   type CajaFiscalPrinterRow,
 } from "@/components/admin/settings/fiscal-printers-form";
+import { ComandasPrintingToggleForm } from "@/components/admin/settings/comandas-printing-toggle-form";
 import { PrintAgentCard } from "@/components/admin/settings/print-agent-card";
-import { PrintingToggleForm } from "@/components/admin/settings/printing-toggle-form";
 import { SettingsSection } from "@/components/admin/settings/settings-section";
 import {
   StationPrintersForm,
@@ -65,7 +64,7 @@ export default async function ConfiguracionLocalPage({
     service
       .from("businesses")
       .select(
-        "print_agent_key_set, printing_enabled, control_printer_ip, control_printer_port, control_printer_enabled, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
+        "print_agent_key_set, comandas_printer_enabled, control_printer_ip, control_printer_port, control_printer_enabled, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
       )
       .eq("id", business.id)
       .maybeSingle(),
@@ -94,9 +93,9 @@ export default async function ConfiguracionLocalPage({
   const printAgentKeySet = Boolean(
     (bizFlag as { print_agent_key_set?: boolean } | null)?.print_agent_key_set,
   );
-  const printingEnabled =
-    (bizFlag as { printing_enabled?: boolean } | null)?.printing_enabled ??
-    true;
+  const comandasPrintingEnabled =
+    (bizFlag as { comandas_printer_enabled?: boolean } | null)
+      ?.comandas_printer_enabled ?? true;
   const controlPrinter: ControlPrinterRow = {
     control_printer_ip:
       (bizFlag as ControlPrinterRow | null)?.control_printer_ip ?? null,
@@ -153,18 +152,14 @@ export default async function ConfiguracionLocalPage({
   return (
     <>
       <SettingsSection
-        icon={<Power className="size-5" />}
-        title="Impresión"
-        description="Interruptor único para todo el local: apaga comandas, control, cuentas y facturas de un saque, sin tocar la config de cada impresora de abajo."
-      >
-        <PrintingToggleForm slug={business_slug} enabled={printingEnabled} />
-      </SettingsSection>
-
-      <SettingsSection
         icon={<Printer className="size-5" />}
         title="Comanderas"
         description="Asigná a cada sector la IP de su impresora térmica en la red del local. Dejá la IP vacía para un sector sin comandera (no se imprime). Puerto por defecto 9100."
       >
+        <ComandasPrintingToggleForm
+          slug={business_slug}
+          enabled={comandasPrintingEnabled}
+        />
         <StationPrintersForm
           slug={business_slug}
           stations={(stations ?? []) as StationPrinterRow[]}

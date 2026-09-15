@@ -267,15 +267,14 @@ export async function reorderStations(
 }
 
 /**
- * Interruptor único: apaga TODA la impresión del negocio —comandas + control +
- * cuenta + factura, las seis familias que ensambla `buildTrabajos` en
- * `GET /api/print-agent`— sin tocar la config de cada impresora (spec 185).
- * Pensado para el local que todavía no tiene comanderas instaladas, o un corte
- * de emergencia sin desarmar sector por sector. Es un OR maestro por encima de
- * `stations.printer_enabled` y compañía: al reactivarlo, cada impresora vuelve
- * exactamente a la config que tenía.
+ * Interruptor único: apaga las comandas de cocina de TODOS los sectores de una
+ * (spec 185), sin tocar `stations.printer_enabled` por sector ni las
+ * comanderas de control/cuenta/factura, que siguen su propio switch. Pensado
+ * para el local que todavía no tiene comanderas instaladas, o un corte de
+ * emergencia sin desarmar sector por sector. Al reactivarlo, cada sector
+ * vuelve exactamente a la config que tenía.
  */
-export async function setPrintingEnabled(
+export async function setComandasPrintingEnabled(
   businessSlug: string,
   enabled: boolean,
 ): Promise<ActionResult<null>> {
@@ -284,17 +283,17 @@ export async function setPrintingEnabled(
 
   const ctx = await ensureAdminAccess(business.id, businessSlug);
   if (!canManageBusiness(ctx)) {
-    return actionError("No tenés permisos para configurar la impresión.");
+    return actionError("No tenés permisos para configurar las comanderas.");
   }
 
   const service = createSupabaseServiceClient();
   const { error } = await service
     .from("businesses")
-    .update({ printing_enabled: enabled })
+    .update({ comandas_printer_enabled: enabled })
     .eq("id", business.id);
 
   if (error) {
-    console.error("setPrintingEnabled", error);
+    console.error("setComandasPrintingEnabled", error);
     return actionError("No pudimos guardar el cambio.");
   }
 

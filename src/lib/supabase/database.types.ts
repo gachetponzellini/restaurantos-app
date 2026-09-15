@@ -280,6 +280,7 @@ export type Database = {
           afip_mode: string;
           afip_provider: string | null;
           afip_punto_venta: number | null;
+          comandas_printer_enabled: boolean;
           control_printer_enabled: boolean;
           control_printer_ip: string | null;
           control_printer_port: number;
@@ -308,7 +309,6 @@ export type Database = {
           phone: string | null;
           plan: string | null;
           print_agent_key_set: boolean;
-          printing_enabled: boolean;
           scheduled_march_lead_delivery_min: number;
           scheduled_march_lead_kitchen_min: number;
           scheduled_march_lead_pickup_min: number;
@@ -327,6 +327,7 @@ export type Database = {
           afip_mode?: string;
           afip_provider?: string | null;
           afip_punto_venta?: number | null;
+          comandas_printer_enabled?: boolean;
           control_printer_enabled?: boolean;
           control_printer_ip?: string | null;
           control_printer_port?: number;
@@ -355,7 +356,6 @@ export type Database = {
           phone?: string | null;
           plan?: string | null;
           print_agent_key_set?: boolean;
-          printing_enabled?: boolean;
           scheduled_march_lead_delivery_min?: number;
           scheduled_march_lead_kitchen_min?: number;
           scheduled_march_lead_pickup_min?: number;
@@ -374,6 +374,7 @@ export type Database = {
           afip_mode?: string;
           afip_provider?: string | null;
           afip_punto_venta?: number | null;
+          comandas_printer_enabled?: boolean;
           control_printer_enabled?: boolean;
           control_printer_ip?: string | null;
           control_printer_port?: number;
@@ -402,7 +403,6 @@ export type Database = {
           phone?: string | null;
           plan?: string | null;
           print_agent_key_set?: boolean;
-          printing_enabled?: boolean;
           scheduled_march_lead_delivery_min?: number;
           scheduled_march_lead_kitchen_min?: number;
           scheduled_march_lead_pickup_min?: number;

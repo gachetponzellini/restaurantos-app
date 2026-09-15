@@ -482,22 +482,31 @@ async function buildTrabajos(
     query = query.eq("station_id", stationId);
   }
 
-  const { data: comandas, error } = await query;
+  // El flag corre EN PARALELO con la query de arriba (spec 185): no agrega un
+  // viaje secuencial al camino de todos los días, que es el negocio con
+  // comandas de cocina activas.
+  const [{ data: comandas, error }, comandaPrintingEnabled] = await Promise.all(
+    [query, isComandaPrintingEnabled(service, businessId)],
+  );
   if (error) {
     console.error("print-agent GET", error);
     return null;
   }
 
-  // «Combina con»: con qué combina lo de este sector. Se arma desde los `order_items`
-  // del pedido —NO desde las comandas hermanas— porque `enviarComanda` inserta
-  // todos los items ANTES de crear cualquier comanda: cuando una comanda existe,
-  // los items de los otros sectores ya están, aunque su comanda todavía no.
-  // Leerlo de las comandas dejaría al primer ticket del envío sin la mitad.
-  const otrosPorPedido = await loadItemsPorPedido(service, [
-    ...new Set(
-      (comandas ?? []).map((c) => (c.orders as unknown as { id: string }).id),
-    ),
-  ]);
+  // Con las comandas de cocina apagadas no hace falta ni el «combina con» ni
+  // armar el ticket: se descarta acá y no en el fondo del array, para no
+  // gastar la query de `otrosPorPedido` en un negocio que la tiene apagada.
+  // Control/cuenta/factura/cierre/rendición —más abajo— no se enteran de este
+  // flag: siguen su propio switch.
+  const otrosPorPedido = comandaPrintingEnabled
+    ? await loadItemsPorPedido(service, [
+        ...new Set(
+          (comandas ?? []).map(
+            (c) => (c.orders as unknown as { id: string }).id,
+          ),
+        ),
+      ])
+    : new Map<string, ItemDePedido[]>();
 
   // Una comanda a medio crear NO se le entrega al agente. `enviarComanda` crea
   // la fila de `comandas` y sus `comanda_items` en dos viajes separados a
@@ -509,120 +518,124 @@ async function buildTrabajos(
   // Sin items no hay nada que imprimir. Se saltea y sale completa en el próximo
   // poll, un segundo después. También cubre el caso de una comanda cuyos
   // `order_items` ya no existen (el `!inner` del select los descarta).
-  const printable = (comandas ?? [])
-    .filter((c) => ((c.comanda_items ?? []) as unknown[]).length > 0)
-    .map((c) => {
-      const order = c.orders as unknown as {
-        id: string;
-        business_id: string;
-        daily_number: number | null;
-        table_id: string | null;
-        delivery_type: string | null;
-        kitchen_notes: string | null;
-        kitchen_at: string | null;
-        tables: { label: string } | null;
-      };
-      const station = c.stations as unknown as {
-        name: string;
-        printer_ip: string | null;
-        printer_port: number;
-        printer_enabled: boolean;
-      };
+  const printable = !comandaPrintingEnabled
+    ? []
+    : (comandas ?? [])
+        .filter((c) => ((c.comanda_items ?? []) as unknown[]).length > 0)
+        .map((c) => {
+          const order = c.orders as unknown as {
+            id: string;
+            business_id: string;
+            daily_number: number | null;
+            table_id: string | null;
+            delivery_type: string | null;
+            kitchen_notes: string | null;
+            kitchen_at: string | null;
+            tables: { label: string } | null;
+          };
+          const station = c.stations as unknown as {
+            name: string;
+            printer_ip: string | null;
+            printer_port: number;
+            printer_enabled: boolean;
+          };
 
-      const comanda = {
-        comanda_id: c.id,
-        station_id: c.station_id,
-        station_name: sanitizeTicketText(station?.name) ?? "—",
-        // Destino de impresión del sector (spec 28). El agente imprime en esta IP
-        // sin mapeo local; si es null, saltea la comanda y la deja `pendiente`.
-        printer_ip: station?.printer_ip ?? null,
-        printer_port: station?.printer_port ?? 9100,
-        printer_enabled: station?.printer_enabled ?? true,
-        batch: c.batch,
-        emitted_at: c.emitted_at,
-        // Spec 049: comanda anulada → el agente imprime un ticket «ANULADA».
-        // Campos aditivos: un agente viejo los ignora y reimprime el ticket normal.
-        cancelled: Boolean(c.cancelled_at),
-        cancelled_reason: sanitizeTicketText(
-          c.cancelled_reason as string | null,
-        ),
-        // Reimpresión pedida (spec 35): editar/reimprimir vuelve a mandar la
-        // comanda. El agente imprime un ticket «REIMPRESIÓN» para que cocina sepa
-        // que reemplaza a uno anterior. Campo aditivo (un agente viejo lo ignora).
-        reprint: Boolean(c.reprint_requested_at),
-        // El número del pedido del día: lo que cocina usa para juntar los
-        // tickets del mismo pedido que salieron por sectores distintos.
-        daily_number: order?.daily_number ?? null,
-        table_label: sanitizeTicketText(order?.tables?.label) ?? "—",
-        // Destino del pedido: delivery / retiro no tienen mesa (salía «MESA —»).
-        delivery_type: (order?.delivery_type ?? null) as
-          | "dine_in"
-          | "delivery"
-          | "pickup"
-          | null,
-        // Indicación del encargado para cocina («junto con la mesa 5»). NO es
-        // `delivery_notes` —la nota del cliente sobre la entrega—, que va al
-        // ticket de control y no le sirve a la parrilla.
-        kitchen_notes: sanitizeTicketText(order?.kitchen_notes),
-        // Para cuándo el plato tiene que estar LISTO (spec 127). Va formateada
-        // como `HH:MM` del local: el armador del ticket es puro y no resuelve TZ.
-        // Es la que encabeza la comanda; la nota de arriba pasó a ser el renglón
-        // de abajo. Campo aditivo — un agente viejo lo ignora.
-        kitchen_time: horaDeCocina(order?.kitchen_at ?? null),
-        // La observación de la tanda (spec 128): lo que el mozo escribió para
-        // este envío, igual en las comandas de todos sus sectores. Campo
-        // aditivo — un agente viejo lo ignora e imprime el ticket de siempre.
-        comanda_notes: sanitizeTicketText(c.notes as string | null),
-        // Con qué combina: lo del MISMO envío que sale de los otros sectores.
-        otros_sectores: agruparOtrosSectores(
-          otrosPorPedido.get(order?.id) ?? [],
-          c.id as string,
-          c.station_id as string | null,
-          c.emitted_at as string | null,
-        ),
-        items: ((c.comanda_items ?? []) as unknown[]).map((ci) => {
-          const item = ci as {
-            order_item_id: string;
-            order_items: {
-              id: string;
-              quantity: number;
-              notes: string | null;
-              unit_price_cents: number;
-              parent_order_item_id: string | null;
-              parent: { product_name: string } | null;
-              products: { name: string } | null;
-              order_item_modifiers: { modifiers: { name: string } | null }[];
-            };
-          };
-          return {
-            product_name:
-              sanitizeTicketText(item.order_items?.products?.name) ?? "—",
-            quantity: item.order_items?.quantity ?? 1,
-            notes: sanitizeTicketText(item.order_items?.notes),
-            modifiers: (item.order_items?.order_item_modifiers ?? [])
-              .map((m) => sanitizeTicketText(m.modifiers?.name))
-              .filter(Boolean),
-            // De qué menú del día viene el plato (spec 145). El combo se guarda
-            // partido: el nombre del menú vive en el PADRE, que no tiene sector y
-            // por eso nunca llegó a una comandera. Se sube acá para que el hijo
-            // —que sí va a cocina— lo lleve impreso. Es el `product_name` del
-            // padre y no `daily_menus.name`: snapshot, como `modifier_name`.
-            combo_name: sanitizeTicketText(
-              item.order_items?.parent?.product_name,
+          const comanda = {
+            comanda_id: c.id,
+            station_id: c.station_id,
+            station_name: sanitizeTicketText(station?.name) ?? "—",
+            // Destino de impresión del sector (spec 28). El agente imprime en esta IP
+            // sin mapeo local; si es null, saltea la comanda y la deja `pendiente`.
+            printer_ip: station?.printer_ip ?? null,
+            printer_port: station?.printer_port ?? 9100,
+            printer_enabled: station?.printer_enabled ?? true,
+            batch: c.batch,
+            emitted_at: c.emitted_at,
+            // Spec 049: comanda anulada → el agente imprime un ticket «ANULADA».
+            // Campos aditivos: un agente viejo los ignora y reimprime el ticket normal.
+            cancelled: Boolean(c.cancelled_at),
+            cancelled_reason: sanitizeTicketText(
+              c.cancelled_reason as string | null,
             ),
+            // Reimpresión pedida (spec 35): editar/reimprimir vuelve a mandar la
+            // comanda. El agente imprime un ticket «REIMPRESIÓN» para que cocina sepa
+            // que reemplaza a uno anterior. Campo aditivo (un agente viejo lo ignora).
+            reprint: Boolean(c.reprint_requested_at),
+            // El número del pedido del día: lo que cocina usa para juntar los
+            // tickets del mismo pedido que salieron por sectores distintos.
+            daily_number: order?.daily_number ?? null,
+            table_label: sanitizeTicketText(order?.tables?.label) ?? "—",
+            // Destino del pedido: delivery / retiro no tienen mesa (salía «MESA —»).
+            delivery_type: (order?.delivery_type ?? null) as
+              | "dine_in"
+              | "delivery"
+              | "pickup"
+              | null,
+            // Indicación del encargado para cocina («junto con la mesa 5»). NO es
+            // `delivery_notes` —la nota del cliente sobre la entrega—, que va al
+            // ticket de control y no le sirve a la parrilla.
+            kitchen_notes: sanitizeTicketText(order?.kitchen_notes),
+            // Para cuándo el plato tiene que estar LISTO (spec 127). Va formateada
+            // como `HH:MM` del local: el armador del ticket es puro y no resuelve TZ.
+            // Es la que encabeza la comanda; la nota de arriba pasó a ser el renglón
+            // de abajo. Campo aditivo — un agente viejo lo ignora.
+            kitchen_time: horaDeCocina(order?.kitchen_at ?? null),
+            // La observación de la tanda (spec 128): lo que el mozo escribió para
+            // este envío, igual en las comandas de todos sus sectores. Campo
+            // aditivo — un agente viejo lo ignora e imprime el ticket de siempre.
+            comanda_notes: sanitizeTicketText(c.notes as string | null),
+            // Con qué combina: lo del MISMO envío que sale de los otros sectores.
+            otros_sectores: agruparOtrosSectores(
+              otrosPorPedido.get(order?.id) ?? [],
+              c.id as string,
+              c.station_id as string | null,
+              c.emitted_at as string | null,
+            ),
+            items: ((c.comanda_items ?? []) as unknown[]).map((ci) => {
+              const item = ci as {
+                order_item_id: string;
+                order_items: {
+                  id: string;
+                  quantity: number;
+                  notes: string | null;
+                  unit_price_cents: number;
+                  parent_order_item_id: string | null;
+                  parent: { product_name: string } | null;
+                  products: { name: string } | null;
+                  order_item_modifiers: {
+                    modifiers: { name: string } | null;
+                  }[];
+                };
+              };
+              return {
+                product_name:
+                  sanitizeTicketText(item.order_items?.products?.name) ?? "—",
+                quantity: item.order_items?.quantity ?? 1,
+                notes: sanitizeTicketText(item.order_items?.notes),
+                modifiers: (item.order_items?.order_item_modifiers ?? [])
+                  .map((m) => sanitizeTicketText(m.modifiers?.name))
+                  .filter(Boolean),
+                // De qué menú del día viene el plato (spec 145). El combo se guarda
+                // partido: el nombre del menú vive en el PADRE, que no tiene sector y
+                // por eso nunca llegó a una comandera. Se sube acá para que el hijo
+                // —que sí va a cocina— lo lleve impreso. Es el `product_name` del
+                // padre y no `daily_menus.name`: snapshot, como `modifier_name`.
+                combo_name: sanitizeTicketText(
+                  item.order_items?.parent?.product_name,
+                ),
+              };
+            }),
           };
-        }),
-      };
-      // Spec 051: el server pre-renderiza el ticket (ESC/POS en base64 + texto
-      // plano). El agente relay lo imprime tal cual; un agente viejo ignora estos
-      // campos y renderiza con su lógica local (aditivo → retrocompat).
-      const content = buildComandaContent(comanda);
-      return {
-        ...comanda,
-        content_escpos_b64: content.escpos_b64,
-        content_plain: content.plain,
-      };
-    });
+          // Spec 051: el server pre-renderiza el ticket (ESC/POS en base64 + texto
+          // plano). El agente relay lo imprime tal cual; un agente viejo ignora estos
+          // campos y renderiza con su lógica local (aditivo → retrocompat).
+          const content = buildComandaContent(comanda);
+          return {
+            ...comanda,
+            content_escpos_b64: content.escpos_b64,
+            content_plain: content.plain,
+          };
+        });
 
   // ── Controles de pedido (spec 063) ────────────────────────────────────────
   // Viajan en el MISMO array que las comandas, con su propio UUID, su IP y su
