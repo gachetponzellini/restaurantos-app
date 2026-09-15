@@ -23,8 +23,8 @@ la cadencia de 1s y los dos agentes están confirmados contra producción (ver
 
 ## Por qué
 
-El print-agent pregunta **dos veces por segundo, las 24 horas**, y el 99% de las
-veces la respuesta es "no hay nada para imprimir".
+El print-agent pregunta **dos veces cada dos segundos y medio, casi todo el
+día**, y el 99% de las veces la respuesta es "no hay nada para imprimir".
 
 `config.json` trae `pollMs: 1000` y `tick()` manda dos requests por vuelta
 ([`agent.mjs:611`](../../print-agent/agent.mjs)):
@@ -35,11 +35,11 @@ async function tick() {
   const comandas = await fetchComandas(); // GET  /api/print-agent
 ```
 
-Medido contra la factura (#304): **3,24M invocaciones/mes**, 108.000 por día —
-que es exactamente dos agentes a 2 req/s durante las ~7,5 h que las PCs del
-local están encendidas. Y que Edge Requests (3.22M) e Invocations (3.24M) den
-casi igual dice lo demás: **el tráfico del proyecto es este loop**, no gente
-usando la app.
+Medido contra la factura (#304): **3,24M invocaciones/mes**, 108.000 por día.
+Eso son dos agentes a 0,83 req/s corriendo ~18 h por día — el turno completo de
+un restaurante con almuerzo y cena, que es lo que efectivamente pasa. Y que Edge
+Requests (3.22M) e Invocations (3.24M) den casi igual dice lo demás: **el
+tráfico del proyecto es este loop**, no gente usando la app.
 
 **Y cada una de esas invocaciones cuesta diez veces lo que parece.** La
 invocación en sí vale $0.0006; pero arrastra **~9 eventos de Observability**
@@ -64,9 +64,9 @@ Un restaurante manda comandas durante cuatro o cinco horas por día, y adentro
 de ese rato pasan minutos entre una y otra. La cadencia de 1s está dimensionada
 para el peor segundo del año y se paga todos los demás.
 
-**Cuánto vale esta spec:** un recorte del 85% del tráfico del agente baja la
-factura del proyecto de ~$49 a **~$15/mes**. Es el único cambio de código del
-repo que mueve la aguja — todo lo que arregla la
+**Cuánto vale esta spec:** llevar el agente de 0,83 a ~0,17 req/s (D1 + D2 + D3)
+es un recorte del **~80%**, y baja la factura del proyecto de ~$49 a **~$16/mes**.
+Es el único cambio de código del repo que mueve la aguja — todo lo que arregla la
 [`184`](../184-nadie-pide-lo-que-no-esta-mirando/spec.md) junto suma $9.50 y
 hacerlo entero no se notaría.
 
@@ -111,6 +111,40 @@ El latido nunca pasa de ~1,3s de viejo: la cadencia de 1s es real en los dos
 locales. Son **exactamente dos agentes**, así que la cuenta de arriba no hay que
 corregirla.
 
+### El piso de red: `pollMs` no es el período
+
+Contando latidos distintos dentro de una ventana fija (`pg_sleep` en un `do`
+contra el cloud), con los dos agentes todavía en `pollMs: 1000`:
+
+| local | latidos | ventana | período real |
+|---|---|---|---|
+| `golf-jcr` | 9 | 24,3 s | **2,31 s** |
+| `kcc` | 11 | 24,3 s | **2,54 s** |
+
+**El período no es 1 s: es ~2,4 s.** La diferencia son los dos HTTP del tick
+—latido y pull— a ~700 ms cada uno desde el local hasta `iad1`. `pollMs` es el
+*sleep entre vueltas*, no la cadencia; la cadencia es `pollMs + (requests × RTT)`.
+
+Eso reordena el valor de las decisiones, y no en la dirección obvia:
+
+| escenario | período | req/s por agente | recorte |
+|---|---:|---:|---:|
+| hoy (`pollMs` 1000, 2 requests) | 2,40 s | 0,833 | — |
+| **D3 sola** (3000, 2 requests) | 4,40 s | 0,455 | **45%** |
+| **D1 sola** (1000, 1 request) | 1,70 s | 0,588 | **29%** |
+| **D1 + D3** (3000, 1 request) | 3,70 s | 0,270 | **68%** |
+| D1 + D2 ocioso (5000, 1 request) | 5,70 s | 0,175 | 79% |
+| D1 + D2 cerrado (20000, 1 request) | 20,70 s | 0,048 | 94% |
+
+Dos cosas que hay que leer despacio:
+
+- **D1 sola rinde 29%, no 50%.** Sacar un request de dos también *acelera el
+  loop* —el tick tarda 700 ms menos— así que el agente da más vueltas por
+  minuto y se come la mitad del ahorro. Una intuición de «la mitad de las
+  invocaciones» acá da mal.
+- **D1 y D3 se potencian.** Juntas dan 68%, más que la suma de sus partes por
+  separado, justamente porque D3 diluye el piso que D1 achica.
+
 Y `agent_version` viene **NULL en los dos**: ambos `.exe` son anteriores a
 set-2026 (la #278 fue la que agregó el campo). Eso convierte el riesgo de más
 abajo en un hecho — hoy, ningún local ahorraría nada — y a la vez lo abarata:
@@ -127,9 +161,17 @@ El GET pasa a registrar el latido como efecto de la misma llamada. Ya tiene todo
 lo que necesita: autenticó, sabe qué agente es, y `version` puede viajar en un
 header (`x-agent-version`) en vez de un body aparte.
 
-**Mitad de las invocaciones, sin perder una sola señal de salud** — el latido
-queda atado al pull, que es exactamente lo que el panel quiere saber ("¿este
-agente está pidiendo comandas?").
+**Mitad de las invocaciones por tick, sin perder una sola señal de salud** — el
+latido queda atado al pull, que es exactamente lo que el panel quiere saber
+("¿este agente está pidiendo comandas?").
+
+Ojo con la cuenta: **mitad de los requests por tick no es mitad del tráfico**.
+Sacar un HTTP también le quita ~700 ms al tick, así que el loop se acelera y
+devuelve parte del ahorro — D1 sola rinde **29%** (ver «El piso de red»). Su
+verdadero valor es otro: **es la única decisión que baja el piso**, y el piso es
+lo que pone techo a todo lo demás. Con el latido afuera, cada aumento de
+`pollMs` se traduce casi 1:1 en menos tráfico en vez de diluirse contra 1,4 s de
+red. Por eso va primero, aunque D3 sola rinda más.
 
 `POST /api/print-agent/heartbeat` **se queda y no se toca**: es lo que siguen
 llamando los agentes viejos, y mientras haya uno instalado tiene que seguir
@@ -153,6 +195,12 @@ La regla arranca simple, del lado del server:
 | Hubo alguna comanda del negocio en los últimos 3 min | 1.000 |
 | El negocio está abierto pero sin movimiento | 5.000 |
 | El negocio está cerrado (fuera de horario) | 20.000 |
+
+`next_poll_ms` es el **sleep entre vueltas**, no el período: el período es eso
+más el RTT del request (~700 ms con D1 aplicada). Los valores de la tabla están
+elegidos como sleeps, que es lo que el agente sabe hacer — quien los toque
+después tiene que acordarse de sumarle el piso antes de comparar contra una
+medición.
 
 "Hubo alguna en los últimos 3 min" sale de un `max(emitted_at)` acotado, no de
 traer filas. Tres minutos es deliberadamente generoso: una mesa que pide entrada
@@ -185,7 +233,9 @@ re-correr `instalar.bat`, sin TeamViewer y sin rotar la key— quedó documentad
 en [`print-agent/README.md`](../../print-agent/README.md#cambiar-la-cadencia-de-un-local-ya-instalado).
 
 Va acá y no en una issue aparte porque es la misma decisión vista desde la
-urgencia: corta dos tercios mientras la D1 y la D2 se implementan.
+urgencia: **corta 45%** mientras D1 y D2 se implementan. (No dos tercios, como
+decía esta spec antes de medir el piso de red: el período pasa de 2,4 s a 4,4 s,
+no de 1 s a 3 s.)
 
 ### D4 · Qué NO se hace: cachear las credenciales
 
