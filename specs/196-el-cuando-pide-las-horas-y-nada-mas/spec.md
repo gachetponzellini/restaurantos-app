@@ -40,18 +40,36 @@ quedan como están: cero migración, cero cambio de contrato.
 
 ## La solución
 
-Cada campo se va con **lo que describe**:
+Los campos se agrupan por **papel**, no por tipo de dato. Un recuadro por papel,
+con el encabezado diciendo cuál es y quién lo lee:
 
-- **«¿Para cuándo?» pide las dos horas y nada más.** Cada una dice a qué papel
-  va, en negrita y simétricamente: «Sale impresa **en la comanda**» / «Sale
-  **en el ticket de control**».
-- **La indicación de entrega baja a pegarse a la dirección**, renombrada a
-  «Indicaciones para la entrega», y **sólo existe en delivery**.
-- **La nota para cocina se va con el pedido en armado**, que es lo que la
-  cocina prepara. No aparece en modo agregar: ahí el pedido ya existe y su nota
-  ya se definió — pisarla desde la hoja sería un efecto lateral invisible.
+```
+¿PARA CUÁNDO?   [Para hoy] [Programado]
 
-Nunca quedan dos notas juntas, ni una nota al lado de una hora.
+  Para cocina · sale en la comanda
+    Hora [HH:MM]   Nota (opcional) [junto con la mesa 5…]
+
+  Para el cliente · sale en el ticket de control
+    Hora [HH:MM]
+```
+
+**La hora y la nota de cocina se leen como una sola cosa**, que es como se
+piensan: son las dos mitades de lo mismo, «qué le digo a la cocina». Siguen
+siendo dos campos porque la hora dispara la ventana de marcha — pero el
+encargado ve un solo lugar.
+
+**La indicación de entrega no entra acá**: baja a pegarse a la dirección,
+renombrada a «Indicaciones para la entrega», y **sólo existe en delivery**. Su
+papel es el mismo que el de la hora del pedido, pero su contexto es la
+dirección: quien la escribe la está escuchando junto con la calle y el número.
+
+### Una pasada intermedia que no funcionó
+
+La primera versión mandó la nota para cocina al bloque «Tu pedido», con el
+argumento de que es sobre cómo sacar esa comida. Juan, viéndolo: *«lo de hora
+para cocina y nota para cocina debería de ser un solo campo»*. Tenía razón —
+quedaban **dos cosas que decían «cocina» en dos recuadros distintos y lejanos**,
+peor que el problema original. Agrupar por papel exige agrupar *todo* el papel.
 
 **Un bug que el layout destapa:** con el campo de entrega oculto en retiro, una
 nota tipeada en delivery y después cambiada a «Para llevar» viajaba invisible

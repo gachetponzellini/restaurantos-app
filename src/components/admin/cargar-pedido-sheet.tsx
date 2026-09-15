@@ -1040,12 +1040,15 @@ export function CargarPedidoSheet({
                   Las dos horas son a mano: el sistema no calcula ninguna ni
                   pre-llena la segunda con la primera. Vacías = para ahora.
 
-                  Spec 196: este bloque pide las dos horas y nada más. Tenía
-                  arriba las dos notas, y cuatro campos apilados se leían como
-                  el mismo dato pedido dos veces — cuál de las dos salía en la
-                  comanda no se sabía sin leer el gris. Cada nota se fue con lo
-                  que describe: la de entrega con la dirección, la de cocina
-                  con el pedido. */}
+                  Spec 196: los cuatro campos estaban agrupados por TIPO DE
+                  DATO — las dos notas juntas, las dos horas juntas— y se leían
+                  como el mismo dato pedido dos veces. Ahora se agrupan por
+                  PAPEL: todo lo que sale en la comanda en un lugar, todo lo
+                  que sale en el ticket del cliente en otro. La hora sigue
+                  siendo campo propio y no texto libre — es la que dispara la
+                  ventana de marcha (spec 127)—, pero la hora y la nota de
+                  cocina se leen como una sola cosa. La indicación de entrega
+                  vive con la dirección, que es su papel y su contexto. */}
                   <section className="space-y-2.5 rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
                     <h3 className="text-[11px] font-bold tracking-wide text-zinc-500 uppercase">
                       ¿Para cuándo?
@@ -1106,46 +1109,82 @@ export function CargarPedidoSheet({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          htmlFor="cargar-hora-cocina"
-                          className="text-xs font-semibold text-zinc-600"
-                        >
-                          Hora de cocina
-                        </label>
-                        <TimeField24
-                          id="cargar-hora-cocina"
-                          value={horaCocina}
-                          onChange={setHoraCocina}
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
-                        />
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-                          Para cuándo tiene que estar listo. Sale impresa{" "}
-                          <strong className="font-semibold">en la comanda</strong>.
-                        </p>
+                    {/* Un recuadro por papel. El encabezado dice qué papel es
+                        y quién lo lee, así la pregunta «¿cuál de los dos sale
+                        en la comanda?» se contesta sin leer el gris. */}
+                    <div className="space-y-2 rounded-xl bg-zinc-50 p-2.5 ring-1 ring-zinc-200">
+                      <p className="text-[11px] font-bold text-zinc-700">
+                        Para cocina{" "}
+                        <span className="font-medium text-zinc-500">
+                          · sale en la comanda
+                        </span>
+                      </p>
+                      <div className="flex gap-2">
+                        <div className="w-24 shrink-0">
+                          <label
+                            htmlFor="cargar-hora-cocina"
+                            className="text-xs font-semibold text-zinc-600"
+                          >
+                            Hora
+                          </label>
+                          <TimeField24
+                            id="cargar-hora-cocina"
+                            value={horaCocina}
+                            onChange={setHoraCocina}
+                            className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <label
+                            htmlFor="cargar-nota-cocina"
+                            className="text-xs font-semibold text-zinc-600"
+                          >
+                            Nota (opcional)
+                          </label>
+                          <input
+                            id="cargar-nota-cocina"
+                            type="text"
+                            value={kitchenNotes}
+                            onChange={(e) => setKitchenNotes(e.target.value)}
+                            maxLength={120}
+                            placeholder="ej: junto con la mesa 5…"
+                            className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          />
+                        </div>
                       </div>
-                      <div>
+                      <p className="text-[11px] leading-snug text-zinc-500">
+                        La hora es para cuándo el plato tiene que estar listo.
+                        Para «sin cebolla», usá la nota del producto.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl bg-zinc-50 p-2.5 ring-1 ring-zinc-200">
+                      <p className="text-[11px] font-bold text-zinc-700">
+                        Para el cliente{" "}
+                        <span className="font-medium text-zinc-500">
+                          · sale en el ticket de control
+                        </span>
+                      </p>
+                      <div className="w-24">
                         <label
                           htmlFor="cargar-hora-pedido"
                           className="text-xs font-semibold text-zinc-600"
                         >
-                          Hora del pedido
+                          Hora
                         </label>
                         <TimeField24
                           id="cargar-hora-pedido"
                           value={horaPedido}
                           onChange={setHoraPedido}
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-                          Cuándo lo retira o lo recibe el cliente. Sale{" "}
-                          <strong className="font-semibold">
-                            en el ticket de control
-                          </strong>
-                          .
-                        </p>
                       </div>
+                      <p className="text-[11px] leading-snug text-zinc-500">
+                        Cuándo lo retira o lo recibe.
+                        {deliveryType === "delivery"
+                          ? " Las indicaciones de la entrega van arriba, con la dirección."
+                          : ""}
+                      </p>
                     </div>
 
                     {/* Lo que va a pasar, dicho antes de que pase. Cambia con el
@@ -1263,33 +1302,6 @@ export function CargarPedidoSheet({
                     <span className="tabular-nums text-zinc-700">
                       {formatCurrency(envioCents)}
                     </span>
-                  </div>
-                )}
-                {/* Spec 196: la nota para cocina vive con los productos — es
-                    sobre cómo sacar ESTA comida, no sobre cuándo. En modo
-                    agregar no va: el pedido ya existe y su nota ya se definió;
-                    pisarla desde acá sería un efecto lateral invisible. */}
-                {!agregarA && (
-                  <div className="border-t border-zinc-100 pt-2.5">
-                    <label
-                      htmlFor="cargar-nota-cocina"
-                      className="text-xs font-semibold text-zinc-600"
-                    >
-                      Nota para cocina (opcional)
-                    </label>
-                    <input
-                      id="cargar-nota-cocina"
-                      type="text"
-                      value={kitchenNotes}
-                      onChange={(e) => setKitchenNotes(e.target.value)}
-                      maxLength={120}
-                      placeholder="ej: junto con la mesa 5…"
-                      className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
-                    />
-                    <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-                      Sale arriba de la comanda. Para «sin cebolla», usá la
-                      nota del producto.
-                    </p>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-zinc-100 pt-2.5">
