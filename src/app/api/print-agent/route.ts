@@ -36,6 +36,7 @@ import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
 import {
   ACTIVIDAD_RECIENTE_MS,
+  POLL_CERRADO_MS,
   POLL_RAPIDO_MS,
   PROBE_MS,
   proximoPollMs,
@@ -142,7 +143,7 @@ export async function GET(req: Request) {
   // «conectado» mientras el agente de verdad está caído.
   const late = url.searchParams.get("beat") !== "0";
 
-  const [trabajos, latido] = await Promise.all([
+  const [trabajos, latido, imprimiendo] = await Promise.all([
     buildTrabajos(service, businessId, agente, stationId),
     late
       ? registrarLatido(service, {
@@ -151,10 +152,20 @@ export async function GET(req: Request) {
           version: req.headers.get("x-agent-version"),
         })
       : Promise.resolve({ error: null }),
+    isPrintingEnabled(service, businessId),
   ]);
   if (latido.error) console.error("print-agent GET · latido", latido.error);
   if (trabajos === null) {
     return NextResponse.json({ error: "query failed" }, { status: 500 });
+  }
+
+  // ── Interruptor maestro (spec 185) ────────────────────────────────────────
+  // El latido de arriba YA se registró: el agente sigue pidiendo, así que el
+  // panel no tiene por qué decirlo «sin conexión» por una decisión explícita
+  // del encargado. Se corta antes de la retención (spec 183 · D5) — sondear la
+  // cola 25 s no tiene sentido si la respuesta ya se sabe de antemano.
+  if (!imprimiendo) {
+    return NextResponse.json({ comandas: [], next_poll_ms: POLL_CERRADO_MS });
   }
 
   // ── Retención (spec 183 · D5) ─────────────────────────────────────────────
@@ -384,6 +395,27 @@ async function hayTrabajoNuevo(
   }
 
   return (comandas.count ?? 0) > 0 || (jobs.count ?? 0) > 0;
+}
+
+/**
+ * El interruptor maestro del negocio (spec 185). `businesses.printing_enabled`
+ * en `false` apaga las seis familias de papel de una — es un OR por encima de
+ * `stations.printer_enabled` y compañía, no un reemplazo. Fail-open como el
+ * resto de los switches de impresión (`control_printer_enabled !== false`):
+ * un negocio sin fila, o la query caída, imprime igual.
+ */
+async function isPrintingEnabled(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+): Promise<boolean> {
+  const { data } = await service
+    .from("businesses")
+    .select("printing_enabled")
+    .eq("id", businessId)
+    .maybeSingle();
+  return (
+    (data as { printing_enabled?: boolean } | null)?.printing_enabled !== false
+  );
 }
 
 /**

@@ -24,7 +24,9 @@ export async function createStation(
     });
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -65,7 +67,9 @@ export async function updateStation(
     });
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -114,10 +118,15 @@ export async function deleteStation(
     .select("id, extra_station_ids")
     .eq("business_id", bizId)
     .contains("extra_station_ids", [id]);
-  for (const c of (cats ?? []) as { id: string; extra_station_ids: string[] }[]) {
+  for (const c of (cats ?? []) as {
+    id: string;
+    extra_station_ids: string[];
+  }[]) {
     await supabase
       .from("categories")
-      .update({ extra_station_ids: c.extra_station_ids.filter((x) => x !== id) })
+      .update({
+        extra_station_ids: c.extra_station_ids.filter((x) => x !== id),
+      })
       .eq("id", c.id);
   }
   const { data: prods } = await supabase
@@ -125,10 +134,15 @@ export async function deleteStation(
     .select("id, extra_station_ids")
     .eq("business_id", bizId)
     .contains("extra_station_ids", [id]);
-  for (const p of (prods ?? []) as { id: string; extra_station_ids: string[] }[]) {
+  for (const p of (prods ?? []) as {
+    id: string;
+    extra_station_ids: string[];
+  }[]) {
     await supabase
       .from("products")
-      .update({ extra_station_ids: p.extra_station_ids.filter((x) => x !== id) })
+      .update({
+        extra_station_ids: p.extra_station_ids.filter((x) => x !== id),
+      })
       .eq("id", p.id);
   }
 
@@ -170,7 +184,9 @@ export async function setStationPrinter(
     });
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -251,6 +267,42 @@ export async function reorderStations(
 }
 
 /**
+ * Interruptor único: apaga TODA la impresión del negocio —comandas + control +
+ * cuenta + factura, las seis familias que ensambla `buildTrabajos` en
+ * `GET /api/print-agent`— sin tocar la config de cada impresora (spec 185).
+ * Pensado para el local que todavía no tiene comanderas instaladas, o un corte
+ * de emergencia sin desarmar sector por sector. Es un OR maestro por encima de
+ * `stations.printer_enabled` y compañía: al reactivarlo, cada impresora vuelve
+ * exactamente a la config que tenía.
+ */
+export async function setPrintingEnabled(
+  businessSlug: string,
+  enabled: boolean,
+): Promise<ActionResult<null>> {
+  const business = await getBusiness(businessSlug);
+  if (!business) return actionError("Negocio no encontrado.");
+
+  const ctx = await ensureAdminAccess(business.id, businessSlug);
+  if (!canManageBusiness(ctx)) {
+    return actionError("No tenés permisos para configurar la impresión.");
+  }
+
+  const service = createSupabaseServiceClient();
+  const { error } = await service
+    .from("businesses")
+    .update({ printing_enabled: enabled })
+    .eq("id", business.id);
+
+  if (error) {
+    console.error("setPrintingEnabled", error);
+    return actionError("No pudimos guardar el cambio.");
+  }
+
+  revalidatePath(`/${businessSlug}/admin/configuracion`);
+  return actionOk(null);
+}
+
+/**
  * Comandera de **control** del negocio (spec 063): dónde se imprime el "control
  * de pedido" que se lleva el repartidor. Es un destino único del local, no un
  * sector más, así que vive en `businesses` — pero se configura en la misma
@@ -264,7 +316,9 @@ export async function setControlPrinter(
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -308,7 +362,9 @@ export async function setCuentaPrinter(
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -353,7 +409,9 @@ export async function setFloorPlanCuentaPrinter(
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 
@@ -400,7 +458,9 @@ export async function setCajaFiscalPrinter(
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     return actionError(
-      first ? `${first.path.join(".") || "campo"}: ${first.message}` : "Datos inválidos.",
+      first
+        ? `${first.path.join(".") || "campo"}: ${first.message}`
+        : "Datos inválidos.",
     );
   }
 

@@ -5,6 +5,7 @@ import {
   FileText,
   Fingerprint,
   MonitorDown,
+  Power,
   Printer,
   Receipt,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
   type CajaFiscalPrinterRow,
 } from "@/components/admin/settings/fiscal-printers-form";
 import { PrintAgentCard } from "@/components/admin/settings/print-agent-card";
+import { PrintingToggleForm } from "@/components/admin/settings/printing-toggle-form";
 import { SettingsSection } from "@/components/admin/settings/settings-section";
 import {
   StationPrintersForm,
@@ -53,46 +55,48 @@ export default async function ConfiguracionLocalPage({
     { data: floorPlans },
     { data: cajas },
     agentes,
-  ] =
-    await Promise.all([
-      listClockOrigins(business.id),
-      service
-        .from("stations")
-        .select("id, name, is_active, printer_ip, printer_port, printer_enabled")
-        .eq("business_id", business.id)
-        .order("sort_order"),
-      service
-        .from("businesses")
-        .select(
-          "print_agent_key_set, control_printer_ip, control_printer_port, control_printer_enabled, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
-        )
-        .eq("id", business.id)
-        .maybeSingle(),
-      service
-        .from("floor_plans")
-        .select(
-          "id, name, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
-        )
-        .eq("business_id", business.id)
-        .order("name"),
-      service
-        .from("cajas")
-        .select(
-          "id, name, is_default, fiscal_printer_ip, fiscal_printer_port, fiscal_printer_enabled",
-        )
-        .eq("business_id", business.id)
-        .eq("is_active", true)
-        // spec 160 · esta pantalla configura la comandera fiscal de cada caja, y
-        // por la Caja Mayor no sale ninguna factura: no se cobra ahí.
-        // El cast: `is_administrative` (0067) todavía no está en `database.types.ts`.
-        .eq("is_administrative" as "is_default", false as unknown as boolean)
-        .order("sort_order"),
-      listPrintAgents(business_slug),
-    ]);
+  ] = await Promise.all([
+    listClockOrigins(business.id),
+    service
+      .from("stations")
+      .select("id, name, is_active, printer_ip, printer_port, printer_enabled")
+      .eq("business_id", business.id)
+      .order("sort_order"),
+    service
+      .from("businesses")
+      .select(
+        "print_agent_key_set, printing_enabled, control_printer_ip, control_printer_port, control_printer_enabled, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
+      )
+      .eq("id", business.id)
+      .maybeSingle(),
+    service
+      .from("floor_plans")
+      .select(
+        "id, name, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled",
+      )
+      .eq("business_id", business.id)
+      .order("name"),
+    service
+      .from("cajas")
+      .select(
+        "id, name, is_default, fiscal_printer_ip, fiscal_printer_port, fiscal_printer_enabled",
+      )
+      .eq("business_id", business.id)
+      .eq("is_active", true)
+      // spec 160 · esta pantalla configura la comandera fiscal de cada caja, y
+      // por la Caja Mayor no sale ninguna factura: no se cobra ahí.
+      // El cast: `is_administrative` (0067) todavía no está en `database.types.ts`.
+      .eq("is_administrative" as "is_default", false as unknown as boolean)
+      .order("sort_order"),
+    listPrintAgents(business_slug),
+  ]);
 
   const printAgentKeySet = Boolean(
     (bizFlag as { print_agent_key_set?: boolean } | null)?.print_agent_key_set,
   );
+  const printingEnabled =
+    (bizFlag as { printing_enabled?: boolean } | null)?.printing_enabled ??
+    true;
   const controlPrinter: ControlPrinterRow = {
     control_printer_ip:
       (bizFlag as ControlPrinterRow | null)?.control_printer_ip ?? null,
@@ -122,14 +126,18 @@ export default async function ConfiguracionLocalPage({
     ...((stations ?? []) as StationPrinterRow[])
       .filter((st) => st.printer_ip && st.printer_enabled !== false)
       .map((st) => ({ label: st.name, ip: st.printer_ip as string })),
-    ...(controlPrinter.control_printer_ip && controlPrinter.control_printer_enabled !== false
+    ...(controlPrinter.control_printer_ip &&
+    controlPrinter.control_printer_enabled !== false
       ? [{ label: "Control de pedido", ip: controlPrinter.control_printer_ip }]
       : []),
-    ...(cuentaPrinter.cuenta_printer_ip && cuentaPrinter.cuenta_printer_enabled !== false
+    ...(cuentaPrinter.cuenta_printer_ip &&
+    cuentaPrinter.cuenta_printer_enabled !== false
       ? [{ label: "Cuenta (por defecto)", ip: cuentaPrinter.cuenta_printer_ip }]
       : []),
     ...((floorPlans ?? []) as FloorPlanPrinterRow[])
-      .filter((fp) => fp.cuenta_printer_ip && fp.cuenta_printer_enabled !== false)
+      .filter(
+        (fp) => fp.cuenta_printer_ip && fp.cuenta_printer_enabled !== false,
+      )
       .map((fp) => ({
         label: `Cuenta · ${fp.name}`,
         ip: fp.cuenta_printer_ip as string,
@@ -144,6 +152,14 @@ export default async function ConfiguracionLocalPage({
 
   return (
     <>
+      <SettingsSection
+        icon={<Power className="size-5" />}
+        title="Impresión"
+        description="Interruptor único para todo el local: apaga comandas, control, cuentas y facturas de un saque, sin tocar la config de cada impresora de abajo."
+      >
+        <PrintingToggleForm slug={business_slug} enabled={printingEnabled} />
+      </SettingsSection>
+
       <SettingsSection
         icon={<Printer className="size-5" />}
         title="Comanderas"
