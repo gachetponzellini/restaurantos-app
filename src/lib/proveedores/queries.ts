@@ -512,7 +512,7 @@ export async function getRenglonesPorComprobante(
         .from("supplier_invoice_items")
         .select(
           "id, invoice_id, ingredient_id, units, quantity_base, unit_cost_cents, " +
-            "ingredients(name, unit), ingredient_presentations(name)",
+            "price_base, tasa_iva, ingredients(name, unit), ingredient_presentations(name)",
         )
         .eq("business_id", businessId)
         .in("invoice_id", lote)
@@ -541,6 +541,9 @@ export async function getRenglonesPorComprobante(
       units: Number(f.units),
       quantityBase: Number(f.quantity_base),
       unitCostCents: Number(f.unit_cost_cents),
+      priceBase: f.price_base ?? null,
+      // numeric llega como string, igual que `units`.
+      tasaIva: f.tasa_iva === null || f.tasa_iva === undefined ? null : Number(f.tasa_iva),
     });
   }
   return porComprobante;
@@ -553,6 +556,8 @@ type RenglonRow = {
   units: string | number;
   quantity_base: string | number;
   unit_cost_cents: string | number;
+  price_base: "neto" | "final" | null;
+  tasa_iva: string | number | null;
   ingredients: { name: string; unit: string } | { name: string; unit: string }[] | null;
   ingredient_presentations: { name: string } | { name: string }[] | null;
 };

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   aFinalCents,
   aNetoCents,
+  ivaDeCents,
   baseDelComprobante,
   conciliarPie,
   parseTasa,
@@ -58,6 +59,36 @@ describe("el precio final — lo que Rocío pidió ver", () => {
   it("redondea al centavo y no arrastra flotantes", () => {
     // 1.234,56 + 21% = 1.493,8176 → 1.493,82
     expect(aFinalCents(1_234_56, 21, "neto")).toBe(1_493_82);
+  });
+});
+
+describe("ivaDeCents — el número que pidió Rocío", () => {
+  it("sobre un precio neto es lo que falta", () => {
+    expect(ivaDeCents(17_500_00, 21, "neto")).toBe(3_675_00);
+    expect(ivaDeCents(1_000_00, 10.5, "neto")).toBe(105_00);
+  });
+
+  it("sobre un precio final es lo que ya está adentro", () => {
+    expect(ivaDeCents(21_175_00, 21, "final")).toBe(3_675_00);
+  });
+
+  /**
+   * La línea entera de la nota de la carnicería: 82,6 kg × $17.500. Es el
+   * número que se compara contra el pie del papel, así que tiene que cerrar al
+   * centavo con `aFinalCents`.
+   */
+  it("cierra con el precio final, al centavo", () => {
+    const neto = 1_445_500_00;
+    expect(ivaDeCents(neto, 21, "neto")).toBe(303_555_00);
+    expect(neto + ivaDeCents(neto, 21, "neto")).toBe(aFinalCents(neto, 21, "neto"));
+  });
+
+  it("sin tasa asume 21, como el resto", () => {
+    expect(ivaDeCents(1_000_00, null, "neto")).toBe(210_00);
+  });
+
+  it("al 0% no hay IVA", () => {
+    expect(ivaDeCents(1_000_00, 0, "neto")).toBe(0);
   });
 });
 

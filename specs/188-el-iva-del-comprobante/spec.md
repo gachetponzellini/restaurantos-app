@@ -258,6 +258,20 @@ están.
 
 ## Verificación
 
+> **Ampliada el mismo día.** La primera versión mostraba el IVA **sólo en la
+> pantalla de revisión de la lectura**, y ahí se veía un momento: apenas se
+> confirma, esa pantalla desaparece y lo que queda a la vista es el editor manual
+> de renglones, que no lo mostraba. Juan lo cazó con una captura —«no marca el
+> IVA en ningún lado»— sobre una compra con tipo «Sin comprobante», donde además
+> es correcto no mostrarlo.
+>
+> Ahora el cartel vive en `LineaIva`, un componente solo, y aparece en **las tres
+> pantallas**: la revisión, el editor manual y el comprobante ya cargado en la
+> cuenta corriente (que lee `price_base` y `tasa_iva` de la fila, así que editarle
+> el tipo al comprobante después no le reescribe el cartel a una compra vieja).
+> Y dice el **monto en pesos**, no sólo la alícuota: «El kg: $17.500 + $3.675 de
+> IVA (21%) = $21.175 final · al costo va el neto».
+
 **Implementada y verificada el 2026-09-15.** `pnpm typecheck` limpio y la suite
 entera en verde: **3.274 tests**. La migración `0110` está aplicada **al cloud**
 (`tjfufswzsxfujcpoxapx`) y al stack local.
@@ -293,8 +307,11 @@ negocio propio y descartable) — que es donde vive la mitad de esta spec, porqu
   para mostrar;
 - una **nota de crédito** guarda el pie en negativo, como el total.
 
-**En vivo, como Sofía (encargada) sobre `demo`:** con «Sin comprobante» no hay
-bloque fiscal; al elegir **Factura A** aparece «Desglose fiscal» con neto, IVA y
+**En vivo, como Sofía (encargada) sobre `demo`:** en el editor manual de
+renglones, con Factura A, la fila dice **«El Bidón 5lt: $2.974 + $625 de IVA
+(21%) = $3.599 final · al costo va el neto»**; cambiando el tipo a Ticket el
+cartel desaparece —de 1 a 0 líneas en el DOM— y vuelve al elegir Factura A. Con
+«Sin comprobante» no hay bloque fiscal; al elegir **Factura A** aparece «Desglose fiscal» con neto, IVA y
 percepciones. Cargados el total $2.475.250, neto $2.045.661,16 e IVA $429.588,84
 dice **«Cierra contra el total. El IVA es crédito fiscal: al costo de los insumos
 va el neto.»**; bajando el IVA a $429.000 pasa a **«Neto + IVA + percepciones da
@@ -309,8 +326,10 @@ los une, pero la corrida real necesita la `ANTHROPIC_API_KEY` del entorno, que
 sigue devolviendo 401 desde la 172. Los escenarios 1, 2 y 7 están verificados con
 los números cargados a mano; falta confirmarlos leyendo el papel.
 
-**El renglón de la pantalla de revisión** muestra el «+ IVA % = final» sólo con
-una lectura en curso, así que su verificación en vivo depende de lo mismo.
+**El renglón de la pantalla de revisión** sólo aparece con una lectura en curso,
+así que su verificación en vivo depende de lo mismo. El editor manual y el panel
+de la cuenta corriente usan el mismo componente y sí están verificados — el
+segundo por la query, que devuelve `priceBase` y `tasaIva` desde Postgres.
 
 **El subdiario de IVA compras no existe todavía.** Esta spec guarda los datos;
 el informe es la spec siguiente, y ahora se puede escribir.

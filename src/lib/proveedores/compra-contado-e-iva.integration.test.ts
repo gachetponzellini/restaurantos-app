@@ -41,6 +41,7 @@ vi.mock("react", async () => {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
 const { createSupplierInvoice } = await import("./actions");
+const { getRenglonesPorComprobante } = await import("./queries");
 
 describe.skipIf(!dbAvailable)("la compra al contado y su IVA (specs 187 y 188)", () => {
   const supabase = createClient(supabaseUrl!, serviceKey!, {
@@ -287,6 +288,16 @@ describe.skipIf(!dbAvailable)("la compra al contado y su IVA (specs 187 y 188)",
     // 172·D6 · las dos columnas que existían desde la 0092 y nadie llenaba.
     expect(item!.source_text).toBe("ENTRECOT 82,600 kg 17.500 1.445.500");
     expect(item!.match_source).toBe("fuzzy");
+
+    /**
+     * Y la query que alimenta el panel de la cuenta corriente devuelve los dos
+     * campos nuevos — es el único tramo entre la base y el cartel de IVA del
+     * comprobante ya cargado, y `tasa_iva` llega de PostgREST como STRING.
+     */
+    const porComprobante = await getRenglonesPorComprobante(businessId, [r.data.id]);
+    const renglon = porComprobante[r.data.id]?.[0];
+    expect(renglon?.priceBase).toBe("neto");
+    expect(renglon?.tasaIva).toBe(21);
 
     // Y el costo que se propagó al insumo es el neto, no el final.
     const { data: pres } = await supabase

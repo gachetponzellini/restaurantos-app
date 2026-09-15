@@ -88,6 +88,14 @@ export type SupplierInvoiceItem = {
   quantityBase: number;
   /** Lo que costó UN envase. Es lo que pisó el costo del insumo. */
   unitCostCents: number;
+  /**
+   * En qué base está `unitCostCents` — spec 188. `neto` sólo en la factura A.
+   * Es lo que deja mostrar el IVA de un comprobante viejo sin volver a
+   * preguntarle al tipo de comprobante, que puede haberse editado después.
+   */
+  priceBase: "neto" | "final" | null;
+  /** La alícuota del renglón, si se conocía. Para mostrar, nunca para costear. */
+  tasaIva: number | null;
 };
 
 export type SupplierIngredientLink = {

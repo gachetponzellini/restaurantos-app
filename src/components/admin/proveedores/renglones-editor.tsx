@@ -6,7 +6,10 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/currency";
+import type { PriceBase } from "@/lib/proveedores/iva";
 import type { SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
+
+import { LineaIva } from "./linea-iva";
 
 export type InsumoOption = {
   id: string;
@@ -46,11 +49,24 @@ export function RenglonesEditor({
   value,
   onChange,
   totalComprobanteCents,
+  baseDelPrecio = "final",
+  tasaComprobante = null,
 }: {
   insumos: InsumoOption[];
   value: SupplierInvoiceItemInput[];
   onChange: (items: SupplierInvoiceItemInput[]) => void;
   totalComprobanteCents: number;
+  /**
+   * En qué base está el precio que se tipea — spec 188.
+   *
+   * El editor manual no tenía esto y era un agujero real: después de confirmar
+   * la lectura, la pantalla de revisión desaparece y **lo que queda a la vista
+   * es esto**, así que el IVA se veía un momento y después no más. El default
+   * `final` deja igual al diálogo viejo, que no sabe de qué tipo es el
+   * comprobante.
+   */
+  baseDelPrecio?: PriceBase;
+  tasaComprobante?: number | null;
 }) {
   /**
    * Abierto si hay renglones — spec 172.
@@ -128,7 +144,8 @@ export function RenglonesEditor({
       {filas.map((f, i) => {
         const ins = insumos.find((x) => x.id === f.ingredient_id);
         return (
-          <div key={f.key} className="flex items-end gap-1.5 @md:gap-2">
+          <div key={f.key} className="space-y-0.5">
+          <div className="flex items-end gap-1.5 @md:gap-2">
             <div className="min-w-0 flex-1">
               <select
                 value={f.ingredient_id}
@@ -187,6 +204,17 @@ export function RenglonesEditor({
             >
               <Trash2 className="size-3.5" />
             </button>
+          </div>
+          {/* spec 188 · el mismo cartel que la revisión de la lectura. El precio
+              que se tipea es por ENVASE, así que el IVA se muestra sobre el
+              envase: es el número que la persona está mirando. */}
+          <LineaIva
+            netoCents={f.unit_cost_cents || null}
+            tasa={tasaComprobante}
+            base={baseDelPrecio}
+            prefijo={`El ${ins?.presentationName ?? "envase"}`}
+            className="pl-0.5 text-[11px] text-zinc-500 tabular-nums"
+          />
           </div>
         );
       })}

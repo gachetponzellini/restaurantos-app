@@ -13,8 +13,9 @@ import {
   type InsumoDelCatalogo,
   type RenglonPropuesto,
 } from "@/lib/proveedores/lectura/a-propuesta";
-import { aFinalCents, tasaDeRenglon, type PriceBase } from "@/lib/proveedores/iva";
+import { tasaDeRenglon, type PriceBase } from "@/lib/proveedores/iva";
 import type { MATCH_SOURCES, SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
+import { LineaIva } from "./linea-iva";
 
 export type OrigenAlias = "exacto" | "fuzzy" | "llm" | "manual" | "manual_corregido";
 
@@ -315,25 +316,13 @@ export function RevisionLectura({
                       compras es crédito fiscal y no es costo (D1). Sólo aparece
                       cuando hay un IVA que sumar: sobre un ticket el precio del
                       papel ya es el final y esta línea sería ruido. */}
-                  {baseDelPrecio === "neto" && costoBase && insumo && (
-                    <p className="text-[11px] text-zinc-500 tabular-nums">
-                      {insumo.unit === "un" ? "La unidad" : `El ${insumo.unit}`}:{" "}
-                      {formatCurrency(Math.round(costoBase))} + IVA{" "}
-                      {(tasaDeRenglon(f.tasaIva, tasaComprobante) ?? 21)
-                        .toLocaleString("es-AR")}
-                      % ={" "}
-                      <span className="font-medium text-zinc-700">
-                        {formatCurrency(
-                          aFinalCents(
-                            Math.round(costoBase),
-                            tasaDeRenglon(f.tasaIva, tasaComprobante),
-                            "neto",
-                          ),
-                        )}
-                      </span>{" "}
-                      final · al costo va el neto
-                    </p>
-                  )}
+                  <LineaIva
+                    netoCents={costoBase ? Math.round(costoBase) : null}
+                    tasa={tasaDeRenglon(f.tasaIva, tasaComprobante)}
+                    base={baseDelPrecio}
+                    prefijo={insumo ? (insumo.unit === "un" ? "La unidad" : `El ${insumo.unit}`) : "El precio"}
+                  />
+
 
                   {/* El precio por unidad base es el número que EFECTIVAMENTE se
                       escribe y se propaga a las recetas. Es lo único que caza el

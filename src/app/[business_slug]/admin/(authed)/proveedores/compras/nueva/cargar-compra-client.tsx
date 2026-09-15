@@ -1405,6 +1405,8 @@ export function CargarCompraClient({
                 value={items}
                 onChange={setItems}
                 totalComprobanteCents={totalCents}
+                baseDelPrecio={baseDelComprobante(tipo)}
+                tasaComprobante={tasaComprobante}
               />
             )}
           </section>

@@ -59,6 +59,20 @@ export function aFinalCents(cents: number, tasa: number | null, base: PriceBase)
   return centavos(cents * (1 + (tasa ?? TASA_POR_DEFECTO) / 100));
 }
 
+/**
+ * Cuánto IVA tiene ese precio, en pesos — spec 188.
+ *
+ * Es el número que Rocío pidió ver: «le pone IVA a cada uno». Se deriva de los
+ * otros dos para que no haya una tercera definición del IVA dando vueltas —
+ * sobre un precio final es lo que ya está adentro, sobre uno neto es lo que
+ * falta, y en los dos casos el redondeo es el mismo.
+ */
+export function ivaDeCents(cents: number, tasa: number | null, base: PriceBase): number {
+  return base === "neto"
+    ? aFinalCents(cents, tasa, base) - cents
+    : cents - aNetoCents(cents, tasa, base);
+}
+
 /** El precio sin IVA. Simétrico del anterior: divide donde el otro multiplica. */
 export function aNetoCents(cents: number, tasa: number | null, base: PriceBase): number {
   if (base === "neto") return cents;

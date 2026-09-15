@@ -20,6 +20,7 @@ import { hoyAR, primerDiaDelMesAR } from "@/lib/proveedores/fechas-ar";
 import type { SupplierInvoiceItem } from "@/lib/proveedores/types";
 import { EditarComprobanteDialog } from "./editar-comprobante-dialog";
 import type { ConceptOption } from "./invoice-dialog";
+import { LineaIva } from "./linea-iva";
 
 type Props = {
   /** El saldo TOTAL del proveedor: no depende del período que se mire (D3). */
@@ -327,6 +328,18 @@ export function CuentaCorrientePanel({
                         {" · "}
                         {formatCurrency(r.unitCostCents)} por envase
                       </p>
+                      {/* spec 188 · el IVA del renglón, sobre la plata de la
+                          línea entera — que es lo que se mira cuando se controla
+                          una compra vieja contra el papel. Sólo aparece si el
+                          renglón se cargó en base neto (factura A); `price_base`
+                          se guardó con la compra, así que editarle el tipo al
+                          comprobante después no reescribe este cartel. */}
+                      <LineaIva
+                        netoCents={Math.round(r.units * r.unitCostCents)}
+                        tasa={r.tasaIva}
+                        base={r.priceBase ?? "final"}
+                        prefijo="La línea"
+                      />
                     </li>
                   ))}
                 </ul>
