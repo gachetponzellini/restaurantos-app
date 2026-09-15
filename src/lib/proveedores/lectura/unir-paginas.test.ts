@@ -12,6 +12,7 @@ function renglon(over: Partial<RenglonModelo> = {}): RenglonModelo {
     unidad: "u",
     precio_unitario: "1.500",
     total_linea: "3.000",
+    tasa_iva: null,
     origen: "renglón del ticket",
     confianza: "alta",
     ...over,
@@ -36,6 +37,9 @@ const CABECERA_VACIA: Cabecera = {
   total: null,
   origen_total: null,
   condicion_pago: null,
+  neto: null,
+  iva: null,
+  percepciones: null,
 };
 
 function lectura({ cabecera, ...resto }: LecturaParcial = {}): LecturaModelo {

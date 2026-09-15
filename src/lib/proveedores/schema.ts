@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TASAS_IVA } from "./iva";
+
 export const SupplierInput = z.object({
   name: z.string().min(1, "Requerido.").max(100),
   cuit: z.string().max(13).nullable().optional(),
@@ -127,11 +129,46 @@ export type PaymentCondition = (typeof PAYMENT_CONDITIONS)[number];
  * ya sabe convertir. `unit_cost_cents` es lo que costó UN envase, y es el precio
  * que se propaga al insumo.
  */
+/**
+ * De dónde salió la propuesta de insumo de un renglón — 172·D6, que declaró la
+ * columna y nunca la llenó. Espeja el CHECK de la 0092.
+ */
+export const MATCH_SOURCES = [
+  "memoria",
+  "exacto",
+  "fuzzy",
+  "llm",
+  "manual",
+  "manual_corregido",
+] as const;
+
 export const SupplierInvoiceItemInput = z.object({
   ingredient_id: z.string().uuid("Insumo inválido."),
   presentation_id: z.string().uuid().nullable().optional(),
   units: z.number().positive("La cantidad debe ser mayor a 0."),
+  /**
+   * Lo que costó UN envase, **en la base del papel** — spec 188·D1.
+   *
+   * En una factura A es el neto; en un ticket, una B o un interno es el final.
+   * Cuál de los dos lo decide la RPC leyendo el `document_type` del comprobante
+   * y lo escribe en `price_base`: el caller no puede mentir sobre la base de un
+   * precio que se propaga al costo de un insumo.
+   */
   unit_cost_cents: z.number().int().min(0),
+  /**
+   * La alícuota impresa en el renglón, si el papel la traía — spec 188·D5.
+   *
+   * Sólo sirve para mostrar el precio final. No entra en ninguna cuenta que
+   * escriba plata.
+   */
+  tasa_iva: z
+    .number()
+    .refine((n) => (TASAS_IVA as readonly number[]).includes(n), "Alícuota inválida.")
+    .nullable()
+    .optional(),
+  /** Lo que decía el papel, verbatim. El equivalente de `mxitc.referencia`. */
+  source_text: z.string().max(300).nullable().optional(),
+  match_source: z.enum(MATCH_SOURCES).nullable().optional(),
 });
 export type SupplierInvoiceItemInput = z.infer<typeof SupplierInvoiceItemInput>;
 
@@ -186,6 +223,22 @@ export const SupplierInvoiceInput = z
      * Y NO se valida que Σ renglones = total: en 2026 sólo 585 de 1.502
      * comprobantes del Golf cuadran exacto.
      */
+    /**
+     * El pie fiscal — spec 188.
+     *
+     * Los tres son `null` cuando no se leyeron, **nunca 0** (188·D3): un
+     * `iva_cents = 0` en una factura A no es un dato faltante, es la declaración
+     * de que la compra fue exenta, y sobre el subdiario eso es crédito fiscal
+     * que se pierde. El `nullish()` es a propósito: un formulario que manda
+     * `undefined` y uno que manda `null` significan lo mismo acá.
+     *
+     * Y NO se valida que `neto + IVA + percepciones = total` (188·D4): se
+     * concilia en pantalla y se carga igual, como el `Σ renglones ≠ total` de
+     * la 165·D2.
+     */
+    neto_cents: z.number().int().nullable().optional(),
+    iva_cents: z.number().int().nullable().optional(),
+    percepciones_cents: z.number().int().nullable().optional(),
     /**
      * spec 187 · la condición de pago, que Rocío pidió «en la misma carga».
      *

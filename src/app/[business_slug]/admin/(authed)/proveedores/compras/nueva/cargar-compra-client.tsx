@@ -25,6 +25,12 @@ import { createSupplierInvoice, crearProveedorDesdeLectura } from "@/lib/proveed
 import { aprenderAliases } from "@/lib/proveedores/actions-client";
 import { calcularVencimiento, etiquetaTipo } from "@/lib/proveedores/cuenta-corriente";
 import { hoyAR } from "@/lib/proveedores/fechas-ar";
+import {
+  baseDelComprobante,
+  conciliarPie,
+  tasaDelPie,
+  TASA_POR_DEFECTO,
+} from "@/lib/proveedores/iva";
 import { condicionDePagoLeida } from "@/lib/proveedores/lectura/condicion-pago";
 import { parseFechaAR } from "@/lib/proveedores/lectura/fecha-ar";
 import { parseNumeroAR } from "@/lib/proveedores/lectura/numeros-ar";
@@ -115,6 +121,10 @@ type CabeceraLeida = {
   origen_total: string | null;
   /** spec 187 · lo que dice el pie sobre cómo se paga, verbatim. */
   condicion_pago?: string | null;
+  /** spec 188 · el pie fiscal, verbatim. */
+  neto?: string | null;
+  iva?: string | null;
+  percepciones?: string | null;
 };
 
 type RespuestaLectura = {
@@ -241,6 +251,11 @@ export function CargarCompraClient({
       // alguien diga lo contrario. Lo que cambia es que decirlo son dos clicks.
       payment_condition: "cuenta_corriente",
       payment_method: "cash",
+      // spec 188 · vacío, nunca cero: un IVA en 0 sobre una factura A es la
+      // declaración de que la compra fue exenta, no un dato faltante.
+      neto_cents: null,
+      iva_cents: null,
+      percepciones_cents: null,
     },
   });
 
@@ -294,6 +309,50 @@ export function CargarCompraClient({
     setImporteTexto(totalCents ? String(totalCents / 100).replace(".", ",") : "");
   }, [totalCents, importeTexto]);
   const conNumero = tipo !== "interno";
+
+  /**
+   * El pie fiscal — spec 188.
+   *
+   * Tres campos de texto con su estado propio, como el importe: `type="number"`
+   * no entiende cómo se escribe la plata acá («2.045.661,16» le da vacío) y el
+   * `|| 0` de un parseo fallido escribiría un CERO donde la persona no puso
+   * nada. En estas tres columnas eso es peor que en el total: un `iva_cents = 0`
+   * sobre una factura A dice «esta compra fue exenta».
+   */
+  const [pieTexto, setPieTexto] = useState({ neto: "", iva: "", percepciones: "" });
+
+  const escribirPie = (campo: "neto" | "iva" | "percepciones", texto: string) => {
+    setPieTexto((prev) => ({ ...prev, [campo]: texto }));
+    const pesos = parseNumeroAR(texto);
+    const campoForm = (
+      { neto: "neto_cents", iva: "iva_cents", percepciones: "percepciones_cents" } as const
+    )[campo];
+    marcarTocado(campoForm);
+    form.setValue(campoForm, pesos === null ? null : Math.round(pesos * 100), {
+      shouldDirty: true,
+    });
+  };
+
+  const netoCents = (form.watch("neto_cents") as number | null) ?? null;
+  const ivaCents = (form.watch("iva_cents") as number | null) ?? null;
+  const percepcionesCents = (form.watch("percepciones_cents") as number | null) ?? null;
+
+  /**
+   * Sólo la factura A discrimina IVA (188·D2). Sobre un ticket o una compra sin
+   * comprobante, pedir el neto sería pedir que se invente: el precio del papel
+   * ya es el final y no hay crédito fiscal que separar.
+   */
+  const discrimina = baseDelComprobante(tipo) === "neto";
+
+  const pie = conciliarPie({
+    netoCents,
+    ivaCents,
+    percepcionesCents,
+    totalCents,
+  });
+
+  /** La tasa que heredan los renglones sin tasa impresa. Sólo para mostrar (D5). */
+  const tasaComprobante = discrimina ? (tasaDelPie(netoCents, ivaCents) ?? TASA_POR_DEFECTO) : null;
 
   const todosLosProveedores = useMemo(
     () => [...proveedores, ...extras],
@@ -523,6 +582,24 @@ export function CargarCompraClient({
        * `contado` sobre una nota de crédito no puede entrar —el Zod lo prohíbe
        * (187·D6)—, así que se mira el tipo que quedó puesto, no el leído.
        */
+      /**
+       * El pie fiscal — spec 188. Cada uno por separado y sólo si está libre:
+       * el que no se leyó queda en null y el campo, vacío.
+       */
+      for (const [campo, crudo] of [
+        ["neto", cab.neto],
+        ["iva", cab.iva],
+        ["percepciones", cab.percepciones],
+      ] as const) {
+        const cents = parsearImporte(crudo);
+        const campoForm = (
+          { neto: "neto_cents", iva: "iva_cents", percepciones: "percepciones_cents" } as const
+        )[campo];
+        if (cents === null || !estaLibre(campoForm)) continue;
+        escribirSiLibre(campoForm, cents, "foto");
+        setPieTexto((prev) => ({ ...prev, [campo]: String(cents / 100).replace(".", ",") }));
+      }
+
       const cond = condicionDePagoLeida(cab.condicion_pago);
       const tipoPuesto = form.getValues("document_type") as TipoComprobante;
       if (cond && tipoPuesto !== "nota_credito") {
@@ -658,6 +735,7 @@ export function CargarCompraClient({
       // apretar «Cargar compra» otra vez es la vuelta que esto vino a sacar.
       sesion.current += 1;
       fotos.limpiar();
+      setPieTexto({ neto: "", iva: "", percepciones: "" });
       yaLeidas.current = "";
       tocados.current.clear();
       setAutollenados({});
@@ -1068,6 +1146,69 @@ export function CargarCompraClient({
                 />
               </div>
 
+              {/* ── El desglose fiscal — spec 188 ────────────────────────
+                  «¿El sistema discrimina los artículos y le pone IVA?» (Rocío,
+                  2026-09-15). Sólo en la factura A: es el único comprobante que
+                  discrimina, y pedirle el neto a un ticket sería pedir que se
+                  invente un crédito fiscal que no existe (D2). */}
+              {discrimina && (
+                <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50/60 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-zinc-700">Desglose fiscal</p>
+                    {autollenados.neto_cents && <Autollenado origen={autollenados.neto_cents} />}
+                  </div>
+                  <div className="grid gap-2 @md:grid-cols-3">
+                    {(
+                      [
+                        ["neto", "Neto gravado"],
+                        ["iva", "IVA"],
+                        ["percepciones", "Percepciones"],
+                      ] as const
+                    ).map(([campo, etiqueta]) => (
+                      <div key={campo} className="space-y-1">
+                        <label
+                          htmlFor={`pie-${campo}`}
+                          className="text-[11px] font-medium text-zinc-500"
+                        >
+                          {etiqueta}
+                        </label>
+                        <Input
+                          id={`pie-${campo}`}
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="—"
+                          className="h-9 text-sm tabular-nums"
+                          value={pieTexto[campo]}
+                          onChange={(e) => escribirPie(campo, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* D4 · se muestra y NO frena: un pie que no cierra por
+                      impuestos internos o un redondeo del proveedor no puede
+                      impedir cargar la compra. Misma política que la 165·D2 con
+                      Σ renglones ≠ total. */}
+                  {pie.estado === "no_cuadra" ? (
+                    <p className="text-[11px] text-amber-700">
+                      Neto + IVA + percepciones da{" "}
+                      {formatCurrency(totalCents - pie.diferenciaCents)} y el total dice{" "}
+                      {formatCurrency(totalCents)}: hay{" "}
+                      {formatCurrency(Math.abs(pie.diferenciaCents))} de diferencia. Se
+                      carga igual — mirá si falta una percepción.
+                    </p>
+                  ) : pie.estado === "cuadra" ? (
+                    <p className="text-[11px] text-zinc-500">
+                      Cierra contra el total. El IVA es crédito fiscal: al costo de los
+                      insumos va el neto.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-zinc-400">
+                      Lo que no esté en el papel dejalo vacío. Vacío no es cero.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* ── La condición de pago — spec 187 ──────────────────────
                   «En la misma carga debería estar la opción de pago: efectivo o
                   cta cte» (Rocío, 2026-09-15). Va acá abajo, después del
@@ -1230,6 +1371,8 @@ export function CargarCompraClient({
                 renglones={leido}
                 insumos={insumos}
                 totalComprobanteCents={totalCents}
+                baseDelPrecio={baseDelComprobante(tipo)}
+                tasaComprobante={tasaComprobante}
                 onIrAPagina={irAPagina}
                 onConfirmar={(nuevos, confirmados) => {
                   // Los renglones que la persona cargó A MANO se conservan: el

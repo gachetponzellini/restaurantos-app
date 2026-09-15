@@ -1,3 +1,4 @@
+import { parseTasa } from "../iva";
 import { conciliarRenglon, type EstadoConciliacion } from "./conciliar";
 import type { RenglonModelo } from "./schema-modelo";
 
@@ -50,6 +51,15 @@ export type RenglonPropuesto = {
   origen: string;
   ingredientId: string | null;
   matchSource: string | null;
+  /**
+   * La alícuota IMPRESA en el renglón, o null — spec 188·D5.
+   *
+   * Null es la respuesta normal: la factura A4 con columna de tasa es la
+   * minoría. La tasa que se muestra cuando esto es null la pone la pantalla,
+   * que sabe de qué tipo es el comprobante y qué dice su pie; acá no se hereda
+   * nada porque `aPropuesta` no conoce la cabecera.
+   */
+  tasaIva: number | null;
   /** Envases. `null` si no se pudo calcular. */
   units: number | null;
   unitCostCents: number | null;
@@ -156,6 +166,9 @@ export function aPropuesta(
     ingredientId: insumo?.id ?? null,
     matchSource,
     estado: c.estado,
+    // Lo que no es una alícuota de ARCA vuelve null: un «2,1» mal leído no
+    // puede convertirse en 21 (188).
+    tasaIva: parseTasa(leido.tasa_iva),
     presentationId: null as string | null,
     presentationName: null as string | null,
   };

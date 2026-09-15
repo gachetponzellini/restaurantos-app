@@ -295,10 +295,29 @@ export async function createSupplierInvoice(
         ? [parsed.data.photo_url]
         : [];
 
+  /**
+   * El pie fiscal — spec 188.
+   *
+   * **El signo lo manda el tipo**, igual que el total (158·D4): el pie de una
+   * nota de crédito está impreso en positivo —es un papel como cualquier otro—
+   * y lo que resta del saldo es lo que guardamos. Si el neto entrara positivo
+   * sobre una NC, el subdiario de IVA compras sumaría un crédito fiscal donde
+   * hubo una devolución.
+   *
+   * `null` se queda en `null`: lo que no se leyó no tiene signo (188·D3).
+   */
+  const conSignoDelTipo = (v: number | null | undefined): number | null => {
+    if (v === null || v === undefined) return null;
+    return parsed.data.document_type === "nota_credito" ? -Math.abs(v) : v;
+  };
+
   const { data, error } = await service
     .from("supplier_invoices")
     .insert({
       business_id: businessId,
+      neto_cents: conSignoDelTipo(parsed.data.neto_cents),
+      iva_cents: conSignoDelTipo(parsed.data.iva_cents),
+      percepciones_cents: conSignoDelTipo(parsed.data.percepciones_cents),
       supplier_id: parsed.data.supplier_id,
       invoice_number: parsed.data.invoice_number ?? null,
       invoice_date: parsed.data.invoice_date,

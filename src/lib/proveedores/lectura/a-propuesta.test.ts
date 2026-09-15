@@ -33,6 +33,7 @@ const linea = (p: Partial<RenglonModelo>): RenglonModelo => ({
   unidad: null,
   precio_unitario: null,
   total_linea: null,
+  tasa_iva: null,
   origen: "ENTRECOT 82,600 kg 17.500 1.445.500",
   confianza: "alta",
   ...p,

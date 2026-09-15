@@ -13,7 +13,8 @@ import {
   type InsumoDelCatalogo,
   type RenglonPropuesto,
 } from "@/lib/proveedores/lectura/a-propuesta";
-import type { SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
+import { aFinalCents, tasaDeRenglon, type PriceBase } from "@/lib/proveedores/iva";
+import type { MATCH_SOURCES, SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
 
 export type OrigenAlias = "exacto" | "fuzzy" | "llm" | "manual" | "manual_corregido";
 
@@ -72,6 +73,8 @@ export function RevisionLectura({
   renglones,
   insumos,
   totalComprobanteCents,
+  baseDelPrecio = "final",
+  tasaComprobante = null,
   onConfirmar,
   onDescartar,
   onIrAPagina,
@@ -79,6 +82,17 @@ export function RevisionLectura({
   renglones: RenglonRevisable[];
   insumos: InsumoDelCatalogo[];
   totalComprobanteCents: number;
+  /**
+   * En qué base está el precio impreso — spec 188·D2. Sale del tipo de
+   * comprobante, que es un campo de la pantalla de al lado.
+   *
+   * El default es `final` y no es pereza: con `final` el precio no se toca y la
+   * pantalla no muestra ninguna línea de IVA, que es exactamente lo que
+   * corresponde en el diálogo viejo, donde no hay de dónde sacar el tipo.
+   */
+  baseDelPrecio?: PriceBase;
+  /** La tasa que hereda un renglón sin tasa impresa. Sólo para mostrar (D5). */
+  tasaComprobante?: number | null;
   onConfirmar: (items: SupplierInvoiceItemInput[], aprender: AliasAprendido[]) => void;
   onDescartar: () => void;
   /**
@@ -118,6 +132,9 @@ export function RevisionLectura({
             unidad: null,
             precio_unitario: f.unitCostCents !== null ? String(f.unitCostCents / 100) : null,
             total_linea: null,
+            // La tasa impresa sobrevive a que se corrija el insumo: es del
+            // papel, no de la propuesta (188).
+            tasa_iva: f.tasaIva !== null ? String(f.tasaIva) : null,
             origen: f.origen,
             confianza: "alta",
           },
@@ -291,6 +308,33 @@ export function RevisionLectura({
                     </p>
                   )}
 
+                  {/* El precio final — spec 188.
+                      «¿Le pone el IVA a cada uno para dejarlos con el precio
+                      final?» (Rocío, 2026-09-15). Sí, PARA MOSTRAR: lo que se
+                      carga al costo sigue siendo el neto, porque el IVA de
+                      compras es crédito fiscal y no es costo (D1). Sólo aparece
+                      cuando hay un IVA que sumar: sobre un ticket el precio del
+                      papel ya es el final y esta línea sería ruido. */}
+                  {baseDelPrecio === "neto" && costoBase && insumo && (
+                    <p className="text-[11px] text-zinc-500 tabular-nums">
+                      {insumo.unit === "un" ? "La unidad" : `El ${insumo.unit}`}:{" "}
+                      {formatCurrency(Math.round(costoBase))} + IVA{" "}
+                      {(tasaDeRenglon(f.tasaIva, tasaComprobante) ?? 21)
+                        .toLocaleString("es-AR")}
+                      % ={" "}
+                      <span className="font-medium text-zinc-700">
+                        {formatCurrency(
+                          aFinalCents(
+                            Math.round(costoBase),
+                            tasaDeRenglon(f.tasaIva, tasaComprobante),
+                            "neto",
+                          ),
+                        )}
+                      </span>{" "}
+                      final · al costo va el neto
+                    </p>
+                  )}
+
                   {/* El precio por unidad base es el número que EFECTIVAMENTE se
                       escribe y se propaga a las recetas. Es lo único que caza el
                       caso «4 maples o 4 cajas». */}
@@ -369,6 +413,19 @@ export function RevisionLectura({
               presentation_id: f.presentationId,
               units: f.units!,
               unit_cost_cents: f.unitCostCents!,
+              // spec 188 · la tasa impresa, si el papel la traía. La heredada NO
+              // viaja: lo que se guarda es lo que decía el renglón.
+              tasa_iva: f.tasaIva,
+              /**
+               * spec 172·D6, que se declaró y nunca se implementó: las columnas
+               * existen desde la 0092 y la RPC no las escribía. Sin
+               * `match_source` no hay forma de responder «la máquina propuso X y
+               * la persona lo corrigió a Y» después de cerrar el diálogo, y un
+               * umbral que no se puede medir no se puede defender.
+               */
+              source_text: f.sourceText,
+              match_source: (f.matchSource ??
+                null) as (typeof MATCH_SOURCES)[number] | null,
             })),
             // Sólo se aprende de lo que se CONFIRMÓ. Un renglón que salió de la
             // memoria y nadie tocó no enseña nada nuevo; uno destildado tampoco:

@@ -55,7 +55,13 @@ Si un campo no está impreso, va en null — aunque lo pudieras deducir de los
 otros dos. La aritmética la hace el código, y la hace mejor que vos porque
 después la verifica.
 
-4 · \`origen\` ES LA PRUEBA DE QUE LA LÍNEA EXISTE.
+4 · LA TASA DE IVA DEL RENGLÓN SE COPIA, NO SE DEDUCE.
+Algunas facturas A4 traen una columna con la alícuota de cada línea ("21,00",
+"10,5"). Si está, copiala en \`tasa_iva\` tal cual. Si no está, va en null:
+NO la deduzcas del pie ni pongas 21 porque es lo más común. Eso lo hace el
+código, que sabe qué tipo de comprobante es.
+
+5 · \`origen\` ES LA PRUEBA DE QUE LA LÍNEA EXISTE.
 Por cada renglón copiás en \`origen\` el fragmento del documento del que salió,
 tal cual, con todo lo que haya en esa zona del papel.
 SI NO PODÉS SEÑALAR DE DÓNDE SALIÓ UNA LÍNEA, LA ESTÁS INVENTANDO: NO LA
@@ -72,7 +78,8 @@ NO devuelvas como renglón nada de esto:
 · Datos del emisor o del cliente: razón social, domicilio, CUIT, ingresos
   brutos, inicio de actividades, condición frente al IVA, teléfono.
 · Totales y subtotales: SUBTOTAL, NETO GRAVADO, IVA 21%, IVA 10,5%, PERCEPCIÓN,
-  IIBB, TOTAL, TOTAL A PAGAR, SALDO, SU PAGO, VUELTO, SALDO PENDIENTE.
+  IIBB, TOTAL, TOTAL A PAGAR, SALDO, SU PAGO, VUELTO, SALDO PENDIENTE. (No son
+  renglones, pero el NETO, el IVA y las PERCEPCIONES van en la cabecera.)
 · Pie fiscal: CAE, vencimiento del CAE, código de barras, QR, "Comprobante
   autorizado", régimen de transparencia fiscal.
 · Formas de pago: EFECTIVO, TRANSFERENCIA, CTA CTE, CHEQUE. (No son renglones,
@@ -154,6 +161,15 @@ LA CABECERA
   lo sumes vos.
 · \`fecha\`: como está escrita, sin convertir formato ni completar el año.
 · \`numero\`: como está impreso, con guiones y ceros.
+· \`neto\`: el NETO GRAVADO / IMPORTE NETO del pie, verbatim. Si el comprobante
+  no discrimina IVA (ticket, factura B o C, remito), va en null — NO lo saques
+  dividiendo el total.
+· \`iva\`: el importe del IVA del pie, verbatim. Si hay dos líneas de IVA (21% y
+  10,5% en la misma factura), SUMALAS sólo si el papel trae el subtotal ya
+  sumado; si no, poné la más grande y nada más. Si no está impreso: null.
+· \`percepciones\`: la suma de las percepciones si el papel trae una sola línea
+  (PERCEPCIÓN IIBB, PERCEPCIÓN IVA, RETENCIÓN). Si hay varias y no hay subtotal,
+  null: el código lo concilia contra el total y muestra la diferencia.
 · \`condicion_pago\`: cómo se paga, como está impreso y nada más — "CONTADO",
   "EFECTIVO", "CTA CTE", "CUENTA CORRIENTE", "30 DÍAS", "TRANSFERENCIA". Está al
   pie o en un recuadro arriba, y a veces es una casilla tildada. Si no dice

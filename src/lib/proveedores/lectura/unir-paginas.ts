@@ -176,6 +176,10 @@ export function unirPaginas(paginas: PaginaLeida[]): LecturaUnida {
         : primeroConDato(cabeceras.map((c) => c.origen_total)),
     // spec 187 · va con el total, al pie de la última página que lo traiga.
     condicion_pago: ultimoConDato(cabeceras.map((c) => c.condicion_pago ?? null)),
+    // spec 188 · el pie fiscal vive junto al total, en la última página.
+    neto: ultimoConDato(cabeceras.map((c) => c.neto ?? null)),
+    iva: ultimoConDato(cabeceras.map((c) => c.iva ?? null)),
+    percepciones: ultimoConDato(cabeceras.map((c) => c.percepciones ?? null)),
   };
 
   const renglones: RenglonConPagina[] = [];

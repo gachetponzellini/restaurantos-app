@@ -2,7 +2,7 @@
 
 **Issue:** [#311](https://github.com/gachetponzellini/RestaurantOS-app/issues/311) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 🚧 en curso
+**Estado:** ✅ implementada (2026-09-15)
 
 **Depende de**: [`158`](../158-comprar-y-pagarle-al-proveedor/spec.md) (el
 comprobante, el pago y el saldo derivado),
@@ -208,4 +208,55 @@ cuando vino del papel.
 
 ## Verificación
 
-_(se completa al implementar)_
+**Implementada y verificada el 2026-09-15.** `pnpm typecheck` limpio y la suite
+entera en verde: **3.274 tests**, 21 nuevos de esta spec.
+
+**El orden, que es toda la decisión, está fijado con mocks del borde**
+(`compra-al-contado.test.ts`, 11 casos): sin Caja Mayor o sin permiso de sangría
+la action falla con **cero comprobantes creados** y cero RPC llamadas (D2); el
+pago va después de los renglones y si los renglones fallan no se paga nada (D3);
+si el pago falla, el comprobante queda vivo, `pago: "pendiente"`, y **nadie lo
+anuló** —el test afirma sobre los `update`—.
+
+**Contra Postgres de verdad** (`compra-contado-e-iva.integration.test.ts`, local,
+negocio propio y descartable): una compra de $482.100 al contado en efectivo deja
+las **tres filas**, y se leen de la base:
+
+- `supplier_payments`: $482.100, `method = cash`, `paid_at = 2026-09-15` (la
+  fecha del papel, D4), `caja_id` = la Caja Mayor;
+- `supplier_payment_allocations`: una imputación contra el comprobante recién
+  creado, por el total;
+- `caja_movimientos`: `kind = 'sangria'` —el literal que filtra el arqueo— por
+  el mismo monto, con motivo «Pago a proveedor · …».
+
+Y la misma compra en cuenta corriente **no escribe ningún pago**: la garantía de
+que el default no cambió para nadie.
+
+De paso quedó probado que un negocio nuevo **nace pudiendo pagar en efectivo**:
+el test no crea la Caja Mayor, la lee, porque la siembra el trigger
+`caja_administrativa_seed_on_business` de la 160.
+
+**El contrato:** sin mandar nada, `payment_condition` sale `cuenta_corriente` y
+`payment_method` `cash`, así que el diálogo viejo y todo caller existente cargan
+igual que ayer. Una nota de crédito al contado rebota en el Zod con el mensaje
+bueno (D6).
+
+**Lo que lee del papel** (`condicion-pago.test.ts`, 6 casos): «CONTADO»,
+«EFECTIVO», «CTA CTE», «Cta. Cte.», «A 30 DÍAS» y «Condición: crédito» caen donde
+tienen que caer; «CONTADO - TRANSFERENCIA» elige el medio; y el recuadro
+preimpreso que nombra las cuatro formas de pago a la vez gana **cuenta
+corriente**, porque leer mal un «CTA CTE» como contado inventa una sangría.
+`unirPaginas` la toma de la **última** página que la traiga, como el total.
+
+**En vivo, como Sofía (encargada) sobre `demo`:** el control «Cómo se paga»
+aparece en la pantalla de carga con Cuenta corriente / Ya la pagué, y la línea de
+abajo dice a dónde va la plata antes de apretar («Queda como deuda en la cuenta
+corriente del proveedor»).
+
+### Lo que queda pendiente
+
+**El escenario 8 no se pudo probar de punta a punta**: precargar la condición
+desde una foto necesita el lector, y la `ANTHROPIC_API_KEY` del entorno sigue
+devolviendo 401 (es el mismo pendiente que dejó abierto la 172). Lo que rodea al
+modelo —el prompt, el esquema, la unión de páginas y la interpretación— está
+verificado sin él.

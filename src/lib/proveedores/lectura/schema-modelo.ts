@@ -27,6 +27,13 @@ export const RenglonModelo = z.object({
   unidad: z.string().nullable(),
   precio_unitario: z.string().nullable(),
   total_linea: z.string().nullable(),
+  /**
+   * La alícuota impresa en la columna del renglón — spec 188·D5.
+   *
+   * La factura A4 con columna TASA es la minoría, así que `null` es la respuesta
+   * normal y correcta. Verbatim como todo el resto: «21», «21,00», «10,5».
+   */
+  tasa_iva: z.string().nullable(),
   origen: z.string(),
   confianza: z.enum(["alta", "media", "baja"]),
 });
@@ -62,6 +69,20 @@ export const CabeceraModelo = z.object({
    * modelo no decide si eso significa pagar de la Caja Mayor.
    */
   condicion_pago: z.string().nullable(),
+  /**
+   * El pie fiscal, verbatim — spec 188.
+   *
+   * Hasta ayer el prompt los listaba entre «lo que no es un ítem» y ahí moría:
+   * NETO GRAVADO, IVA 21%, PERCEPCIÓN. No son renglones —eso era cierto— pero
+   * son la cabecera del comprobante, y sin ellos el subdiario de IVA compras no
+   * se puede armar.
+   *
+   * `percepciones` es UNA sola: lo que hace falta es que el pie cierre contra el
+   * total, no desagregar IIBB de Ganancias.
+   */
+  neto: z.string().nullable(),
+  iva: z.string().nullable(),
+  percepciones: z.string().nullable(),
 });
 
 export const LecturaModelo = z.object({
