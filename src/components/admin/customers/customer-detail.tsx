@@ -24,6 +24,7 @@ import type {
   CustomerDetail,
 } from "@/lib/admin/customers-query";
 import { formatCurrency } from "@/lib/currency";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import { STATUS_META } from "@/lib/orders/status-meta";
 import { cn } from "@/lib/utils";
 
@@ -203,11 +204,15 @@ export function CustomerDetailView({
         {/* Addresses */}
         <div className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
           <h2 className="mb-3 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-            Direcciones guardadas
+            {copyDeEntrega(slug).porLote
+              ? "Lotes guardados"
+              : "Direcciones guardadas"}
           </h2>
           {customer.addresses.length === 0 ? (
             <p className="text-sm text-zinc-500">
-              No tiene direcciones guardadas (puede ser cliente de retiro).
+              {copyDeEntrega(slug).porLote
+                ? "No tiene lotes guardados (puede ser cliente de retiro)."
+                : "No tiene direcciones guardadas (puede ser cliente de retiro)."}
             </p>
           ) : (
             <ul className="space-y-2">

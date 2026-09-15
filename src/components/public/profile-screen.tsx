@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { I } from "@/components/delivery/primitives";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export function ProfileScreen({
@@ -78,7 +79,10 @@ export function ProfileScreen({
           <MenuRow label="Reservar mesa" href={`/${slug}/reservar`} />
           <MenuRow label="Mis reservas" href={`/${slug}/perfil/reservas`} />
           <MenuRow label="Mis pedidos" href={`/${slug}/perfil/pedidos`} />
-          <MenuRow label="Direcciones" href={`/${slug}/perfil/direcciones`} />
+          <MenuRow
+            label={copyDeEntrega(slug).porLote ? "Lotes" : "Direcciones"}
+            href={`/${slug}/perfil/direcciones`}
+          />
           <MenuRow label="Métodos de pago" disabled />
           <MenuRow label="Ayuda" disabled last />
         </div>

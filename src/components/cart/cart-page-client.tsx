@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { I, ImageTile } from "@/components/delivery/primitives";
 import { formatCurrency } from "@/lib/currency";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import {
   cartItemSubtotal,
   cartTotal,
@@ -25,6 +26,10 @@ export function CartPageClient({
   const router = useRouter();
   const items = useCart(slug, (s) => s.items);
   const updateQuantity = useCart(slug, (s) => s.updateQuantity);
+
+  // Spec 194 — si el negocio reparte sólo adentro del barrio, se avisa acá
+  // también: el que arma el carrito lo lee antes de llegar al checkout.
+  const avisoDeEntrega = copyDeEntrega(slug).aviso;
 
   const subtotal = cartTotal(items);
   const isEmpty = items.length === 0;
@@ -348,6 +353,7 @@ export function CartPageClient({
                 {deliveryFeeCents > 0
                   ? "Retiro en local sin cargo. El envío se suma si elegís delivery."
                   : "Retiro en local o delivery sin cargo."}
+                {avisoDeEntrega ? ` ${avisoDeEntrega}` : ""}
               </div>
               <div
                 style={{

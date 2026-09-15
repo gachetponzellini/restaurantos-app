@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/shell/page-shell";
 import { getOrderDetail } from "@/lib/admin/orders-query";
 import { formatCurrency } from "@/lib/currency";
+import { lugarDeEntrega } from "@/lib/orders/entrega-por-lote";
 import type { OrderStatus } from "@/lib/orders/status";
 import { getBusiness } from "@/lib/tenant";
 
@@ -87,7 +88,9 @@ export default async function OrderDetailPage({
       {order.delivery_type === "delivery" && (
         <Surface padding="default">
           <SurfaceHeader eyebrow="Delivery" title="Entrega a domicilio" />
-          <p className="mt-3 text-sm text-zinc-700">{order.delivery_address}</p>
+          <p className="mt-3 text-sm text-zinc-700">
+            {lugarDeEntrega(business_slug, order.delivery_address ?? "")}
+          </p>
           {order.delivery_notes && (
             <p className="mt-2 text-xs italic text-zinc-500">
               &quot;{order.delivery_notes}&quot;

@@ -12,6 +12,7 @@ import {
   ventanaEstimadaLabel,
 } from "@/lib/orders/entrega-estimada";
 import { formatCurrency } from "@/lib/currency";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import { createOrder } from "@/lib/orders/create-order";
 import {
   filterSlotsByLead,
@@ -69,6 +70,10 @@ export function CheckoutForm({
   const items = useCart(slug, (s) => s.items);
   const clearCart = useCart(slug, (s) => s.clear);
   const [submitting, setSubmitting] = useState(false);
+
+  // Spec 194 — dónde entregar depende del negocio: kcc reparte sólo adentro
+  // del barrio y pide el número de lote, no una calle.
+  const entrega = copyDeEntrega(slug);
 
   const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
   const [address, setAddress] = useState("");
@@ -233,8 +238,8 @@ export function CheckoutForm({
     const next: typeof errors = {};
     if (!name.trim()) next.name = "Ingresá tu nombre.";
     if (!phoneOk) next.phone = "Teléfono inválido.";
-    if (!isPickup && address.trim().length < 5) {
-      next.address = "Completá la dirección.";
+    if (!isPickup && address.trim().length < entrega.minChars) {
+      next.address = entrega.error;
     }
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -634,7 +639,7 @@ export function CheckoutForm({
                   marginBottom: 6,
                 }}
               >
-                Mis direcciones
+                {entrega.guardadasLabel}
               </div>
               <div
                 style={{
@@ -676,23 +681,46 @@ export function CheckoutForm({
               </div>
             </div>
           )}
-          <Field label="Dirección" error={errors.address}>
+          {entrega.aviso && (
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "flex-start",
+                padding: "10px 12px",
+                marginBottom: 14,
+                borderRadius: 10,
+                background: "var(--accent-soft)",
+                border: "1px solid var(--hairline-2)",
+                fontSize: 12,
+                lineHeight: 1.4,
+                color: "var(--ink-2)",
+              }}
+            >
+              <span aria-hidden>📍</span>
+              <span>{entrega.aviso}</span>
+            </div>
+          )}
+          <Field label={entrega.label} error={errors.address}>
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Calle y número"
-              autoComplete="street-address"
+              placeholder={entrega.placeholder}
+              autoComplete={entrega.porLote ? "off" : "street-address"}
+              inputMode={entrega.porLote ? "numeric" : undefined}
               style={inputStyle(!!errors.address)}
             />
           </Field>
-          <Field label="Piso / depto (opcional)">
-            <input
-              value={apt}
-              onChange={(e) => setApt(e.target.value)}
-              placeholder="3° B"
-              style={inputStyle()}
-            />
-          </Field>
+          {entrega.pidePisoDepto && (
+            <Field label="Piso / depto (opcional)">
+              <input
+                value={apt}
+                onChange={(e) => setApt(e.target.value)}
+                placeholder="3° B"
+                style={inputStyle()}
+              />
+            </Field>
+          )}
           <Field label="Notas para el repartidor">
             <input
               value={notes}

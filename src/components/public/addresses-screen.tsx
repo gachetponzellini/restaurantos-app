@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { I } from "@/components/delivery/primitives";
 import { deleteSavedAddress } from "@/lib/customers/addresses-actions";
 import type { SavedAddress } from "@/lib/customers/addresses";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 
 export function AddressesScreen({
   slug,
@@ -16,6 +17,8 @@ export function AddressesScreen({
   slug: string;
   addresses: SavedAddress[];
 }) {
+  // Spec 194 — en un negocio que reparte por lote, acá se guardan lotes.
+  const entrega = copyDeEntrega(slug);
   const [confirming, setConfirming] = useState<SavedAddress | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -27,7 +30,7 @@ export function AddressesScreen({
         toast.error(r.error);
         return;
       }
-      toast.success("Dirección borrada.");
+      toast.success(entrega.porLote ? "Lote borrado." : "Dirección borrada.");
       setConfirming(null);
       router.refresh();
     });
@@ -44,11 +47,11 @@ export function AddressesScreen({
         flexDirection: "column",
       }}
     >
-      <Header slug={slug} title="Mis direcciones" />
+      <Header slug={slug} title={entrega.guardadasLabel} />
 
       <div style={{ flex: 1, padding: "8px 16px 40px" }}>
         {addresses.length === 0 ? (
-          <EmptyState />
+          <EmptyState porLote={entrega.porLote} />
         ) : (
           <>
             <p
@@ -217,7 +220,7 @@ function TrashIcon() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ porLote }: { porLote: boolean }) {
   return (
     <div
       style={{
@@ -246,11 +249,11 @@ function EmptyState() {
         className="d-display"
         style={{ fontSize: 22, color: "var(--ink)" }}
       >
-        Todavía no guardaste direcciones
+        {porLote ? "Todavía no guardaste lotes" : "Todavía no guardaste direcciones"}
       </div>
       <div style={{ fontSize: 13, color: "var(--ink-3)", maxWidth: 320 }}>
-        Tus direcciones aparecen acá automáticamente cuando hacés tu primer
-        envío.
+        {porLote ? "Tus lotes aparecen" : "Tus direcciones aparecen"} acá
+        automáticamente cuando hacés tu primer envío.
       </div>
     </div>
   );

@@ -27,6 +27,10 @@ import type { AdminOrder } from "@/lib/admin/orders-query";
 import { formatCurrency } from "@/lib/currency";
 import { entregaLabel } from "@/lib/orders/entrega";
 import type { OrderStatus } from "@/lib/orders/status";
+import {
+  copyDeEntrega,
+  lugarDeEntrega,
+} from "@/lib/orders/entrega-por-lote";
 import { updateOrderStatus } from "@/lib/orders/update-status";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -453,10 +457,10 @@ export function OrderDetailSheet({
           {detail?.delivery_address && order.delivery_type === "delivery" && (
             <section className="border-border/60 border-t px-5 py-4">
               <p className="text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider">
-                Dirección
+                {copyDeEntrega(slug).label}
               </p>
               <p className="text-foreground mt-1.5 text-sm">
-                {detail.delivery_address}
+                {lugarDeEntrega(slug, detail.delivery_address)}
               </p>
               {detail.delivery_notes && (
                 <p className="text-muted-foreground mt-1 text-xs italic">

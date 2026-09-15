@@ -864,13 +864,14 @@ async function buildPrintableControlTickets(
   const { data: business } = await service
     .from("businesses")
     .select(
-      "name, address, phone, control_printer_ip, control_printer_port, control_printer_enabled",
+      "name, slug, address, phone, control_printer_ip, control_printer_port, control_printer_enabled",
     )
     .eq("id", businessId)
     .maybeSingle();
 
   const biz = business as {
     name: string;
+    slug: string;
     address: string | null;
     phone: string | null;
     control_printer_ip: string | null;
@@ -1021,6 +1022,7 @@ async function buildPrintableControlTickets(
     const data: ControlTicketData = {
       control_ticket_id: t.id,
       business_name: sanitizeTicketText(biz.name) ?? "—",
+      business_slug: biz.slug,
       business_address: sanitizeTicketText(biz.address),
       business_phone: sanitizeTicketText(biz.phone),
       daily_number: order.daily_number,

@@ -12,6 +12,7 @@
 // Referencia de formato: el «Control de Pedido» de MaxiRest del Restaurant del
 // Golf, que es lo que el local viene usando.
 
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import {
   COLS,
   COMPACT_SPACING,
@@ -60,6 +61,8 @@ export type ControlTicketData = {
   scheduled_at?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
+  /** El slug decide si el papel dice «Direccion» o «Lote» (#319). */
+  business_slug?: string | null;
   delivery_address?: string | null;
   delivery_notes?: string | null;
   subtotal_cents: number;
@@ -232,7 +235,10 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
     for (const l of wrap(`Cliente: ${c.customer_name}`, COLS.sm)) push(l);
   if (c.customer_phone) push(`Tel: ${c.customer_phone}`);
   if (isDelivery && c.delivery_address)
-    for (const l of wrap(`Direccion: ${c.delivery_address}`, COLS.sm))
+    for (const l of wrap(
+      `${copyDeEntrega(c.business_slug ?? "").labelTicket}: ${c.delivery_address}`,
+      COLS.sm,
+    ))
       push(l, { bold: true });
   if (c.delivery_notes)
     for (const l of wrap(`Obs: ${c.delivery_notes}`, COLS.sm))

@@ -45,6 +45,7 @@ import {
 import { ItemLibreModal } from "@/components/shared/item-libre-modal";
 import { confirmarPedido } from "@/lib/orders/confirm-order";
 import { horaLocal } from "@/lib/orders/entrega";
+import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import {
   DEFAULT_MARCH_LEAD_KITCHEN_MIN,
   localYmd,
@@ -197,6 +198,8 @@ export function CargarPedidoSheet({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  // Spec 194 — el telefonista pide lo mismo que la web: en kcc, el lote.
+  const entrega = copyDeEntrega(slug);
   const [deliveryNotes, setDeliveryNotes] = useState("");
   // Indicación para cocina: sale como «ENTREGAR x» arriba de la comanda. Es
   // otra cosa que las notas de arriba, que son del cliente y van al control.
@@ -522,7 +525,9 @@ export function CargarPedidoSheet({
     if (esProgramado && !hayHoras)
       return "Un encargue programado necesita las dos horas.";
     if (deliveryType === "delivery" && deliveryAddress.trim().length === 0)
-      return "El delivery necesita la dirección de entrega.";
+      return entrega.porLote
+        ? "El delivery necesita el número de lote."
+        : "El delivery necesita la dirección de entrega.";
     if (deliveryType === "delivery" && customerPhone.trim().length < 6)
       return "El delivery necesita el teléfono del cliente.";
     return null;
@@ -951,7 +956,9 @@ export function CargarPedidoSheet({
                     {deliveryType === "delivery" && (
                       <div>
                         <label className="text-xs font-semibold text-zinc-600">
-                          Dirección de entrega (requerida)
+                          {entrega.porLote
+                            ? "Nro de lote (requerido)"
+                            : "Dirección de entrega (requerida)"}
                         </label>
                         {clienteDirecciones.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1.5">
@@ -980,7 +987,7 @@ export function CargarPedidoSheet({
                           type="text"
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
-                          placeholder="Av. del Golf 123"
+                          placeholder={entrega.placeholder}
                           className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
                         {clienteDirecciones.length > 0 && (
