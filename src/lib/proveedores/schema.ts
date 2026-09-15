@@ -98,6 +98,27 @@ export const SupplierInvoiceEditInput = z.object({
 });
 export type SupplierInvoiceEditInput = z.infer<typeof SupplierInvoiceEditInput>;
 
+export const SUPPLIER_PAYMENT_METHODS = [
+  "cash",
+  "transfer",
+  "card_manual",
+  "other",
+] as const;
+
+/**
+ * Cómo se salda la compra — spec 187.
+ *
+ * **No es una columna de `supplier_invoices`** (187·D1): el saldo del proveedor
+ * se DERIVA de `Σ comprobantes vivos − Σ pagos vivos` (158·D3), así que una
+ * columna diciendo «contado» sería una segunda fuente para la misma pregunta —
+ * y se separarían el día que alguien anule el pago.
+ *
+ * `contado` es un atajo: escribe el mismo pago e imputación que escribiría el
+ * diálogo de pago, por el total, contra el comprobante recién creado.
+ */
+export const PAYMENT_CONDITIONS = ["cuenta_corriente", "contado"] as const;
+export type PaymentCondition = (typeof PAYMENT_CONDITIONS)[number];
+
 /**
  * Un renglón del comprobante — spec 165.
  *
@@ -165,6 +186,17 @@ export const SupplierInvoiceInput = z
      * Y NO se valida que Σ renglones = total: en 2026 sólo 585 de 1.502
      * comprobantes del Golf cuadran exacto.
      */
+    /**
+     * spec 187 · la condición de pago, que Rocío pidió «en la misma carga».
+     *
+     * `cuenta_corriente` es lo de siempre y sigue siendo el default: no cambia
+     * el comportamiento de nada que ya esté cargado ni de ningún otro caller.
+     * `contado` hace que el server registre el pago por el total después de
+     * crear el comprobante.
+     */
+    payment_condition: z.enum(PAYMENT_CONDITIONS).default("cuenta_corriente"),
+    /** Sólo se mira con `contado`. `cash` sale de la Caja Mayor (160). */
+    payment_method: z.enum(SUPPLIER_PAYMENT_METHODS).default("cash"),
     items: z.array(SupplierInvoiceItemInput).max(100).default([]),
   })
   // El signo lo manda el tipo (D4): la nota de crédito resta, todo lo demás
@@ -194,6 +226,17 @@ export const SupplierInvoiceInput = z
   .refine((v) => v.total_cents !== 0, {
     message: "Poné el importe del comprobante.",
     path: ["total_cents"],
+  })
+  /**
+   * La nota de crédito no se paga — spec 187·D6.
+   *
+   * Su total es negativo (D4 de la 158) y `SupplierPaymentInput` exige monto
+   * positivo: sin esta guarda el error aparecería recién adentro del Zod del
+   * pago, con el comprobante ya creado y un mensaje que habla de otra pantalla.
+   */
+  .refine((v) => v.payment_condition !== "contado" || v.total_cents > 0, {
+    message: "Una nota de crédito no se paga: resta del saldo.",
+    path: ["payment_condition"],
   });
 export type SupplierInvoiceInput = z.infer<typeof SupplierInvoiceInput>;
 
@@ -203,13 +246,6 @@ export const ExpenseConceptInput = z.object({
   is_active: z.boolean().default(true),
 });
 export type ExpenseConceptInput = z.infer<typeof ExpenseConceptInput>;
-
-export const SUPPLIER_PAYMENT_METHODS = [
-  "cash",
-  "transfer",
-  "card_manual",
-  "other",
-] as const;
 
 export const SupplierPaymentInput = z.object({
   supplier_id: z.string().uuid("Proveedor inválido."),

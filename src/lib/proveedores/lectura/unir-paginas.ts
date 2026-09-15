@@ -66,6 +66,19 @@ function vacio(valor: string | null | undefined): boolean {
   return valor === null || valor === undefined || valor.trim() === "";
 }
 
+/**
+ * El ÚLTIMO que aporte algo. Para lo que está impreso al pie —el total, la
+ * condición de pago— y no en el membrete: tomar el primero agarra el subtotal de
+ * la página 1 y lo muestra como el importe de la compra.
+ */
+function ultimoConDato<T extends string>(valores: (T | null)[]): T | null {
+  for (let i = valores.length - 1; i >= 0; i--) {
+    const v = valores[i];
+    if (v !== null && v !== undefined && !vacio(v)) return v;
+  }
+  return null;
+}
+
 /** El primero que aporte algo, en orden de página. */
 function primeroConDato<T extends string>(valores: (T | null)[]): T | null {
   for (const v of valores) {
@@ -161,6 +174,8 @@ export function unirPaginas(paginas: PaginaLeida[]): LecturaUnida {
       iTotal >= 0
         ? cabeceras[iTotal]!.origen_total
         : primeroConDato(cabeceras.map((c) => c.origen_total)),
+    // spec 187 · va con el total, al pie de la última página que lo traiga.
+    condicion_pago: ultimoConDato(cabeceras.map((c) => c.condicion_pago ?? null)),
   };
 
   const renglones: RenglonConPagina[] = [];

@@ -50,6 +50,18 @@ export const CabeceraModelo = z.object({
   fecha: z.string().nullable(),
   total: z.string().nullable(),
   origen_total: z.string().nullable(),
+  /**
+   * La condición de pago impresa, verbatim — spec 187.
+   *
+   * «CONTADO», «EFECTIVO», «CTA CTE», «CUENTA CORRIENTE 30 DÍAS». Sale del pie y
+   * hasta ayer se descartaba: estaba en la lista de «lo que no es un ítem» del
+   * prompt, que es cierto —no es un renglón— pero de ahí a tirarlo hay un paso
+   * que nadie dio a propósito. Es cabecera.
+   *
+   * Viaja como texto y la interpreta `condicionDePagoLeida`, que es pura: el
+   * modelo no decide si eso significa pagar de la Caja Mayor.
+   */
+  condicion_pago: z.string().nullable(),
 });
 
 export const LecturaModelo = z.object({

@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { getCajaAdministrativa } from "@/lib/caja/queries";
 import { requireMozoActionContext } from "@/lib/mozo/auth";
-import { canManageProveedores } from "@/lib/permissions/can";
+import { canMakeSangria, canManageProveedores } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { calcularVencimiento } from "./cuenta-corriente";
@@ -186,10 +187,19 @@ export async function crearProveedorDesdeLectura(
 // SUPPLIER INVOICES (FACTURAS DE COMPRA)
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Qué pasó con el pago al cargar la compra — spec 187.
+ *
+ * `pendiente` es el estado raro que la D3 decide NO tapar: el comprobante quedó
+ * bien y el pago no salió. Se nombra para que la pantalla lo pueda decir; un
+ * estado raro que se tapa es un bug.
+ */
+export type EstadoPagoCompra = "no_aplica" | "registrado" | "pendiente";
+
 export async function createSupplierInvoice(
   businessSlug: string,
   input: unknown,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; pago: EstadoPagoCompra }>> {
   const parsed = SupplierInvoiceInput.safeParse(input);
   if (!parsed.success) return actionError("Datos inválidos.");
 
@@ -206,13 +216,14 @@ export async function createSupplierInvoice(
   // exactamente la fricción que el módulo viene a sacar.
   const { data: supplier } = await service
     .from("suppliers")
-    .select("id, default_expense_concept_id, payment_terms_days")
+    .select("id, name, default_expense_concept_id, payment_terms_days")
     .eq("id", parsed.data.supplier_id)
     .eq("business_id", businessId)
     .maybeSingle();
 
   if (!supplier) return actionError("Proveedor no encontrado.");
   const prov = supplier as unknown as {
+    name: string;
     default_expense_concept_id: string | null;
     payment_terms_days: number | null;
   };
@@ -227,6 +238,36 @@ export async function createSupplierInvoice(
   // que ya hace `linkSupplierIngredients` con los insumos.
   if (!(await conceptoEsDelNegocio(service, businessId, conceptId))) {
     return actionError("El concepto de gasto no es de este negocio.");
+  }
+
+  /**
+   * Las guardas del contado corren ANTES de crear el comprobante — spec 187·D2.
+   *
+   * Las tres cosas que pueden decir que no al pago en efectivo —el permiso de
+   * sangría, que exista la Caja Mayor y que esté activa— son verificables sin
+   * escribir una fila. Chequearlas después dejaría la compra cargada y un «no»
+   * que habla de otra pantalla; chequearlas acá deja el formulario intacto y el
+   * arreglo a un click (cambiar el medio, o destildar contado).
+   */
+  const alContado = parsed.data.payment_condition === "contado";
+  let cajaAdminId: string | null = null;
+
+  if (alContado && parsed.data.payment_method === "cash") {
+    // Sacar plata del cajón no puede tener un techo más bajo por entrar desde la
+    // pantalla de carga que desde el diálogo de pago (187·D5).
+    if (!canMakeSangria(ctxResult.data.role) && !ctxResult.data.isPlatformAdmin) {
+      return actionError("Solo encargado o admin pueden sacar efectivo de la caja.");
+    }
+    const cajaAdmin = await getCajaAdministrativa(businessId);
+    if (!cajaAdmin) {
+      return actionError(
+        "Este negocio todavía no tiene Caja Mayor, así que no se puede pagar en efectivo. Cargala en cuenta corriente y avisale al equipo.",
+      );
+    }
+    if (!cajaAdmin.is_active) {
+      return actionError("La Caja Mayor está inactiva: no se puede pagar en efectivo.");
+    }
+    cajaAdminId = cajaAdmin.id;
   }
 
   const dueDate =
@@ -320,9 +361,59 @@ export async function createSupplierInvoice(
     }
   }
 
+  /**
+   * spec 187 · el contado, que es el pago del diálogo de pago sin el rodeo.
+   *
+   * Va DESPUÉS de los renglones a propósito: si los renglones fallan el
+   * comprobante ya se anuló solo (165·D3) y pagar un comprobante anulado es lo
+   * que la RPC rechaza con COMPROBANTE_NO_DISPONIBLE.
+   *
+   * `paid_at` es la fecha del comprobante —contado significa que la plata salió
+   * contra ese papel— y el movimiento de caja lo estampa la RPC con `now()`:
+   * son dos hechos distintos y la Caja Mayor se entera hoy (187·D4). Como el
+   * egreso va a la caja administrativa, que no corta nunca (160), cargar el
+   * remito del martes no puede descuadrar el arqueo del martes.
+   */
+  let pago: EstadoPagoCompra = "no_aplica";
+
+  if (alContado) {
+    const { data: rpcPago, error: pagoErr } = await service.rpc(
+      "registrar_pago_proveedor_tx",
+      {
+        p_business_id: businessId,
+        p_supplier_id: parsed.data.supplier_id,
+        p_amount_cents: parsed.data.total_cents,
+        p_method: parsed.data.payment_method,
+        p_paid_at: parsed.data.invoice_date,
+        p_notes: null,
+        p_created_by: ctxResult.data.userId,
+        p_caja_id: cajaAdminId,
+        p_caja_reason: `Pago a proveedor · ${prov.name}`,
+        p_imputaciones: [{ invoice_id: data.id, amount_cents: parsed.data.total_cents }],
+      },
+    );
+
+    const fila = (rpcPago as Array<{ payment_id: string }> | null)?.[0];
+    if (pagoErr || !fila) {
+      /**
+       * El comprobante NO se anula — spec 187·D3.
+       *
+       * Un comprobante sin pago es un estado válido: es la cuenta corriente,
+       * donde vivían todos hasta ayer. Anularlo además obligaría a revertir los
+       * renglones que ya entraron (stock adentro, costo pisado, histórico
+       * escrito): perder trabajo bueno para dejar la pantalla prolija.
+       */
+      console.error("createSupplierInvoice · pago al contado", pagoErr);
+      pago = "pendiente";
+    } else {
+      pago = "registrado";
+      revalidatePath(`/${businessSlug}/admin/caja/movimientos`);
+    }
+  }
+
   revalidatePath(`/${businessSlug}/admin/proveedores`);
   revalidatePath(`/${businessSlug}/admin/catalogo`);
-  return actionOk({ id: data.id });
+  return actionOk({ id: data.id, pago });
 }
 
 // ═══════════════════════════════════════════════════════════════════

@@ -75,7 +75,8 @@ NO devuelvas como renglón nada de esto:
   IIBB, TOTAL, TOTAL A PAGAR, SALDO, SU PAGO, VUELTO, SALDO PENDIENTE.
 · Pie fiscal: CAE, vencimiento del CAE, código de barras, QR, "Comprobante
   autorizado", régimen de transparencia fiscal.
-· Formas de pago: EFECTIVO, TRANSFERENCIA, CTA CTE, CHEQUE.
+· Formas de pago: EFECTIVO, TRANSFERENCIA, CTA CTE, CHEQUE. (No son renglones,
+  pero NO las tires: van en \`condicion_pago\` de la cabecera.)
 · Leyendas: "Original", "Duplicado", "No válido como factura", "Documento no
   fiscal", condiciones de venta, agradecimientos.
 · Firmas, sellos, aclaraciones, "recibí conforme".
@@ -153,6 +154,11 @@ LA CABECERA
   lo sumes vos.
 · \`fecha\`: como está escrita, sin convertir formato ni completar el año.
 · \`numero\`: como está impreso, con guiones y ceros.
+· \`condicion_pago\`: cómo se paga, como está impreso y nada más — "CONTADO",
+  "EFECTIVO", "CTA CTE", "CUENTA CORRIENTE", "30 DÍAS", "TRANSFERENCIA". Está al
+  pie o en un recuadro arriba, y a veces es una casilla tildada. Si no dice
+  nada: null. NO deduzcas la condición de que el comprobante sea remito o
+  factura — quien la interpreta es el código.
 
 ═══════════════════════════════════════════════════════════════════
 CONFIANZA

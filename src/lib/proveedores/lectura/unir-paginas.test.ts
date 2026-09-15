@@ -35,6 +35,7 @@ const CABECERA_VACIA: Cabecera = {
   fecha: null,
   total: null,
   origen_total: null,
+  condicion_pago: null,
 };
 
 function lectura({ cabecera, ...resto }: LecturaParcial = {}): LecturaModelo {
@@ -299,5 +300,29 @@ describe("unirPaginas · el solapamiento de la tira larga", () => {
     ]);
 
     expect(unida.renglones[1]!.posibleDuplicado).toBe(true);
+  });
+});
+
+/**
+ * spec 187 · la condición de pago está impresa al pie, igual que el total.
+ *
+ * Por eso no usa `primeroConDato`: en un ticket de tres fotos, la página 1 no
+ * dice nada de cómo se paga y la 3 sí. Tomar el primero daría siempre null.
+ */
+describe("unirPaginas · la condición de pago (spec 187)", () => {
+  it("sale de la última página que la traiga", () => {
+    const unida = unirPaginas([
+      ok(1, { cabecera: { proveedor_nombre: "Carnicería El Peludo" } }),
+      ok(2),
+      ok(3, { cabecera: { total: "2.474.280", condicion_pago: "CONTADO EFECTIVO" } }),
+    ]);
+
+    expect(unida.cabecera?.condicion_pago).toBe("CONTADO EFECTIVO");
+    expect(unida.cabecera?.proveedor_nombre).toBe("Carnicería El Peludo");
+  });
+
+  it("si ninguna página la trae, queda en null", () => {
+    const unida = unirPaginas([ok(1), ok(2)]);
+    expect(unida.cabecera?.condicion_pago).toBeNull();
   });
 });

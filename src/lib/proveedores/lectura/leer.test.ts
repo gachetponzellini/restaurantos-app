@@ -61,6 +61,7 @@ const LECTURA_OK = {
     fecha: null,
     total: null,
     origen_total: null,
+    condicion_pago: null,
   },
   renglones: [],
 };

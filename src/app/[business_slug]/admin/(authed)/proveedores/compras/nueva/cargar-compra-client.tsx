@@ -25,11 +25,13 @@ import { createSupplierInvoice, crearProveedorDesdeLectura } from "@/lib/proveed
 import { aprenderAliases } from "@/lib/proveedores/actions-client";
 import { calcularVencimiento, etiquetaTipo } from "@/lib/proveedores/cuenta-corriente";
 import { hoyAR } from "@/lib/proveedores/fechas-ar";
+import { condicionDePagoLeida } from "@/lib/proveedores/lectura/condicion-pago";
 import { parseFechaAR } from "@/lib/proveedores/lectura/fecha-ar";
 import { parseNumeroAR } from "@/lib/proveedores/lectura/numeros-ar";
 import {
   DOCUMENT_TYPES,
   RUBRO_LABELS,
+  SUPPLIER_PAYMENT_METHODS,
   SupplierInvoiceInput,
   type ExpenseRubro,
   type SupplierInvoiceItemInput,
@@ -111,6 +113,8 @@ type CabeceraLeida = {
   fecha: string | null;
   total: string | null;
   origen_total: string | null;
+  /** spec 187 · lo que dice el pie sobre cómo se paga, verbatim. */
+  condicion_pago?: string | null;
 };
 
 type RespuestaLectura = {
@@ -131,6 +135,14 @@ type RespuestaLectura = {
 };
 
 /** El sello de «esto lo llenó la máquina». Discreto: informa, no grita. */
+/** Los mismos nombres que el diálogo de pago: es la misma operación. */
+const METODOS: Record<(typeof SUPPLIER_PAYMENT_METHODS)[number], string> = {
+  cash: "Efectivo",
+  transfer: "Transferencia",
+  card_manual: "Tarjeta",
+  other: "Otro",
+};
+
 function Autollenado({ origen }: { origen: Origen }) {
   return (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-400">
@@ -225,6 +237,10 @@ export function CargarCompraClient({
       document_type: "interno",
       expense_concept_id: fijado?.defaultExpenseConceptId ?? null,
       due_date: calcularVencimiento(today, fijado?.paymentTermsDays ?? 0),
+      // spec 187 · el default no cambia: la compra nace debiendo salvo que
+      // alguien diga lo contrario. Lo que cambia es que decirlo son dos clicks.
+      payment_condition: "cuenta_corriente",
+      payment_method: "cash",
     },
   });
 
@@ -498,6 +514,22 @@ export function CargarCompraClient({
       // por si contesta el endpoint viejo, que no manda el campo.
       const fechaAR = data.fechaISO ?? parseFechaAR(cab.fecha);
       if (fechaAR) escribirSiLibre("invoice_date", fechaAR, "foto");
+
+      /**
+       * spec 187 · la condición de pago del pie.
+       *
+       * `condicionDePagoLeida` devuelve null cuando el texto no habla de pago:
+       * ahí no se escribe nada y no aparece el chip de «lo llenó la foto». Y
+       * `contado` sobre una nota de crédito no puede entrar —el Zod lo prohíbe
+       * (187·D6)—, así que se mira el tipo que quedó puesto, no el leído.
+       */
+      const cond = condicionDePagoLeida(cab.condicion_pago);
+      const tipoPuesto = form.getValues("document_type") as TipoComprobante;
+      if (cond && tipoPuesto !== "nota_credito") {
+        if (escribirSiLibre("payment_condition", cond.condicion, "foto")) {
+          escribirSiLibre("payment_method", cond.metodo, "foto");
+        }
+      }
     }
 
     setLeido(data.renglones ?? []);
@@ -594,11 +626,32 @@ export function CargarCompraClient({
       if (aprender.length > 0 && values.supplier_id) {
         aprenderAliases(businessId, values.supplier_id, aprender).catch(() => {});
       }
-      toast.success(
+      const conInsumos =
         items.length > 0
           ? `Compra cargada con ${items.length} ${items.length === 1 ? "insumo" : "insumos"}. Subió el stock y se actualizó el costo.`
-          : "Compra cargada. Podés cargar la próxima.",
-      );
+          : "Compra cargada. Podés cargar la próxima.";
+
+      /**
+       * spec 187·D3 · el estado raro se nombra.
+       *
+       * El comprobante quedó bien y el pago no salió: es un estado válido —es la
+       * cuenta corriente— pero la persona eligió «pagado» y tiene que saber que
+       * no quedó pagado, y dónde terminarlo.
+       */
+      if (result.data?.pago === "pendiente") {
+        toast.warning(
+          "La compra quedó cargada, pero el pago no se pudo registrar. Quedó en la cuenta corriente: pagala desde la ficha del proveedor.",
+          { duration: 10_000 },
+        );
+      } else if (result.data?.pago === "registrado") {
+        toast.success(
+          values.payment_method === "cash"
+            ? `${conInsumos} El pago salió de la Caja Mayor.`
+            : `${conInsumos} Quedó pagada.`,
+        );
+      } else {
+        toast.success(conInsumos);
+      }
 
       // Se queda en la pantalla con el formulario limpio: las compras se cargan
       // de a pila —el atado de remitos del día—, y volver a la lista para
@@ -964,6 +1017,15 @@ export function CargarCompraClient({
                             } else if (nuevo !== "nota_credito" && actual < 0) {
                               form.setValue("total_cents", -actual, { shouldValidate: true });
                             }
+                            // spec 187·D6 · la nota de crédito no se paga. Sin
+                            // esto el control desaparece con «Ya la pagué»
+                            // adentro y el Zod frena el submit por un campo que
+                            // ya no se ve.
+                            if (nuevo === "nota_credito") {
+                              form.setValue("payment_condition", "cuenta_corriente", {
+                                shouldValidate: true,
+                              });
+                            }
                           }}
                         >
                           {DOCUMENT_TYPES.map((t) => (
@@ -1005,6 +1067,93 @@ export function CargarCompraClient({
                   )}
                 />
               </div>
+
+              {/* ── La condición de pago — spec 187 ──────────────────────
+                  «En la misma carga debería estar la opción de pago: efectivo o
+                  cta cte» (Rocío, 2026-09-15). Va acá abajo, después del
+                  vencimiento, porque es la misma pregunta: cuándo se paga esto.
+                  En la nota de crédito no aparece: no se paga, resta (D6). */}
+              {tipo !== "nota_credito" && (
+                <FormField
+                  control={form.control}
+                  name="payment_condition"
+                  render={({ field }) => {
+                    const contado = field.value === "contado";
+                    return (
+                      <FormItem>
+                        <div className="flex items-center gap-2">
+                          <FormLabel>Cómo se paga</FormLabel>
+                          {autollenados.payment_condition && (
+                            <Autollenado origen={autollenados.payment_condition} />
+                          )}
+                        </div>
+                        <FormControl>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+                              {(
+                                [
+                                  ["cuenta_corriente", "Cuenta corriente"],
+                                  ["contado", "Ya la pagué"],
+                                ] as const
+                              ).map(([valor, texto]) => (
+                                <button
+                                  key={valor}
+                                  type="button"
+                                  onClick={() => {
+                                    marcarTocado("payment_condition");
+                                    field.onChange(valor);
+                                  }}
+                                  className={cn(
+                                    "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                                    field.value === valor
+                                      ? "bg-white text-zinc-900 shadow-sm"
+                                      : "text-zinc-500 hover:text-zinc-900",
+                                  )}
+                                >
+                                  {texto}
+                                </button>
+                              ))}
+                            </div>
+
+                            {contado && (
+                              <select
+                                className="h-9 rounded-lg border border-zinc-200 bg-white px-2 text-sm"
+                                value={(form.watch("payment_method") as string) ?? "cash"}
+                                onChange={(e) => {
+                                  marcarTocado("payment_method");
+                                  form.setValue(
+                                    "payment_method",
+                                    e.target.value as (typeof SUPPLIER_PAYMENT_METHODS)[number],
+                                    { shouldDirty: true },
+                                  );
+                                }}
+                                aria-label="Medio de pago"
+                              >
+                                {SUPPLIER_PAYMENT_METHODS.map((m) => (
+                                  <option key={m} value={m}>
+                                    {METODOS[m]}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                        {/* De dónde sale la plata, dicho antes de apretar y no
+                            después: el egreso va a la Caja Mayor y no al cajón
+                            del turno, así que no descuadra ningún arqueo (160). */}
+                        <p className="text-xs text-zinc-500">
+                          {!contado
+                            ? "Queda como deuda en la cuenta corriente del proveedor."
+                            : form.watch("payment_method") === "cash"
+                              ? "Sale de la Caja Mayor y queda como sangría en el libro."
+                              : "Se registra el pago, sin movimiento de caja."}
+                        </p>
+                      </FormItem>
+                    );
+                  }}
+                />
+              )}
 
               {/* El número sólo cuando hay comprobante que numerar. */}
               {conNumero && (
