@@ -23,6 +23,10 @@ export function Numpad({
             key={key}
             type="button"
             disabled={disabled}
+            // El numpad no se queda con el foco: quien lo tiene es el diálogo,
+            // que es el que escucha el teclado. Si no, después de tocar un
+            // dígito con el dedo, el Enter del teclado repetía esa misma tecla.
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (isDelete ? onDelete() : onDigit(key))}
             className={cn(
               "flex h-20 w-20 items-center justify-center rounded-2xl text-3xl font-semibold transition-all active:scale-95 disabled:opacity-40",

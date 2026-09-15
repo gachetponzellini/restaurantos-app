@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock, Fingerprint, LogOut, UserX, X } from "lucide-react";
 
 import {
@@ -47,6 +47,7 @@ export function FichajeTab({
   const absent = todaySummary?.absent ?? [];
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pin, setPin] = useState("");
+  const popupRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<FeedbackState>({ status: "idle" });
 
   // Los presentes vuelven a seedearse cuando el server manda datos nuevos (el
@@ -84,6 +85,25 @@ export function FichajeTab({
     if (feedback.status !== "idle") setFeedback({ status: "idle" });
     setPin((prev) => prev.slice(0, -1));
   }, [feedback.status]);
+
+  // El PIN se tipea, igual que en el kiosco de `/fichar`: abrís el diálogo y
+  // escribís. El foco vive en el popup —no en un input— así que no se abre el
+  // teclado en pantalla de la tablet, que ya tiene el numpad abajo, y las
+  // teclas siguen llegando acá aunque el foco ande por otro lado del diálogo.
+  // `e.key` es el dígito tanto en la fila de arriba como en el pad numérico.
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        handleDelete();
+      } else if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        handleDigit(e.key);
+      }
+    },
+    [handleDigit, handleDelete],
+  );
 
   useEffect(() => {
     if (pin.length < 4) return;
@@ -224,7 +244,13 @@ export function FichajeTab({
       >
         <DialogContent
           showCloseButton={false}
-          className="max-w-sm rounded-3xl bg-zinc-950 p-8 text-white shadow-2xl ring-0"
+          ref={popupRef}
+          // Sin esto el foco arranca en la ✕ —el primer focuseable del
+          // diálogo— y el teclado no escribe nada.
+          initialFocus={popupRef}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          className="max-w-sm rounded-3xl bg-zinc-950 p-8 text-white shadow-2xl ring-0 outline-none"
         >
           <DialogTitle className="sr-only">Marcar asistencia</DialogTitle>
           <button
@@ -244,7 +270,11 @@ export function FichajeTab({
               </span>
             </div>
 
-            <PinDisplay length={pin.length} size="md" />
+            <PinDisplay
+              length={pin.length}
+              size="md"
+              active={feedback.status !== "loading"}
+            />
 
             <div className="h-16 w-full">
               <ClockFeedback feedback={feedback} size="md" />
