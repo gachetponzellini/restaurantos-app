@@ -6,25 +6,34 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { updateTerminalPrinter } from "@/lib/admin/members-actions";
+import { updateControlPrinter } from "@/lib/admin/members-actions";
 
 /**
- * La comandera de control de una terminal (spec 181 · D2).
+ * La comandera de control de un puesto (spec 181 · D2, generalizada en la
+ * 186 · D1).
  *
- * Aparece sólo en las filas con rol `terminal`: es un puesto, no una persona.
- * El control de lo que se manda desde esa compu sale por acá. Vacío = la del
- * negocio. Admite IP o `local:NOMBRE` — la impresora USB enchufada a esa
- * compu, atendida por el agente instalado ahí (D3).
+ * Aparece en las filas que pueden emitir un control —terminal, encargado,
+ * admin—: el control de lo que se manda desde ese puesto sale por acá. Vacío =
+ * la del negocio, que es el caso de casi todos. Admite IP o `local:NOMBRE`: la
+ * impresora USB enchufada a esa compu, atendida por el agente instalado ahí.
+ *
+ * Ojo con lo que significa ponerla en una persona (186 · D1): el papel sigue a
+ * la **cuenta**, no a la máquina. Es lo que se quiere cuando esa cuenta atiende
+ * siempre el mismo puesto —la segunda caja de KCC— y es justo lo que no se
+ * quiere cuando el encargado rota: ahí se deja vacío.
  */
-export function TerminalPrinterField({
+export function ControlPrinterField({
   slug,
   userId,
+  esTerminal,
   initialIp,
   initialPort,
   editable,
 }: {
   slug: string;
   userId: string;
+  /** Sólo para el texto: una terminal es una compu, un encargado es un puesto. */
+  esTerminal: boolean;
   initialIp: string | null;
   initialPort: number | null;
   editable: boolean;
@@ -36,7 +45,7 @@ export function TerminalPrinterField({
 
   const guardar = () =>
     startTransition(async () => {
-      const r = await updateTerminalPrinter({
+      const r = await updateControlPrinter({
         business_slug: slug,
         user_id: userId,
         control_printer_ip: ip.trim() || null,
@@ -46,10 +55,11 @@ export function TerminalPrinterField({
         toast.error(r.error);
         return;
       }
+      const quien = esTerminal ? "esta terminal" : "este puesto";
       toast.success(
         ip.trim()
-          ? `Los controles de esta terminal salen por ${ip.trim()}.`
-          : "Esta terminal usa la comandera de control del negocio.",
+          ? `Los controles de ${quien} salen por ${ip.trim()}.`
+          : `${esTerminal ? "Esta terminal" : "Este puesto"} usa la comandera de control del negocio.`,
       );
     });
 
@@ -60,7 +70,9 @@ export function TerminalPrinterField({
         className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900"
       >
         <Printer className="size-3.5" />
-        Comandera de control de esta terminal
+        {esTerminal
+          ? "Comandera de control de esta terminal"
+          : "Comandera de control de este puesto"}
       </label>
       <div className="mt-2 flex items-center gap-2">
         <Input
@@ -78,9 +90,11 @@ export function TerminalPrinterField({
         )}
       </div>
       <p className="mt-1.5 text-xs text-zinc-500">
-        El control de lo que se manda desde esta compu sale por acá.{" "}
+        {esTerminal
+          ? "El control de lo que se manda desde esta compu sale por acá. "
+          : "El control de lo que esta persona manda sale por acá, esté donde esté. "}
         {esLocal
-          ? "«local:» es una impresora USB de esta compu: la atiende el agente instalado en ella, con ese nombre en su alcance."
+          ? "«local:» es una impresora USB: la atiende el agente instalado en esa misma compu, con ese nombre en su alcance."
           : "Con una USB, poné local: y el nombre de la impresora en Windows."}
       </p>
     </div>

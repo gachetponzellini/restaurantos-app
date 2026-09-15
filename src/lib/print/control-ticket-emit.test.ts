@@ -68,7 +68,16 @@ describe("emitControlTicket", () => {
       order_id: "o1",
       business_id: "biz1",
       kind: "control",
+      // Spec 186 · D2 — el ruteo no tiene persona detrás (a veces es el cron),
+      // así que el control de delivery sigue yendo a la del negocio.
+      requested_by: null,
     });
+  });
+
+  it("con un pedidor, el papel queda estampado a su nombre (spec 186 · D2)", async () => {
+    const res = await emitControlTicket(fakeService(), "o1", "biz1", "sofia");
+    expect(res).toEqual({ emitted: true, failed: false });
+    expect(inserts[0]).toMatchObject({ requested_by: "sofia" });
   });
 
   it("emite para retiro", async () => {

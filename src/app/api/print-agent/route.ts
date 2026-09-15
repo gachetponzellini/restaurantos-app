@@ -36,7 +36,6 @@ import { alcanzaLaImpresora } from "@/lib/print/agent-scope";
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
 import {
   ACTIVIDAD_RECIENTE_MS,
-  POLL_CERRADO_MS,
   POLL_RAPIDO_MS,
   PROBE_MS,
   proximoPollMs,
@@ -143,7 +142,7 @@ export async function GET(req: Request) {
   // «conectado» mientras el agente de verdad está caído.
   const late = url.searchParams.get("beat") !== "0";
 
-  const [trabajos, latido, imprimiendo] = await Promise.all([
+  const [trabajos, latido] = await Promise.all([
     buildTrabajos(service, businessId, agente, stationId),
     late
       ? registrarLatido(service, {
@@ -152,20 +151,10 @@ export async function GET(req: Request) {
           version: req.headers.get("x-agent-version"),
         })
       : Promise.resolve({ error: null }),
-    isPrintingEnabled(service, businessId),
   ]);
   if (latido.error) console.error("print-agent GET · latido", latido.error);
   if (trabajos === null) {
     return NextResponse.json({ error: "query failed" }, { status: 500 });
-  }
-
-  // ── Interruptor maestro (spec 185) ────────────────────────────────────────
-  // El latido de arriba YA se registró: el agente sigue pidiendo, así que el
-  // panel no tiene por qué decirlo «sin conexión» por una decisión explícita
-  // del encargado. Se corta antes de la retención (spec 183 · D5) — sondear la
-  // cola 25 s no tiene sentido si la respuesta ya se sabe de antemano.
-  if (!imprimiendo) {
-    return NextResponse.json({ comandas: [], next_poll_ms: POLL_CERRADO_MS });
   }
 
   // ── Retención (spec 183 · D5) ─────────────────────────────────────────────
@@ -398,23 +387,26 @@ async function hayTrabajoNuevo(
 }
 
 /**
- * El interruptor maestro del negocio (spec 185). `businesses.printing_enabled`
- * en `false` apaga las seis familias de papel de una — es un OR por encima de
- * `stations.printer_enabled` y compañía, no un reemplazo. Fail-open como el
+ * El interruptor de comandas de cocina del negocio (spec 185).
+ * `businesses.comandas_printer_enabled` en `false` apaga las comandas de TODOS
+ * los sectores de una — es un OR por encima de `stations.printer_enabled`, no
+ * un reemplazo. No toca control/cuenta/factura/cierre/rendición: esas
+ * familias siguen su propio switch, sin enterarse de este. Fail-open como el
  * resto de los switches de impresión (`control_printer_enabled !== false`):
  * un negocio sin fila, o la query caída, imprime igual.
  */
-async function isPrintingEnabled(
+async function isComandaPrintingEnabled(
   service: ReturnType<typeof createSupabaseServiceClient>,
   businessId: string,
 ): Promise<boolean> {
   const { data } = await service
     .from("businesses")
-    .select("printing_enabled")
+    .select("comandas_printer_enabled")
     .eq("id", businessId)
     .maybeSingle();
   return (
-    (data as { printing_enabled?: boolean } | null)?.printing_enabled !== false
+    (data as { comandas_printer_enabled?: boolean } | null)
+      ?.comandas_printer_enabled !== false
   );
 }
 
@@ -931,10 +923,14 @@ async function buildPrintableControlTickets(
     return [];
   }
 
-  // Spec 181 · D4 — quién pidió cada papel. Si fue una terminal con impresora
-  // propia (la USB de esa compu), sale por la suya; si no, por la del negocio.
-  // Sólo el rol `terminal`: es un puesto, no una persona — la impresora
-  // configurada en un encargado no significa nada.
+  // Spec 181 · D4 — quién pidió cada papel. Si quien lo pidió tiene impresora
+  // propia (la USB de su compu), sale por la suya; si no, por la del negocio.
+  //
+  // Spec 186 · D3 — acá ya no se mira el rol. La 181 aceptaba sólo `terminal`
+  // («es un puesto, no una persona»), y eso dejaba sin papel propio a la
+  // segunda caja de KCC, que la atiende la encargada con su cuenta. Quién puede
+  // tener impresora se decide **al guardarla** (`updateControlPrinter`), no al
+  // imprimir: una regla, un solo lugar.
   const pedidores = [
     ...new Set(
       (tickets ?? [])
@@ -942,22 +938,21 @@ async function buildPrintableControlTickets(
         .filter((u): u is string => Boolean(u)),
     ),
   ];
-  const impresoraDeTerminal = new Map<string, { ip: string; port: number }>();
+  const impresoraDelPedidor = new Map<string, { ip: string; port: number }>();
   if (pedidores.length > 0) {
-    const { data: terminales } = await service
+    const { data: miembros } = await service
       .from("business_users")
-      .select("user_id, role, control_printer_ip, control_printer_port")
+      .select("user_id, control_printer_ip, control_printer_port")
       .eq("business_id", businessId)
       .in("user_id", pedidores);
-    for (const u of (terminales ?? []) as {
+    for (const u of (miembros ?? []) as {
       user_id: string;
-      role: string;
       control_printer_ip: string | null;
       control_printer_port: number | null;
     }[]) {
       const ip = u.control_printer_ip?.trim();
-      if (u.role === "terminal" && ip) {
-        impresoraDeTerminal.set(u.user_id, {
+      if (ip) {
+        impresoraDelPedidor.set(u.user_id, {
           ip,
           port: u.control_printer_port ?? 9100,
         });
@@ -970,7 +965,7 @@ async function buildPrintableControlTickets(
     const pedidor =
       (t as { requested_by?: string | null }).requested_by ?? null;
     const printer =
-      (pedidor ? impresoraDeTerminal.get(pedidor) : undefined) ??
+      (pedidor ? impresoraDelPedidor.get(pedidor) : undefined) ??
       controlDelNegocio;
     // Sin destino no se entrega: queda pendiente para cuando lo configuren.
     if (!printer) continue;

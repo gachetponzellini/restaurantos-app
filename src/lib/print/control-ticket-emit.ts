@@ -47,6 +47,17 @@ export async function emitControlTicket(
   service: SupabaseClient,
   orderId: string,
   businessId: string,
+  /**
+   * Quién causó el papel (spec 186 · D2). Con valor, el control sale por la
+   * comandera de esa cuenta si tiene una; sin valor, por la del negocio.
+   *
+   * Hoy **ningún caller lo pasa**, y es a propósito: los controles de
+   * delivery/pickup nacen del ruteo —a veces desde el cron de marcha
+   * programada, donde no hay persona— y el local ya los espera en la impresora
+   * del negocio. El que va a usarlo es el control de mesa (el F3), que sí nace
+   * de alguien apretando una tecla.
+   */
+  requestedBy?: string | null,
 ): Promise<ControlTicketResult> {
   const { data: order } = await service
     .from("orders")
@@ -74,9 +85,12 @@ export async function emitControlTicket(
     .eq("kind", "control");
   if ((count ?? 0) > 0) return { emitted: false, failed: false };
 
-  const { error } = await service
-    .from("print_jobs")
-    .insert({ order_id: orderId, business_id: businessId, kind: "control" });
+  const { error } = await service.from("print_jobs").insert({
+    order_id: orderId,
+    business_id: businessId,
+    kind: "control",
+    requested_by: requestedBy ?? null,
+  });
 
   if (error) {
     // 23505 = unique_violation contra `print_jobs_control_uniq`: entre el

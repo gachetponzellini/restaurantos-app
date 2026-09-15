@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { RolePicker } from "@/components/admin/users/role-picker";
-import { TerminalPrinterField } from "@/components/admin/users/terminal-printer-field";
+import { ControlPrinterField } from "@/components/admin/users/control-printer-field";
 import {
   generateAccessLink,
   type AccessLinkPayload,
@@ -24,6 +24,12 @@ import {
 } from "@/lib/admin/members-actions";
 import type { BusinessMember } from "@/lib/admin/members-query";
 import { cn } from "@/lib/utils";
+
+const PUEDE_TENER_IMPRESORA = new Set<BusinessMember["role"]>([
+  "admin",
+  "encargado",
+  "terminal",
+]);
 
 export function UserRow({
   slug,
@@ -262,11 +268,14 @@ export function UserRow({
         </div>
       </div>
 
-      {/* Spec 181 — sólo la terminal tiene impresora: es un puesto. */}
-      {member.role === "terminal" && !isDisabled && (
-        <TerminalPrinterField
+      {/* Spec 186 — la impresora de control es de quien puede emitir uno: la
+          terminal (una compu) y también el encargado o el admin que atiende un
+          puesto fijo, como la segunda caja de KCC. */}
+      {PUEDE_TENER_IMPRESORA.has(member.role) && !isDisabled && (
+        <ControlPrinterField
           slug={slug}
           userId={member.user_id}
+          esTerminal={member.role === "terminal"}
           initialIp={member.control_printer_ip}
           initialPort={member.control_printer_port}
           editable={canManage}

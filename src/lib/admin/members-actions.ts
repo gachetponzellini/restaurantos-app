@@ -37,7 +37,10 @@ const PinSchema = z
   .trim()
   .optional()
   .transform((v) => (v === "" ? undefined : v))
-  .refine((v) => !v || /^\d{4}$/.test(v), "El PIN debe ser de 4 dígitos numéricos.");
+  .refine(
+    (v) => !v || /^\d{4}$/.test(v),
+    "El PIN debe ser de 4 dígitos numéricos.",
+  );
 
 const InviteInput = z.object({
   business_slug: z.string().min(1),
@@ -58,7 +61,11 @@ export type InvitePayload = {
 const CreateWithPasswordInput = z.object({
   business_slug: z.string().min(1),
   email: z.string().email("Email inválido.").optional(),
-  password: z.string().min(8, "Contraseña muy corta (mínimo 8).").max(72).optional(),
+  password: z
+    .string()
+    .min(8, "Contraseña muy corta (mínimo 8).")
+    .max(72)
+    .optional(),
   role: z.enum(BUSINESS_ROLES),
   full_name: FullNameSchema,
   phone: PhoneSchema,
@@ -431,9 +438,7 @@ export async function createBusinessMemberWithPassword(
 ): Promise<ActionResult<CreateMemberPayload>> {
   const parsed = CreateWithPasswordInput.safeParse(input);
   if (!parsed.success) {
-    return actionError(
-      parsed.error.issues[0]?.message ?? "Datos inválidos.",
-    );
+    return actionError(parsed.error.issues[0]?.message ?? "Datos inválidos.");
   }
   const { business_slug, role, full_name, phone, pin } = parsed.data;
   let { email, password } = parsed.data;
@@ -444,7 +449,8 @@ export async function createBusinessMemberWithPassword(
   const service = svc();
 
   if (role === "personal") {
-    if (!pin) return actionError("El rol Personal requiere un PIN de 4 dígitos.");
+    if (!pin)
+      return actionError("El rol Personal requiere un PIN de 4 dígitos.");
     email = `personal-${pin}@${business_slug}.internal`;
     password = crypto.randomUUID().slice(0, 16);
   } else {
@@ -533,10 +539,7 @@ export async function createBusinessMemberWithPassword(
 
   const { error: userUpsertErr } = await service
     .from("users")
-    .upsert(
-      { id: userId, email: email! },
-      { onConflict: "id" },
-    );
+    .upsert({ id: userId, email: email! }, { onConflict: "id" });
   if (userUpsertErr) {
     console.error("users upsert", userUpsertErr);
     return actionError("No pudimos registrar el usuario.");
@@ -685,7 +688,17 @@ export async function updateMemberProfile(
  * lo que se manda desde esa compu sale por acá. `null` = la del negocio. El
  * destino admite IP o `local:NOMBRE` (la USB de esa compu, D3).
  */
-export async function updateTerminalPrinter(
+/**
+ * Quién puede tener comandera de control propia (spec 186 · D1).
+ *
+ * La 181 lo limitó al rol `terminal` —«es un puesto, no una persona»— y en KCC
+ * eso se cayó: la segunda caja la atiende la encargada con su cuenta. El mozo y
+ * el personal siguen afuera: no emiten controles, y el campo en la fila de cada
+ * mozo sería ruido con forma de opción.
+ */
+const ROLES_CON_IMPRESORA_DE_CONTROL = ["admin", "encargado", "terminal"];
+
+export async function updateControlPrinter(
   input: unknown,
 ): Promise<ActionResult<null>> {
   const parsed = z
@@ -720,8 +733,12 @@ export async function updateTerminalPrinter(
     .eq("user_id", user_id)
     .maybeSingle();
   if (!member) return actionError("Miembro no encontrado.");
-  if ((member as { role: string }).role !== "terminal") {
-    return actionError("La impresora de control es de una terminal, no de una persona.");
+  if (
+    !ROLES_CON_IMPRESORA_DE_CONTROL.includes((member as { role: string }).role)
+  ) {
+    return actionError(
+      "Sólo una terminal, un encargado o un admin pueden tener comandera de control propia.",
+    );
   }
 
   const { error } = await service
@@ -733,7 +750,7 @@ export async function updateTerminalPrinter(
     .eq("business_id", guard.businessId)
     .eq("user_id", user_id);
   if (error) {
-    console.error("updateTerminalPrinter", error);
+    console.error("updateControlPrinter", error);
     return actionError("No pudimos guardar la impresora.");
   }
 

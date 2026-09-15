@@ -333,13 +333,33 @@ describe("GET · controles de pedido", () => {
     expect(body.comandas.map((c: Row) => c.comanda_id)).toEqual(["ct2"]);
   });
 
-  it("la impresora de una persona (no terminal) no se usa: no es un puesto", async () => {
+  // Spec 186 · D3 — hasta acá esta prueba decía lo contrario: «la impresora de
+  // una persona no se usa, no es un puesto». Se dio vuelta con la segunda caja
+  // de KCC, que la atiende la encargada con su cuenta. Quién puede tener
+  // impresora se decide al guardarla, no al imprimir.
+  it("la impresora de un encargado SÍ se usa: es el puesto de la segunda caja", async () => {
+    agentScope = ["local:CAJA2"];
     controlRows = [ticket({ requested_by: "sofia" })];
     businessUsersRows = [
       {
         user_id: "sofia",
         role: "encargado",
-        control_printer_ip: "local:X",
+        control_printer_ip: "local:CAJA2",
+        control_printer_port: null,
+      },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas).toHaveLength(1);
+    expect(body.comandas[0].printer_ip).toBe("local:CAJA2");
+  });
+
+  it("un encargado sin impresora propia cae a la del negocio, como siempre", async () => {
+    controlRows = [ticket({ requested_by: "sofia" })];
+    businessUsersRows = [
+      {
+        user_id: "sofia",
+        role: "encargado",
+        control_printer_ip: null,
         control_printer_port: null,
       },
     ];
