@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { ProductDialog } from "@/components/admin/catalog/product-dialog";
 import { ProductRow } from "@/components/admin/catalog/product-row";
 import { useStickyFilter } from "@/lib/ui/use-sticky-filter";
 import type {
@@ -12,6 +13,7 @@ import type {
   AdminProduct,
   AdminStation,
 } from "@/lib/admin/catalog-query";
+import type { IngredientOverview } from "@/lib/ingredients/types";
 
 const ALL = "all";
 const UNCATEGORIZED = "__uncat__";
@@ -37,12 +39,14 @@ export function CatalogClient({
   categories,
   stations,
   products,
+  ingredients,
 }: {
   slug: string;
   businessId: string;
   categories: AdminCategory[];
   stations: AdminStation[];
   products: AdminProduct[];
+  ingredients: IngredientOverview[];
 }) {
   const hasUncategorized = products.some((p) => !p.category_id);
   const hasSinSector = products.some((p) => !p.station_id);
@@ -85,6 +89,24 @@ export function CatalogClient({
   // La búsqueda NO se persiste (FR-008): una búsqueda guardada de ayer que hoy
   // deja la lista en cero se lee como "se me borró el catálogo".
   const [search, setSearch] = useState("");
+
+  // Edición en modal. Guardamos el id, no el producto: cuando el modal guarda y
+  // dispara `router.refresh()`, la lista llega nueva y el modal tiene que
+  // mostrar ESA fila, no la copia con la que se abrió.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId
+    ? (products.find((p) => p.id === editingId) ?? null)
+    : null;
+
+  // Insumos para el buscador de la receta: ya vienen con el catálogo, no hace
+  // falta pedirlos de nuevo al abrir.
+  const ingredientOptions = useMemo(
+    () =>
+      ingredients
+        .filter((i) => i.isActive)
+        .map((i) => ({ id: i.id, name: i.name, unit: i.unit })),
+    [ingredients],
+  );
 
   const filteredProducts = useMemo(() => {
     let result = products;
@@ -235,10 +257,31 @@ export function CatalogClient({
           </li>
         ) : (
           filteredProducts.map((p) => (
-            <ProductRow key={p.id} slug={slug} product={p} />
+            <ProductRow
+              key={p.id}
+              slug={slug}
+              product={p}
+              onEdit={() => setEditingId(p.id)}
+            />
           ))
         )}
       </ul>
+
+      {editing && (
+        <ProductDialog
+          key={editing.id}
+          slug={slug}
+          businessId={businessId}
+          categories={categories}
+          stations={stations}
+          product={editing}
+          ingredientOptions={ingredientOptions}
+          open
+          onOpenChange={(o) => {
+            if (!o) setEditingId(null);
+          }}
+        />
+      )}
     </>
   );
 }

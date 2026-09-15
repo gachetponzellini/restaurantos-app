@@ -228,6 +228,7 @@ function TabsInner({
             categories={categories}
             stations={stations}
             products={products}
+            ingredients={ingredients}
           />
         )}
         {active === "categorias" && (

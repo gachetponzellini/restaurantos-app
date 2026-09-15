@@ -45,6 +45,7 @@ export function ProductForm({
   onCancel,
   hideActions = false,
   formId,
+  onSubmittingChange,
 }: {
   slug: string;
   businessId: string;
@@ -55,9 +56,19 @@ export function ProductForm({
   onCancel?: () => void;
   hideActions?: boolean;
   formId?: string;
+  /**
+   * Avisa cuándo está guardando. Lo usa el modal del catálogo, que renderiza el
+   * botón «Guardar» afuera del form (en el footer fijo) y necesita bloquearlo.
+   */
+  onSubmittingChange?: (submitting: boolean) => void;
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+
+  const markSubmitting = (value: boolean) => {
+    setSubmitting(value);
+    onSubmittingChange?.(value);
+  };
 
   const form = useForm<ProductInput>({
     resolver: zodResolver(ProductInput),
@@ -118,7 +129,7 @@ export function ProductForm({
   });
 
   const onSubmit = async (values: ProductInput) => {
-    setSubmitting(true);
+    markSubmitting(true);
     try {
       // Los importes ya vienen en centavos desde el campo: no hay conversión
       // que redondear acá. El `Math.round(pesos * 100)` que había era la otra
@@ -144,7 +155,7 @@ export function ProductForm({
         router.push(`/${slug}/admin/catalogo`);
       }
     } finally {
-      setSubmitting(false);
+      markSubmitting(false);
     }
   };
 

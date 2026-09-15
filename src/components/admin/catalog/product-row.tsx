@@ -11,16 +11,30 @@ import { cn } from "@/lib/utils";
 export function ProductRow({
   slug,
   product,
+  onEdit,
 }: {
   slug: string;
   product: AdminProduct;
+  /** Abre el modal de edición. Si no viene, la fila navega a la página. */
+  onEdit?: () => void;
 }) {
   const dimmed = !product.is_active;
 
   return (
     <li>
+      {/*
+        Sigue siendo un link a la página: así el cmd+click y el «abrir en otra
+        pestaña» funcionan como en cualquier lista. El click normal lo
+        interceptamos y abrimos el modal, que no navega.
+      */}
       <Link
         href={`/${slug}/admin/catalogo/productos/${product.id}`}
+        onClick={(e) => {
+          if (!onEdit) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          onEdit();
+        }}
         className={cn(
           "bg-card hover:bg-muted/40 group flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors",
           "ring-border/60 ring-1",

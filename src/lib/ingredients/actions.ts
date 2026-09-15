@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
 
-import { getMermaReport } from "./queries";
+import { calculateFoodCost, getMermaReport, getRecipeForProduct } from "./queries";
 import type { MermaReportItem } from "./merma";
 
 import {
@@ -20,7 +20,12 @@ import {
   StockAjusteInput,
   StockIngresoInput,
 } from "./schema";
-import type { IngredientRecipeLine, IngredientUnit } from "./types";
+import type {
+  FoodCostResult,
+  IngredientRecipeLine,
+  IngredientUnit,
+  RecipeLine,
+} from "./types";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -786,4 +791,36 @@ export async function fetchPresentations(ingredientId: string) {
     cost_cents: p.cost_cents as number,
     is_default: p.is_default as boolean,
   }));
+}
+
+/**
+ * Receta + food cost de un producto — lo único que el modal de edición del
+ * catálogo no tiene ya en memoria.
+ *
+ * La lista de productos del admin viene entera del server (incluidos los grupos
+ * de adicionales), así que el modal abre y se edita sin esperar nada. La receta
+ * es el pedazo caro (resuelve costos de insumos compuestos recursivamente) y
+ * sólo la mira quien costea: se trae recién al abrir el modal.
+ */
+export async function fetchProductRecipe(
+  businessSlug: string,
+  productId: string,
+): Promise<{ lines: RecipeLine[]; foodCost: FoodCostResult } | null> {
+  const auth = await requireCatalogAdmin(businessSlug);
+  if (!auth.ok) return null;
+
+  const service = db();
+  const { data: product } = await service
+    .from("products")
+    .select("id, price_cents, business_id")
+    .eq("id", productId)
+    .maybeSingle();
+  // Scope de tenant: el id viaja desde el browser.
+  if (!product || product.business_id !== auth.data.businessId) return null;
+
+  const [lines, foodCost] = await Promise.all([
+    getRecipeForProduct(productId),
+    calculateFoodCost(productId, Number(product.price_cents)),
+  ]);
+  return { lines, foodCost };
 }
