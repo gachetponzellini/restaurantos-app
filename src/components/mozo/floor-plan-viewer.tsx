@@ -12,7 +12,7 @@ import type {
 } from "@/lib/reservations/types";
 
 /**
- * Geometría del globo de demora (spec 191).
+ * Geometría del globo de demora (spec 193).
  *
  * Vive acá y no adentro de la mesa porque el globo ya no se dibuja con ella:
  * en SVG no hay z-index, y el que vive dentro del `<g>` de su mesa queda tapado
@@ -127,7 +127,7 @@ export function FloorPlanViewer({
 }: Props) {
   const active = tables.filter((t) => t.status === "active");
   /**
-   * Spec 191 — qué mesa está mostrando su globo de demora. El estado vive acá
+   * Spec 193 — qué mesa está mostrando su globo de demora. El estado vive acá
    * arriba, no en la mesa: el globo se dibuja en una capa posterior a TODAS las
    * mesas, que es la única forma de que no lo tape la de al lado (en SVG manda
    * el orden de pintado, no el z-index).
@@ -194,7 +194,7 @@ export function FloorPlanViewer({
 
 /**
  * El globo de demora de una mesa (spec 30), dibujado por el plano y no por la
- * mesa (spec 191).
+ * mesa (spec 193).
  *
  * Adentro del `<g>` de su mesa quedaba tapado por cualquier mesa pintada
  * después —en SVG no hay z-index, manda el orden del documento— y, si la mesa
@@ -290,7 +290,7 @@ function ViewerTable({
   /** Spec 067: este plano rotula las mesas ocupadas con el nombre del cliente. */
   showCustomerName: boolean;
   onClick: () => void;
-  /** Spec 191 — el globo lo dibuja el plano, arriba de todas las mesas. */
+  /** Spec 193 — el globo lo dibuja el plano, arriba de todas las mesas. */
   onDelayHover?: (hovering: boolean) => void;
 }) {
   const cx = table.width / 2;
@@ -498,7 +498,7 @@ function ViewerTable({
 
         {/* Punto de demora de cocina (esquina sup-izq). El color encodea cuánto
           se PASÓ del tiempo esperado; no toca el fill. El globo lo dibuja el
-          plano en su capa de arriba (spec 191): acá adentro lo tapaba la mesa
+          plano en su capa de arriba (spec 193): acá adentro lo tapaba la mesa
           siguiente. */}
         {delayColor && delay && (
           <circle

@@ -1,4 +1,4 @@
-# 190 · El plano muestra el día entero, sin slider de hora
+# 192 · El plano muestra el día entero, sin slider de hora
 
 Issue [#317](https://github.com/gachetponzellini/RestaurantOS-app/issues/317).
 Sigue a la [189](../189-reservas-abre-en-el-plano/), que puso el plano de

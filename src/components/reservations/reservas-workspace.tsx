@@ -20,6 +20,14 @@ import type {
  * solicitud que está esperando mesa (spec 138). El botón vive en la bandeja y
  * el tap que resuelve vive en el plano, así que el modo tiene que estar arriba
  * de los dos.
+ *
+ * Spec 192 — lo monta **`/admin/reservas` y también la tab «Reservas» del
+ * operativo**. La tab tenía su propia copia del layout, y quedó sin plano
+ * cuando el plano se volvió la vista de entrada: dos copias de la misma
+ * pantalla se separan al primer cambio. Lo propio de la tab entra por props
+ * opcionales — se re-pide el día con su action en vez de recargar la ruta
+ * (`onChanged`), el navegador de fechas se queda en `?tab=reservas`
+ * (`datePath`) y el filtro de salón del operativo la alcanza (`salonIds`).
  */
 export function ReservasWorkspace({
   slug,
@@ -34,6 +42,9 @@ export function ReservasWorkspace({
   solicitudes,
   diasConSolicitudes,
   ahoraIso,
+  onChanged,
+  datePath,
+  salonIds,
 }: {
   slug: string;
   businessId: string;
@@ -48,6 +59,16 @@ export function ReservasWorkspace({
   diasConSolicitudes: string[];
   /** Reloj del server, para que la bandeja hidrate sin diferencias. */
   ahoraIso: string;
+  /**
+   * Cómo re-pedir el día después de mutar. Sin esto —la página server-side— los
+   * hijos hacen `router.refresh()`; la tab del operativo pasa su propio refetch,
+   * que no re-corre la ruta entera (spec 103).
+   */
+  onChanged?: (date: string) => void;
+  /** Dónde escribe el navegador de fechas. Default: `/admin/reservas`. */
+  datePath?: string;
+  /** Filtro de salón del operativo, si está puesto. */
+  salonIds?: string[];
 }) {
   const [asignando, setAsignando] = useState<{
     id: string;
@@ -92,7 +113,10 @@ export function ReservasWorkspace({
           activeTables={activeTables}
           mode={mode}
           services={services}
+          salonIds={salonIds}
+          datePath={datePath}
           diasConSolicitudes={diasConSolicitudes}
+          onChanged={onChanged}
           vista={vista}
           onVistaChange={(v) => {
             setVista(v);
@@ -112,6 +136,7 @@ export function ReservasWorkspace({
               services={services}
               asignando={asignando}
               onAsignarFin={() => setAsignando(null)}
+              onChanged={onChanged ? () => onChanged(date) : undefined}
             />
           }
         />
@@ -143,6 +168,7 @@ export function ReservasWorkspace({
           services={services}
           activeTables={activeTables}
           floorPlans={floorPlans}
+          onChanged={onChanged ? () => onChanged(date) : undefined}
           onAsignarMesa={empezarAsignacion}
         />
       </aside>

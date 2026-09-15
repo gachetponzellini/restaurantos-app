@@ -144,7 +144,7 @@ export function PlanoDelDia({
   // Sin `onChanged` (la página server-side) se recarga sola: confirmar desde el
   // plano tiene que verse en el plano.
   const resincronizar = () => (onChanged ? onChanged() : router.refresh());
-  /** Spec 190 — `null` = el día entero. Los turnos filtran; no hay recorrido. */
+  /** Spec 192 — `null` = el día entero. Los turnos filtran; no hay recorrido. */
   const [turno, setTurno] = useState<TurnoId | null>(null);
   const [salonId, setSalonId] = useState(floorPlans[0]?.id ?? "");
   const [elegida, setElegida] = useState<string | null>(null);
@@ -181,7 +181,7 @@ export function PlanoDelDia({
   const viewBox = useMemo(() => encuadreDeMesas(mesasDelSalon), [mesasDelSalon]);
 
   const seleccionada = estado.find((m) => m.mesa.id === elegida) ?? null;
-  /** Spec 190 — con dos turnos en la mesa hay que elegir cuál se mira. */
+  /** Spec 192 — con dos turnos en la mesa hay que elegir cuál se mira. */
   const [reservaAbierta, setReservaAbierta] = useState<string | null>(null);
   const reservaDeLaFicha =
     seleccionada?.reservas.find((r) => r.id === reservaAbierta) ??
@@ -363,7 +363,7 @@ export function PlanoDelDia({
           </select>
         )}
 
-        {/* Spec 190 — los turnos FILTRAN; el default es el día entero. Un
+        {/* Spec 192 — los turnos FILTRAN; el default es el día entero. Un
             servicio normal tiene una reserva por mesa y por turno, así que casi
             siempre no hace falta tocarlos. */}
         <div
@@ -551,7 +551,7 @@ function FichaDeMesa({
             lugares
           </p>
 
-          {/* Spec 190 — la mesa con dos turnos: se elige cuál se mira. */}
+          {/* Spec 192 — la mesa con dos turnos: se elige cuál se mira. */}
           {reservas.length > 1 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {reservas.map((r) => {

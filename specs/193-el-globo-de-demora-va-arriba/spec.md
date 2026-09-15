@@ -1,4 +1,4 @@
-# 191 · El globo de demora va arriba de todas las mesas
+# 193 · El globo de demora va arriba de todas las mesas
 
 Issue [#318](https://github.com/gachetponzellini/RestaurantOS-app/issues/318).
 

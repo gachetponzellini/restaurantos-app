@@ -42,13 +42,9 @@ vi.mock("@/components/admin/local/fichaje-tab", () => ({
 vi.mock("@/components/admin/orders-realtime-board", () => ({
   OrdersRealtimeBoard: () => <div data-testid="panel-pedidos">PEDIDOS</div>,
 }));
-vi.mock("@/components/reservations/admin-day-list", () => ({
-  AdminDayList: () => <div data-testid="panel-reservas">RESERVAS</div>,
-}));
-vi.mock("@/components/reservations/solicitudes-inbox", () => ({
-  SolicitudesInbox: () => (
-    <div data-testid="panel-solicitudes">SOLICITUDES</div>
-  ),
+// Spec 192 — la tab monta el MISMO workspace que /admin/reservas.
+vi.mock("@/components/reservations/reservas-workspace", () => ({
+  ReservasWorkspace: () => <div data-testid="panel-reservas">RESERVAS</div>,
 }));
 
 // Las actions de tab: lo que se verifica es que al entrar a una tab se pida

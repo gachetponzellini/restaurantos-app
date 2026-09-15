@@ -57,7 +57,7 @@ describe("reservasDelDia", () => {
     expect(res.find((m) => m.mesa.id === "T2")?.estado).toBe("libre");
   });
 
-  // Spec 190 — el día entero, sin slider: dos turnos en la misma mesa se ven
+  // Spec 192 — el día entero, sin slider: dos turnos en la misma mesa se ven
   // los dos, ordenados por hora.
   it("una mesa con dos turnos los lista ordenados por hora", () => {
     const res = reservasDelDia(
@@ -176,7 +176,7 @@ describe("renglonesDeMesa", () => {
     expect(renglonesDeMesa({ width: 70, height: 40 }, [r], TZ)).toHaveLength(1);
   });
 
-  // Spec 190 — con dos turnos en la mesa, el segundo renglón deja de ser el
+  // Spec 192 — con dos turnos en la mesa, el segundo renglón deja de ser el
   // nombre y avisa que hay más: el plano no esconde la segunda reserva.
   it("con más de una reserva avisa cuántas faltan", () => {
     const segunda = reserva({ id: "r2", starts_at: MEDIODIA, party_size: 2 });

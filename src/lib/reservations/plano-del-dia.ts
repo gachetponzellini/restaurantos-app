@@ -3,14 +3,14 @@ import { formatInTimeZone } from "date-fns-tz";
 import type { FloorTable, Reservation } from "@/lib/reservations/types";
 
 /**
- * El plano del día completo (spec 137, rehecho en la 190) — reglas puras.
+ * El plano del día completo (spec 137, rehecho en la 192) — reglas puras.
  *
  * El plano que ya existe (`salon-desktop`) es la foto del **ahora**: las
  * reservas entran recién cuando faltan 3 h (`VENTANA_RESERVA_EN_PLANO_MS`),
  * porque a quien atiende el mediodía una reserva de las 21 no le dice nada.
  *
  * Acá la pregunta es la opuesta: **qué tiene reservado el salón hoy**. La
- * primera versión la contestaba con un slider de hora; la 190 lo sacó — el día
+ * primera versión la contestaba con un slider de hora; la 192 lo sacó — el día
  * entra entero en el dibujo, y los turnos quedan como filtro, no como recorrido
  * obligatorio.
  */
@@ -20,7 +20,7 @@ export type EstadoDeMesa = "libre" | "reservada" | "pendiente";
 export type MesaEnElPlano = {
   mesa: FloorTable;
   estado: EstadoDeMesa;
-  /** Todas las reservas del día en esa mesa, ordenadas por hora (spec 190). */
+  /** Todas las reservas del día en esa mesa, ordenadas por hora (spec 192). */
   reservas: ReservaEnPlano[];
 };
 
@@ -68,7 +68,7 @@ function porHora(a: ReservaEnPlano, b: ReservaEnPlano): number {
 }
 
 /**
- * Todas las reservas del día, mesa por mesa (spec 190).
+ * Todas las reservas del día, mesa por mesa (spec 192).
  *
  * Reemplaza al estado «a una hora» del slider. Un servicio normal tiene una
  * reserva por mesa y por turno: pedirle al encargado que barra una línea de
@@ -120,7 +120,7 @@ export function conteoPorTurno(
  * llegar, spec 059): no se pueden dibujar, pero esconderlas haría leer un salón
  * más vacío de lo que está.
  *
- * Spec 190 — devuelve las filas, no sólo el número: un contador que no se puede
+ * Spec 192 — devuelve las filas, no sólo el número: un contador que no se puede
  * abrir esconde media noche.
  */
 export function sinMesa(

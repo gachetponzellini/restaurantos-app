@@ -110,7 +110,7 @@ describe("FloorPlanViewer — punto de demora (spec 30)", () => {
     expect(queryByText("+23 min de demora")).not.toBeNull();
   });
 
-  // Spec 191 — en SVG no hay z-index: manda el orden de pintado. El globo
+  // Spec 193 — en SVG no hay z-index: manda el orden de pintado. El globo
   // dibujado dentro del `<g>` de su mesa quedaba tapado por la mesa de al lado.
   it("el globo se pinta después de todas las mesas, no adentro de la suya", () => {
     const extras: Record<string, TableExtra> = {
