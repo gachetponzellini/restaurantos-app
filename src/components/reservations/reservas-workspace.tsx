@@ -33,7 +33,6 @@ export function ReservasWorkspace({
   services,
   solicitudes,
   diasConSolicitudes,
-  horasPlano,
   ahoraIso,
 }: {
   slug: string;
@@ -47,7 +46,6 @@ export function ReservasWorkspace({
   services: DayServiceOption[];
   solicitudes: SolicitudEnBandeja[];
   diasConSolicitudes: string[];
-  horasPlano: string[];
   /** Reloj del server, para que la bandeja hidrate sin diferencias. */
   ahoraIso: string;
 }) {
@@ -107,7 +105,6 @@ export function ReservasWorkspace({
               slug={slug}
               date={date}
               timezone={timezone}
-              horas={horasPlano}
               reservas={rows}
               mesas={activeTables}
               floorPlans={floorPlans}

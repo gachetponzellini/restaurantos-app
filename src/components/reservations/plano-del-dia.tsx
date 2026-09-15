@@ -34,15 +34,16 @@ import {
 } from "@/lib/reservations/booking-actions";
 import { OVERBOOK_HINT } from "@/lib/reservations/edit-window";
 import {
+  conteoPorTurno,
   encuadreDeMesas,
-  estadoDeMesasEn,
-  horaInicial,
-  momentoDe,
   renglonesDeMesa,
+  reservasDelDia,
   sinMesa,
+  TURNOS,
   type EstadoDeMesa,
   type MesaEnElPlano,
   type ReservaEnPlano,
+  type TurnoId,
 } from "@/lib/reservations/plano-del-dia";
 import type {
   DayServiceOption,
@@ -109,7 +110,6 @@ export function PlanoDelDia({
   slug,
   date,
   timezone,
-  horas,
   reservas,
   mesas,
   floorPlans,
@@ -123,8 +123,6 @@ export function PlanoDelDia({
   /** `YYYY-MM-DD` del día que se está mirando. */
   date: string;
   timezone: string;
-  /** Horas que ofrece el control, calculadas en el server (`horasDelDia`). */
-  horas: string[];
   reservas: ReservaEnPlano[];
   mesas: FloorTable[];
   floorPlans: Array<{ id: string; name: string }>;
@@ -146,9 +144,8 @@ export function PlanoDelDia({
   // Sin `onChanged` (la página server-side) se recarga sola: confirmar desde el
   // plano tiene que verse en el plano.
   const resincronizar = () => (onChanged ? onChanged() : router.refresh());
-  const [hora, setHora] = useState(() =>
-    horaInicial(horas, reservas, date, timezone),
-  );
+  /** Spec 190 — `null` = el día entero. Los turnos filtran; no hay recorrido. */
+  const [turno, setTurno] = useState<TurnoId | null>(null);
   const [salonId, setSalonId] = useState(floorPlans[0]?.id ?? "");
   const [elegida, setElegida] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
@@ -161,36 +158,44 @@ export function PlanoDelDia({
     [mesas, salonId],
   );
 
-  const momento = useMemo(
-    () => (hora ? momentoDe(date, hora, timezone) : null),
-    [date, hora, timezone],
-  );
-
   const estado = useMemo(
-    () => (momento ? estadoDeMesasEn(momento, reservas, mesasDelSalon) : []),
-    [momento, reservas, mesasDelSalon],
+    () => reservasDelDia(reservas, mesasDelSalon, { turno, timezone }),
+    [reservas, mesasDelSalon, turno, timezone],
   );
 
   const genericas = useMemo(
-    () =>
-      momento
-        ? sinMesa(momento, reservas)
-        : { cantidad: 0, cubiertos: 0, reservas: [] as ReservaEnPlano[] },
-    [momento, reservas],
+    () => sinMesa(reservas, { turno, timezone }),
+    [reservas, turno, timezone],
   );
+
+  const porTurno = useMemo(
+    () => conteoPorTurno(reservas, timezone),
+    [reservas, timezone],
+  );
+
+  /** Cuántas reservas se están mostrando en el plano (mesa + genéricas). */
+  const enPantalla =
+    estado.reduce((n, m) => n + m.reservas.length, 0) + genericas.cantidad;
 
   /** Encuadre: el rectángulo que ocupan las mesas, con aire alrededor. */
   const viewBox = useMemo(() => encuadreDeMesas(mesasDelSalon), [mesasDelSalon]);
 
   const seleccionada = estado.find((m) => m.mesa.id === elegida) ?? null;
+  /** Spec 190 — con dos turnos en la mesa hay que elegir cuál se mira. */
+  const [reservaAbierta, setReservaAbierta] = useState<string | null>(null);
+  const reservaDeLaFicha =
+    seleccionada?.reservas.find((r) => r.id === reservaAbierta) ??
+    seleccionada?.reservas[0] ??
+    null;
 
-  // La ficha abierta se cierra sola si la hora o el salón la dejaron sin
-  // sentido: un panel de edición sobre una reserva que ya no está en pantalla
-  // guarda cambios a ciegas.
+  // La ficha abierta se resetea si el turno o el salón la dejaron sin sentido:
+  // un panel de edición sobre una reserva que ya no está en pantalla guarda
+  // cambios a ciegas.
   useEffect(() => {
     setEditando(false);
     setConfirmando(null);
-  }, [elegida, hora, salonId]);
+    setReservaAbierta(null);
+  }, [elegida, turno, salonId]);
 
   function asignarMesa(mesa: FloorTable) {
     if (!asignando) return;
@@ -358,30 +363,35 @@ export function PlanoDelDia({
           </select>
         )}
 
-        {horas.length > 0 ? (
-          <div className="flex flex-1 items-center gap-2">
-            <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-400">
-              Cómo queda a las
-            </span>
-            <span className="rounded-lg bg-zinc-900 px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-white">
-              {hora || "—"}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={horas.length - 1}
-              step={1}
-              value={Math.max(0, horas.indexOf(hora))}
-              onChange={(e) => setHora(horas[Number(e.target.value)] ?? hora)}
-              aria-label="Hora del plano"
-              className="h-1 flex-1 cursor-pointer accent-zinc-900"
+        {/* Spec 190 — los turnos FILTRAN; el default es el día entero. Un
+            servicio normal tiene una reserva por mesa y por turno, así que casi
+            siempre no hace falta tocarlos. */}
+        <div
+          className="inline-flex rounded-full bg-zinc-100/80 p-1 ring-1 ring-zinc-200/60"
+          role="tablist"
+          aria-label="Turno del plano"
+        >
+          <BotonTurno
+            activo={turno === null}
+            onClick={() => setTurno(null)}
+            label="Todo el día"
+          />
+          {TURNOS.map((t) => (
+            <BotonTurno
+              key={t.id}
+              activo={turno === t.id}
+              onClick={() => setTurno(turno === t.id ? null : t.id)}
+              label={t.label}
+              cantidad={porTurno[t.id]}
             />
-          </div>
-        ) : (
-          <span className="text-xs text-zinc-500">
-            Este día no tiene horarios configurados.
-          </span>
-        )}
+          ))}
+        </div>
+
+        <span className="ml-auto text-[11px] text-zinc-500">
+          {enPantalla === 0
+            ? "Sin reservas"
+            : `${enPantalla} ${enPantalla === 1 ? "reserva" : "reservas"}`}
+        </span>
       </div>
 
       <svg
@@ -389,7 +399,7 @@ export function PlanoDelDia({
         className="h-auto w-full"
         style={{ maxHeight: "72vh" }}
         role="img"
-        aria-label={`Plano del salón a las ${hora}`}
+        aria-label={`Plano del salón — ${turno ? TURNOS.find((t) => t.id === turno)?.label : "todo el día"}`}
       >
         {estado.map((m) => (
           <MesaDibujada
@@ -429,7 +439,8 @@ export function PlanoDelDia({
       {seleccionada && (
         <FichaDeMesa
           m={seleccionada}
-          hora={hora}
+          reserva={reservaDeLaFicha}
+          onElegirReserva={setReservaAbierta}
           timezone={timezone}
           multiSalon={floorPlans.length > 1}
           salonName={
@@ -447,17 +458,17 @@ export function PlanoDelDia({
           onEditar={() => setEditando(true)}
           onCerrarEdicion={() => setEditando(false)}
           onGuardar={(patch, callbacks) =>
-            guardarEdicion(seleccionada.reserva!.id, patch, callbacks)
+            guardarEdicion(reservaDeLaFicha!.id, patch, callbacks)
           }
-          onDecidir={(d) => decidir(seleccionada.reserva!.id, d)}
-          onSentar={() => sentar(seleccionada.reserva!.id)}
+          onDecidir={(d) => decidir(reservaDeLaFicha!.id, d)}
+          onSentar={() => sentar(reservaDeLaFicha!.id)}
           onPedirConfirmacion={setConfirmando}
-          onCambiarEstado={(s) => cambiarEstado(seleccionada.reserva!.id, s)}
+          onCambiarEstado={(s) => cambiarEstado(reservaDeLaFicha!.id, s)}
         />
       )}
 
-      {/* Spec 059/186 — las genéricas no se dibujan, pero se abren: en flexible
-          son la mayoría de la noche y el plano solo las contaba. */}
+      {/* Spec 059/189 — las genéricas no se dibujan, pero se abren: en flexible
+          son la mayoría de la noche y el plano sólo las contaba. */}
       {genericas.cantidad > 0 && (
         <SinMesa
           reservas={genericas.reservas}
@@ -474,7 +485,8 @@ export function PlanoDelDia({
 
 function FichaDeMesa({
   m,
-  hora,
+  reserva,
+  onElegirReserva,
   timezone,
   multiSalon,
   salonName,
@@ -495,7 +507,9 @@ function FichaDeMesa({
   onCambiarEstado,
 }: {
   m: MesaEnElPlano;
-  hora: string;
+  /** La reserva de la mesa que se está mirando (la primera, por defecto). */
+  reserva: ReservaEnPlano | null;
+  onElegirReserva: (id: string) => void;
   timezone: string;
   multiSalon: boolean;
   salonName: string | null;
@@ -518,7 +532,7 @@ function FichaDeMesa({
   onPedirConfirmacion: (s: ReservationStatus | null) => void;
   onCambiarEstado: (s: ReservationStatus) => void;
 }) {
-  const { mesa, estado, reserva } = m;
+  const { mesa, estado, reservas } = m;
 
   return (
     <div
@@ -536,6 +550,31 @@ function FichaDeMesa({
             {multiSalon && salonName ? ` · ${salonName}` : ""} · {mesa.seats}{" "}
             lugares
           </p>
+
+          {/* Spec 190 — la mesa con dos turnos: se elige cuál se mira. */}
+          {reservas.length > 1 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {reservas.map((r) => {
+                const activa = r.id === reserva?.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => onElegirReserva(r.id)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums ring-1 transition",
+                      activa
+                        ? "bg-zinc-900 text-white ring-zinc-900"
+                        : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-100",
+                      r.status === "pending" && !activa && "text-amber-800 ring-amber-300",
+                    )}
+                  >
+                    {formatInTimeZone(new Date(r.starts_at), timezone, "HH:mm")}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {reserva ? (
             <>
@@ -607,7 +646,9 @@ function FichaDeMesa({
               </div>
             </>
           ) : (
-            <p className="mt-1 text-xs text-zinc-500">Libre a las {hora}.</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Sin reservas {"en este turno."}
+            </p>
           )}
         </div>
 
@@ -857,8 +898,9 @@ function MesaDibujada({
   apagada?: boolean;
   onClick: () => void;
 }) {
-  const { mesa, estado, reserva } = m;
-  const lineas = renglonesDeMesa(mesa, reserva, timezone);
+  const { mesa, estado, reservas } = m;
+  const lineas = renglonesDeMesa(mesa, reservas, timezone);
+  const primera = reservas[0] ?? null;
 
   return (
     <MesaFigura
@@ -866,8 +908,8 @@ function MesaDibujada({
       onClick={onClick}
       role="button"
       aria-label={
-        reserva
-          ? `Mesa ${mesa.label}, ${estado}: ${reserva.customer_name}, ${reserva.party_size} comensales a las ${formatInTimeZone(new Date(reserva.starts_at), timezone, "HH:mm")}`
+        primera
+          ? `Mesa ${mesa.label}, ${estado}: ${primera.customer_name}, ${primera.party_size} comensales a las ${formatInTimeZone(new Date(primera.starts_at), timezone, "HH:mm")}${reservas.length > 1 ? ` y ${reservas.length - 1} reserva(s) más` : ""}`
           : `Mesa ${mesa.label}, ${estado}`
       }
       className={cn(
@@ -890,5 +932,40 @@ function Leyenda({ className, label }: { className: string; label: string }) {
       <span className={cn("inline-block h-2.5 w-2.5 rounded ring-1", className)} />
       {label}
     </span>
+  );
+}
+
+function BotonTurno({
+  activo,
+  onClick,
+  label,
+  cantidad,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  label: string;
+  /** Sin reservas el turno se ve apagado, pero se puede tocar igual. */
+  cantidad?: number;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={activo}
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-3 py-1.5 text-xs font-medium transition",
+        activo
+          ? "bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)]"
+          : cantidad === 0
+            ? "text-zinc-400 hover:text-zinc-600"
+            : "text-zinc-500 hover:text-zinc-900",
+      )}
+    >
+      {label}
+      {cantidad !== undefined && cantidad > 0 && (
+        <span className="ml-1.5 tabular-nums text-zinc-400">{cantidad}</span>
+      )}
+    </button>
   );
 }

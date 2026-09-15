@@ -8,7 +8,6 @@ import { AyudaChip } from "@/components/admin/ayuda-chip";
 import { PageHeader, PageShell } from "@/components/admin/shell/page-shell";
 import { ensureAdminAccess } from "@/lib/admin/context";
 import { localDate } from "@/lib/reservations/pending-inbox";
-import { horasDelDia } from "@/lib/reservations/plano-del-dia";
 import {
   getPendingInbox,
   getReservationEditContext,
@@ -93,23 +92,6 @@ export default async function AdminReservasPage({
     useService: true,
   });
 
-  // Spec 137 — las horas que ofrece el control del plano salen de la config del
-  // negocio, no de una grilla inventada.
-  const [settings, servicios] = await Promise.all([
-    getReservationSettings(business.id, { useService: true }),
-    mode === "flexible"
-      ? getReservationServices(business.id, { useService: true })
-      : Promise.resolve([]),
-  ]);
-  const horasPlano = horasDelDia({
-    date,
-    timezone: business.timezone,
-    mode,
-    schedule: settings.schedule,
-    services: servicios,
-    reservas: rows,
-  });
-
   // Spec 136 — los días que el navegador de fechas marca con el punto.
   const diasConSolicitudes = [
     ...new Set(
@@ -138,7 +120,6 @@ export default async function AdminReservasPage({
         services={services}
         solicitudes={solicitudes}
         diasConSolicitudes={diasConSolicitudes}
-        horasPlano={horasPlano}
         ahoraIso={new Date().toISOString()}
       />
     </PageShell>

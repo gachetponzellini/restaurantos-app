@@ -1,23 +1,18 @@
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 
-import { arrivalSlots } from "@/lib/reservations/flexible-availability";
-import type {
-  FloorTable,
-  Reservation,
-  ReservationMode,
-  ReservationService,
-  WeeklySchedule,
-} from "@/lib/reservations/types";
+import type { FloorTable, Reservation } from "@/lib/reservations/types";
 
 /**
- * El plano del día a una hora elegida (spec 137) — reglas puras, sin DOM.
+ * El plano del día completo (spec 137, rehecho en la 190) — reglas puras.
  *
  * El plano que ya existe (`salon-desktop`) es la foto del **ahora**: las
  * reservas entran recién cuando faltan 3 h (`VENTANA_RESERVA_EN_PLANO_MS`),
  * porque a quien atiende el mediodía una reserva de las 21 no le dice nada.
  *
- * Acá la pregunta es la opuesta y es la que hay que contestar para decidir una
- * solicitud: **cómo queda el salón el sábado a las 21**.
+ * Acá la pregunta es la opuesta: **qué tiene reservado el salón hoy**. La
+ * primera versión la contestaba con un slider de hora; la 190 lo sacó — el día
+ * entra entero en el dibujo, y los turnos quedan como filtro, no como recorrido
+ * obligatorio.
  */
 
 export type EstadoDeMesa = "libre" | "reservada" | "pendiente";
@@ -25,8 +20,8 @@ export type EstadoDeMesa = "libre" | "reservada" | "pendiente";
 export type MesaEnElPlano = {
   mesa: FloorTable;
   estado: EstadoDeMesa;
-  /** La reserva que la ocupa a esa hora, si hay alguna. */
-  reserva: ReservaEnPlano | null;
+  /** Todas las reservas del día en esa mesa, ordenadas por hora (spec 190). */
+  reservas: ReservaEnPlano[];
 };
 
 export type ReservaEnPlano = Pick<
@@ -48,133 +43,103 @@ export type ReservaEnPlano = Pick<
   created_at?: string;
 };
 
+/** Los turnos del día. La reserva cae en uno por su hora de inicio. */
+export const TURNOS = [
+  { id: "mediodia", label: "Mediodía", desde: 0, hasta: 17 },
+  { id: "tarde", label: "Tarde", desde: 17, hasta: 20 },
+  { id: "noche", label: "Noche", desde: 20, hasta: 24 },
+] as const;
+
+export type TurnoId = (typeof TURNOS)[number]["id"];
+
+/** El turno al que pertenece una reserva, por su hora local de inicio. */
+export function turnoDe(reserva: ReservaEnPlano, timezone: string): TurnoId {
+  const h = Number(formatInTimeZone(new Date(reserva.starts_at), timezone, "H"));
+  return (TURNOS.find((t) => h >= t.desde && h < t.hasta)?.id ?? "noche") as TurnoId;
+}
+
+/** Vive = ocupa lugar. Lo cancelado, vencido y terminado no pinta el salón. */
+function viva(r: ReservaEnPlano): boolean {
+  return r.status === "pending" || r.status === "confirmed" || r.status === "seated";
+}
+
+function porHora(a: ReservaEnPlano, b: ReservaEnPlano): number {
+  return new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime();
+}
+
 /**
- * Qué pasa en cada mesa en el instante `momento`.
+ * Todas las reservas del día, mesa por mesa (spec 190).
  *
- * El rango es `[starts_at, ends_at)` — el mismo que usa el `EXCLUDE USING gist`
- * de la tabla. Que el dibujo y la base midan igual es lo que evita que el plano
- * diga «libre» sobre algo que la DB va a rechazar.
+ * Reemplaza al estado «a una hora» del slider. Un servicio normal tiene una
+ * reserva por mesa y por turno: pedirle al encargado que barra una línea de
+ * tiempo para encontrarlas era hacerle buscar lo que se puede mostrar de una.
+ * Cuando una mesa tiene varias, se listan todas ordenadas por hora — el plano
+ * dice «acá hay más», no esconde la segunda.
  *
- * `pendiente` gana sobre `reservada` cuando dos se pisan: lo que el encargado
- * necesita ver es qué mesa se comería una solicitud sin responder.
+ * `pendiente` gana sobre `reservada`: lo que el encargado necesita ver es qué
+ * mesa se comería una solicitud sin responder.
  */
-export function estadoDeMesasEn(
-  momento: Date,
+export function reservasDelDia(
   reservas: ReservaEnPlano[],
   mesas: FloorTable[],
+  opciones?: { turno?: TurnoId | null; timezone?: string },
 ): MesaEnElPlano[] {
-  const t = momento.getTime();
+  const turno = opciones?.turno ?? null;
+  const tz = opciones?.timezone ?? "America/Argentina/Buenos_Aires";
   const activas = reservas.filter(
-    (r) => r.status === "pending" || r.status === "confirmed" || r.status === "seated",
+    (r) => viva(r) && (!turno || turnoDe(r, tz) === turno),
   );
 
   return mesas.map((mesa) => {
-    const encima = activas.filter((r) => {
-      if (r.table_id !== mesa.id) return false;
-      const desde = new Date(r.starts_at).getTime();
-      const hasta = new Date(r.ends_at).getTime();
-      return desde <= t && t < hasta;
-    });
-    if (encima.length === 0) return { mesa, estado: "libre", reserva: null };
-    const pendiente = encima.find((r) => r.status === "pending");
-    return pendiente
-      ? { mesa, estado: "pendiente", reserva: pendiente }
-      : { mesa, estado: "reservada", reserva: encima[0] };
+    const encima = activas.filter((r) => r.table_id === mesa.id).sort(porHora);
+    if (encima.length === 0) {
+      return { mesa, estado: "libre" as const, reservas: encima };
+    }
+    return {
+      mesa,
+      estado: encima.some((r) => r.status === "pending")
+        ? ("pendiente" as const)
+        : ("reservada" as const),
+      reservas: encima,
+    };
   });
 }
 
-/**
- * Las horas que ofrece el control. Son las del negocio, no una grilla
- * inventada: los slots configurados en estricto, la ventana de los servicios
- * en flexible. Si no hay nada configurado, las horas de las propias reservas —
- * un día sin config igual se puede mirar.
- */
-export function horasDelDia(input: {
-  date: string;
-  timezone: string;
-  mode: ReservationMode;
-  schedule: WeeklySchedule;
-  services: ReservationService[];
-  reservas: ReservaEnPlano[];
-}): string[] {
-  const { date, timezone, mode, schedule, services, reservas } = input;
-  const horas = new Set<string>();
-
-  if (mode === "flexible") {
-    const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
-    for (const svc of services) {
-      if (svc.day_of_week !== null && svc.day_of_week !== dow) continue;
-      for (const h of arrivalSlots(svc.opens_at, svc.closes_at, 30)) horas.add(h);
-    }
-  } else {
-    const dow = String(new Date(`${date}T12:00:00Z`).getUTCDay()) as keyof WeeklySchedule;
-    const dia = schedule[dow];
-    if (dia?.open) for (const slot of dia.slots) horas.add(slot);
-  }
-
-  // Sin config para ese día, las horas de lo que hay reservado.
-  if (horas.size === 0) {
-    for (const r of reservas) {
-      horas.add(formatInTimeZone(new Date(r.starts_at), timezone, "HH:mm"));
-    }
-  }
-
-  return [...horas].sort();
-}
-
-/** El instante que representa `HH:MM` de `date` en la TZ del negocio. */
-export function momentoDe(date: string, hora: string, timezone: string): Date {
-  return fromZonedTime(`${date}T${hora}:00`, timezone);
+/** Cuántas reservas vivas tiene cada turno del día (para los chips). */
+export function conteoPorTurno(
+  reservas: ReservaEnPlano[],
+  timezone: string,
+): Record<TurnoId, number> {
+  const out = { mediodia: 0, tarde: 0, noche: 0 } as Record<TurnoId, number>;
+  for (const r of reservas) if (viva(r)) out[turnoDe(r, timezone)] += 1;
+  return out;
 }
 
 /**
- * Las reservas sin mesa de ese momento. En flexible son mayoría (la mesa se
- * define al llegar, spec 059): no se pueden dibujar, pero esconderlas haría
- * leer un salón más vacío de lo que está.
+ * Las reservas del día sin mesa. En flexible son mayoría (la mesa se define al
+ * llegar, spec 059): no se pueden dibujar, pero esconderlas haría leer un salón
+ * más vacío de lo que está.
+ *
+ * Spec 190 — devuelve las filas, no sólo el número: un contador que no se puede
+ * abrir esconde media noche.
  */
 export function sinMesa(
-  momento: Date,
   reservas: ReservaEnPlano[],
+  opciones?: { turno?: TurnoId | null; timezone?: string },
 ): { cantidad: number; cubiertos: number; reservas: ReservaEnPlano[] } {
-  const t = momento.getTime();
-  const vivas = reservas.filter(
-    (r) =>
-      r.table_id === null &&
-      (r.status === "pending" || r.status === "confirmed" || r.status === "seated") &&
-      new Date(r.starts_at).getTime() <= t &&
-      t < new Date(r.ends_at).getTime(),
-  );
+  const turno = opciones?.turno ?? null;
+  const tz = opciones?.timezone ?? "America/Argentina/Buenos_Aires";
+  const vivas = reservas
+    .filter(
+      (r) =>
+        r.table_id === null && viva(r) && (!turno || turnoDe(r, tz) === turno),
+    )
+    .sort(porHora);
   return {
     cantidad: vivas.length,
     cubiertos: vivas.reduce((sum, r) => sum + (r.party_size ?? 0), 0),
-    // Spec 189 — devuelve las filas, no sólo el número: con el plano de
-    // entrada, un contador que no se puede abrir esconde media noche en
-    // flexible, donde la mesa se define al llegar.
-    reservas: vivas.sort(
-      (a, b) =>
-        new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
-    ),
+    reservas: vivas,
   };
-}
-
-/** La primera hora con algo reservado: donde conviene abrir el plano. */
-export function horaInicial(
-  horas: string[],
-  reservas: ReservaEnPlano[],
-  date: string,
-  timezone: string,
-): string {
-  if (horas.length === 0) return "";
-  const conReserva = horas.find((h) => {
-    const t = momentoDe(date, h, timezone).getTime();
-    return reservas.some(
-      (r) =>
-        (r.status === "pending" || r.status === "confirmed" || r.status === "seated") &&
-        new Date(r.starts_at).getTime() <= t &&
-        t < new Date(r.ends_at).getTime(),
-    );
-  });
-  return conReserva ?? horas[0];
 }
 
 /**
@@ -209,25 +174,32 @@ export function nombreEnMesa(nombre: string, width: number): string {
 }
 
 /**
- * Los renglones que la mesa muestra sin que la toquen (spec 189).
+ * Los renglones que la mesa muestra sin que la toquen (spec 189/190).
  *
  * La mesa más chica del parque mide 35 unidades: no hay lugar para todo, así
- * que se cae con orden — primero se va la hora, después el nombre. Lo que
- * nunca se va son los cubiertos, que es el dato con el que se decide si entra
- * otra reserva encima.
+ * que se cae con orden — primero se van los cubiertos, después el nombre. Lo
+ * que nunca se va es **la hora**: es lo que se va a buscar al plano, y sin ella
+ * una mesa pintada no dice si el problema es a la una o a las nueve.
+ *
+ * Con más de una reserva en el día, el segundo renglón deja de ser el nombre y
+ * pasa a ser «+N más»: el plano avisa que hay otra, en vez de mostrar una sola
+ * y hacer creer que la mesa está libre el resto del día.
  */
 export function renglonesDeMesa(
   mesa: Pick<FloorTable, "width" | "height">,
-  reserva: ReservaEnPlano | null,
+  reservas: ReservaEnPlano[],
   timezone: string,
 ): string[] {
-  if (!reserva) return [];
-  const hora = formatInTimeZone(new Date(reserva.starts_at), timezone, "HH:mm");
-  const cupo = `${reserva.party_size}p`;
-  const cabeHora = cabenChars(mesa.width) >= `${hora} · ${cupo}`.length;
-  const primera = cabeHora ? `${hora} · ${cupo}` : cupo;
+  const [primera, ...resto] = reservas;
+  if (!primera) return [];
+  const hora = formatInTimeZone(new Date(primera.starts_at), timezone, "HH:mm");
+  const cupo = `${primera.party_size}p`;
+  const cabenLosDos = cabenChars(mesa.width) >= `${hora} · ${cupo}`.length;
+  const linea1 = cabenLosDos ? `${hora} · ${cupo}` : hora;
   // Dos renglones de 10 + la etiqueta de 13 no entran en una mesa baja.
-  if (mesa.height < 48) return [primera];
-  const nombre = nombreEnMesa(reserva.customer_name, mesa.width);
-  return nombre ? [primera, nombre] : [primera];
+  if (mesa.height < 48) return [linea1];
+  const linea2 = resto.length
+    ? `+${resto.length} más`
+    : nombreEnMesa(primera.customer_name, mesa.width);
+  return linea2 ? [linea1, linea2] : [linea1];
 }
