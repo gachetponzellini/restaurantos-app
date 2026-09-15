@@ -109,6 +109,33 @@ describe("FloorPlanViewer — punto de demora (spec 30)", () => {
     expect(queryByText("Parrilla")).not.toBeNull();
     expect(queryByText("+23 min de demora")).not.toBeNull();
   });
+
+  // Spec 191 — en SVG no hay z-index: manda el orden de pintado. El globo
+  // dibujado dentro del `<g>` de su mesa quedaba tapado por la mesa de al lado.
+  it("el globo se pinta después de todas las mesas, no adentro de la suya", () => {
+    const extras: Record<string, TableExtra> = {
+      t1: { delay: { level: 3, excessMinutes: 23, station: "Parrilla" } },
+    };
+    const { container, getByText } = render(
+      <FloorPlanViewer
+        plan={plan}
+        tables={[makeTable(), makeTable({ id: "t2", label: "13", x: 120 })]}
+        extras={extras}
+      />,
+    );
+    fireEvent.mouseEnter(
+      container.querySelector(`circle[fill="${DELAY_COLORS[3]}"]`)!,
+    );
+
+    const svg = container.querySelector("svg")!;
+    const hijos = [...svg.children];
+    const globo = getByText("Parrilla").closest("g")!;
+    const mesaVecina = getByText("13").closest("g")!;
+    const indiceDe = (el: Element) =>
+      hijos.findIndex((h) => h === el || h.contains(el));
+
+    expect(indiceDe(globo)).toBeGreaterThan(indiceDe(mesaVecina));
+  });
 });
 
 describe("FloorPlanViewer — el mozo de la mesa", () => {

@@ -11,6 +11,33 @@ import type {
   OperationalStatus,
 } from "@/lib/reservations/types";
 
+/**
+ * Geometría del globo de demora (spec 191).
+ *
+ * Vive acá y no adentro de la mesa porque el globo ya no se dibuja con ella:
+ * en SVG no hay z-index, y el que vive dentro del `<g>` de su mesa queda tapado
+ * por las mesas que se pintan después (y acostado, si la mesa está rotada). Se
+ * dibuja en una capa al final del plano, con la posición calculada acá.
+ */
+function geometriaDelGlobo(
+  table: FloorTable,
+  lineas: [string, string],
+  planWidth: number,
+  planHeight: number,
+) {
+  const labelSize = Math.min(table.width, table.height) * 0.22;
+  const font = Math.max(11, Math.max(9, labelSize * 0.62));
+  const chars = Math.max(lineas[0].length, lineas[1].length);
+  const padX = font * 0.7;
+  const w = chars * font * 0.56 + padX * 2 + 6;
+  const h = font * 2.6 + 8;
+  // El punto vive en la esquina sup-izq; el globo crece hacia el interior y se
+  // "flipea" si tocaría el borde del plano (derecha / abajo).
+  const dx = table.x + 16 + w > planWidth ? 4 - w : 16;
+  const dy = table.y + 16 + h > planHeight ? -h - 2 : 16;
+  return { font, padX, w, h, x: table.x + dx, y: table.y + dy };
+}
+
 const STATUS_COLORS: Record<
   OperationalStatus,
   { fill: string; stroke: string }
@@ -99,6 +126,15 @@ export function FloorPlanViewer({
   paintMode = false,
 }: Props) {
   const active = tables.filter((t) => t.status === "active");
+  /**
+   * Spec 191 — qué mesa está mostrando su globo de demora. El estado vive acá
+   * arriba, no en la mesa: el globo se dibuja en una capa posterior a TODAS las
+   * mesas, que es la única forma de que no lo tape la de al lado (en SVG manda
+   * el orden de pintado, no el z-index).
+   */
+  const [conGlobo, setConGlobo] = useState<string | null>(null);
+  const mesaDelGlobo = active.find((t) => t.id === conGlobo) ?? null;
+  const delayDelGlobo = mesaDelGlobo ? extras[mesaDelGlobo.id]?.delay : undefined;
 
   return (
     // El plano se AJUSTA a la caja que le da el contenedor (ancho y alto), lo
@@ -133,13 +169,88 @@ export function FloorPlanViewer({
             table={table}
             extra={extras[table.id]}
             paintMode={paintMode}
-            planWidth={plan.width}
-            planHeight={plan.height}
             onClick={() => onTableClick?.(table)}
+            onDelayHover={(hovering) =>
+              setConGlobo((prev) =>
+                hovering ? table.id : prev === table.id ? null : prev,
+              )
+            }
           />
         ))}
+
+        {/* La capa del globo: última, así queda arriba de todas las mesas. */}
+        {!paintMode && mesaDelGlobo && delayDelGlobo && delayDelGlobo.level >= 1 && (
+          <GloboDeDemora
+            table={mesaDelGlobo}
+            delay={delayDelGlobo}
+            planWidth={plan.width}
+            planHeight={plan.height}
+          />
+        )}
       </svg>
     </div>
+  );
+}
+
+/**
+ * El globo de demora de una mesa (spec 30), dibujado por el plano y no por la
+ * mesa (spec 191).
+ *
+ * Adentro del `<g>` de su mesa quedaba tapado por cualquier mesa pintada
+ * después —en SVG no hay z-index, manda el orden del documento— y, si la mesa
+ * estaba rotada, salía acostado. Acá arriba no le pasa ninguna de las dos.
+ */
+function GloboDeDemora({
+  table,
+  delay,
+  planWidth,
+  planHeight,
+}: {
+  table: FloorTable;
+  delay: NonNullable<TableExtra["delay"]>;
+  planWidth: number;
+  planHeight: number;
+}) {
+  const color = DELAY_COLORS[delay.level];
+  const lineas: [string, string] = [
+    delay.station ?? "",
+    `+${Math.round(delay.excessMinutes)} min de demora`,
+  ];
+  const g = geometriaDelGlobo(table, lineas, planWidth, planHeight);
+
+  return (
+    <g transform={`translate(${g.x} ${g.y})`} style={{ pointerEvents: "none" }}>
+      <rect
+        x={0}
+        y={0}
+        width={g.w}
+        height={g.h}
+        rx={g.font * 0.4}
+        fill="#18181b"
+        opacity={0.96}
+        style={{ filter: "drop-shadow(0 2px 6px rgb(0 0 0 / 0.35))" }}
+      />
+      <rect x={0} y={0} width={4} height={g.h} rx={2} fill={color} />
+      <text
+        x={g.padX}
+        y={g.font * 1.25}
+        fontSize={g.font}
+        fontWeight={700}
+        fill="#ffffff"
+        style={{ userSelect: "none", fontFamily: "inherit" }}
+      >
+        {lineas[0]}
+      </text>
+      <text
+        x={g.padX}
+        y={g.font * 2.25}
+        fontSize={g.font * 0.85}
+        fill="#e4e4e7"
+        style={{ userSelect: "none", fontFamily: "inherit" }}
+      >
+        {lineas[1]}
+      </text>
+    </g>
   );
 }
 
@@ -170,20 +281,18 @@ function ViewerTable({
   extra,
   paintMode,
   showCustomerName,
-  planWidth,
-  planHeight,
   onClick,
+  onDelayHover,
 }: {
   table: FloorTable;
   extra?: TableExtra;
   paintMode: boolean;
   /** Spec 067: este plano rotula las mesas ocupadas con el nombre del cliente. */
   showCustomerName: boolean;
-  planWidth: number;
-  planHeight: number;
   onClick: () => void;
+  /** Spec 191 — el globo lo dibuja el plano, arriba de todas las mesas. */
+  onDelayHover?: (hovering: boolean) => void;
 }) {
-  const [showDelayTip, setShowDelayTip] = useState(false);
   const cx = table.width / 2;
   const cy = table.height / 2;
   // El translate y el rotate van separados a propósito: el nombre del mozo va
@@ -228,22 +337,6 @@ function ViewerTable({
   const delay = paintMode ? undefined : extra?.delay;
   const delayColor =
     delay && delay.level >= 1 ? DELAY_COLORS[delay.level] : null;
-
-  // Geometría del tooltip de demora (se dibuja dentro del SVG al hover, a la
-  // misma escala que el resto del plano). Sector + minutos reales de exceso.
-  const tipFont = Math.max(11, subSize);
-  const tipLine1 = delay?.station ?? "";
-  const tipLine2 = delay
-    ? `+${Math.round(delay.excessMinutes)} min de demora`
-    : "";
-  const tipChars = Math.max(tipLine1.length, tipLine2.length);
-  const tipPadX = tipFont * 0.7;
-  const tipW = tipChars * tipFont * 0.56 + tipPadX * 2 + 6;
-  const tipH = tipFont * 2.6 + 8;
-  // El punto vive en la esquina sup-izq; el tooltip crece hacia el interior y
-  // se "flipea" si tocaría el borde del plano (derecha / abajo).
-  const tipX = table.x + 16 + tipW > planWidth ? 4 - tipW : 16;
-  const tipY = table.y + 16 + tipH > planHeight ? -tipH - 2 : 16;
 
   // ── Qué dice la mesa (spec 067) ──
   // Con `show_customer_name` y una mesa OCUPADA de la que se conoce el nombre,
@@ -403,74 +496,22 @@ function ViewerTable({
           </>
         )}
 
-        {/* Punto de demora de cocina (esquina sup-izq) + tooltip al hover. El
-          color encodea cuánto se PASÓ del tiempo esperado; no toca el fill. */}
+        {/* Punto de demora de cocina (esquina sup-izq). El color encodea cuánto
+          se PASÓ del tiempo esperado; no toca el fill. El globo lo dibuja el
+          plano en su capa de arriba (spec 191): acá adentro lo tapaba la mesa
+          siguiente. */}
         {delayColor && delay && (
-          <g>
-            <circle
-              cx={10}
-              cy={10}
-              r={7.5}
-              fill={delayColor}
-              stroke="white"
-              strokeWidth={1.5}
-              onMouseEnter={() => setShowDelayTip(true)}
-              onMouseLeave={() => setShowDelayTip(false)}
-              style={{ cursor: "pointer" }}
-            />
-            {showDelayTip && (
-              <g
-                transform={`translate(${tipX} ${tipY})`}
-                style={{ pointerEvents: "none" }}
-              >
-                <rect
-                  x={0}
-                  y={0}
-                  width={tipW}
-                  height={tipH}
-                  rx={tipFont * 0.4}
-                  fill="#18181b"
-                  opacity={0.96}
-                  style={{ filter: "drop-shadow(0 2px 6px rgb(0 0 0 / 0.35))" }}
-                />
-                <rect
-                  x={0}
-                  y={0}
-                  width={4}
-                  height={tipH}
-                  rx={2}
-                  fill={delayColor}
-                />
-                <text
-                  x={tipPadX}
-                  y={tipFont * 1.25}
-                  fontSize={tipFont}
-                  fontWeight={700}
-                  fill="#ffffff"
-                  style={{
-                    userSelect: "none",
-                    pointerEvents: "none",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {tipLine1}
-                </text>
-                <text
-                  x={tipPadX}
-                  y={tipFont * 2.25}
-                  fontSize={tipFont * 0.85}
-                  fill="#e4e4e7"
-                  style={{
-                    userSelect: "none",
-                    pointerEvents: "none",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {tipLine2}
-                </text>
-              </g>
-            )}
-          </g>
+          <circle
+            cx={10}
+            cy={10}
+            r={7.5}
+            fill={delayColor}
+            stroke="white"
+            strokeWidth={1.5}
+            onMouseEnter={() => onDelayHover?.(true)}
+            onMouseLeave={() => onDelayHover?.(false)}
+            style={{ cursor: "pointer" }}
+          />
         )}
       </g>
 
