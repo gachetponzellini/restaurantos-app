@@ -233,9 +233,34 @@ re-correr `instalar.bat`, sin TeamViewer y sin rotar la key— quedó documentad
 en [`print-agent/README.md`](../../print-agent/README.md#cambiar-la-cadencia-de-un-local-ya-instalado).
 
 Va acá y no en una issue aparte porque es la misma decisión vista desde la
-urgencia: **corta 45%** mientras D1 y D2 se implementan. (No dos tercios, como
-decía esta spec antes de medir el piso de red: el período pasa de 2,4 s a 4,4 s,
-no de 1 s a 3 s.)
+urgencia: corta **~la mitad** mientras D1 y D2 se implementan. (No dos tercios,
+como decía esta spec antes de medir el piso de red.)
+
+#### Verificado en golf — 2026-09-15
+
+| | antes | después | req/s |
+|---|---|---|---|
+| `golf-jcr` | 1,71 s | **3,73 s** | 1,17 → 0,54 · **−54%** |
+| `kcc` (control, sin tocar) | 1,76 s | 1,76 s | 1,14 |
+
+**El modelo del piso quedó validado con 30 ms de error.** Con el RTT que daba el
+control en ese momento (0,76 s por tick), `3,0 + 0,76 = 3,76 s` predicho contra
+**3,73 s** medido. La fórmula `período = pollMs + (requests × RTT)` es correcta.
+
+El recorte real de D3 cae entre **45% y 54%** según el RTT del momento — el piso
+se mueve con la hora y la conexión del local (medimos 1,4 s por tick de noche y
+0,76 s al otro día). Cuanto más bajo el piso, más rinde subir `pollMs`.
+
+**Lo que costó llegar**, porque es parte de la decisión: tres intentos. El Bloc
+de notas sobre `%PROGRAMDATA%` **guarda en otro lado sin avisar** si no se abrió
+como administrador, y `instalar.bat` copia el `config.json` del ZIP encima del
+instalado —o sea que pisa la edición—. El camino que funciona es PowerShell
+elevado, verificando con `IsInRole` antes de tocar nada, y el `.exe` se reinicia
+con `Stop-Process` (si el wrapper no lo relevanta, `schtasks /run`). Está en el
+[README](../../print-agent/README.md#cambiar-la-cadencia-de-un-local-ya-instalado).
+
+Esto es, además, el mejor argumento a favor de la D2: **cambiar un número costó
+una interrupción del servicio y tres intentos.**
 
 ### D4 · Qué NO se hace: cachear las credenciales
 
