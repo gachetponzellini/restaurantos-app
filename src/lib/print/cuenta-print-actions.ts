@@ -135,3 +135,87 @@ export async function imprimirCuenta(
     reprint,
   });
 }
+
+/**
+ * Imprimir la cuenta de un pedido online (tab Pedidos). Mismo `print_job` de
+ * `kind='cuenta'` que el de la mesa, pero sin salón: sale por la comandera de
+ * cuentas del negocio.
+ */
+export async function imprimirCuentaPedido(
+  orderId: string,
+  businessSlug: string,
+): Promise<ActionResult<{ print_job_id: string; reprint: boolean }>> {
+  const business = await getBusiness(businessSlug);
+  if (!business) return actionError("Negocio no encontrado.");
+
+  const ctxResult = await requireMozoActionContext(business.id);
+  if (!ctxResult.ok) return ctxResult;
+  const ctx = ctxResult.data;
+
+  const service = createSupabaseServiceClient() as unknown as GenericClient;
+
+  const { data: orderRow } = await service
+    .from("orders")
+    .select("id, business_id, lifecycle_status, total_cents")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  const order = orderRow as {
+    business_id: string;
+    lifecycle_status: string;
+    total_cents: number;
+  } | null;
+  if (!order || order.business_id !== business.id) {
+    return actionError("Pedido no encontrado.");
+  }
+  if (order.lifecycle_status !== "open") {
+    return actionError("El pedido ya está cerrado.");
+  }
+  if ((order.total_cents ?? 0) <= 0) {
+    return actionError("El pedido no tiene nada cargado.");
+  }
+
+  const printer = resolveCuentaPrinter(null, {
+    cuenta_printer_ip: (business as { cuenta_printer_ip?: string | null })
+      .cuenta_printer_ip,
+    cuenta_printer_port: (business as { cuenta_printer_port?: number | null })
+      .cuenta_printer_port,
+    cuenta_printer_enabled: (
+      business as { cuenta_printer_enabled?: boolean | null }
+    ).cuenta_printer_enabled,
+  });
+  if (!printer) {
+    return actionError(
+      "No hay comandera de cuentas configurada. Configurala en Ajustes → Operación del local.",
+    );
+  }
+
+  const { count: previos } = await service
+    .from("print_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", orderId)
+    .eq("kind", "cuenta");
+  const reprint = (previos ?? 0) > 0;
+
+  const { data: inserted, error } = await service
+    .from("print_jobs")
+    .insert({
+      order_id: orderId,
+      business_id: business.id,
+      kind: "cuenta",
+      requested_by: ctx.userId ?? null,
+      reprint_requested_at: reprint ? new Date().toISOString() : null,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error || !inserted) {
+    console.error("imprimirCuentaPedido", error);
+    return actionError("No pudimos mandar la cuenta a la impresora.");
+  }
+
+  return actionOk({
+    print_job_id: (inserted as { id: string }).id,
+    reprint,
+  });
+}
