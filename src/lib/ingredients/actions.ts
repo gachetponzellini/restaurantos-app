@@ -201,7 +201,7 @@ export async function upsertPresentations(
 
   // Validate: exactly one default
   const defaults = items.filter((i) => i.is_default);
-  if (defaults.length !== 1) {
+  if (items.length > 0 && defaults.length !== 1) {
     return actionError("Debe haber exactamente una presentación por defecto.");
   }
 

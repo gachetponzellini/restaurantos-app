@@ -152,15 +152,13 @@ export function IngredientDialog({ slug, ingredient, trigger, ingredientOptions 
   // ── Submit ──
 
   const onSubmit = async (values: IngredientInput) => {
-    // Validate presentations
-    const validPresentations = presentations.filter((p) => p.name.trim() !== "");
-    if (validPresentations.length === 0) {
-      toast.error("Agregá al menos una presentación.");
-      return;
-    }
-    if (!validPresentations.some((p) => p.is_default)) {
-      toast.error("Una presentación debe ser la por defecto.");
-      return;
+    // Los envases son opcionales: un insumo se puede dar de alta sin ninguno.
+    let validPresentations = presentations.filter((p) => p.name.trim() !== "");
+    if (
+      validPresentations.length > 0 &&
+      !validPresentations.some((p) => p.is_default)
+    ) {
+      validPresentations = validPresentations.map((p, i) => ({ ...p, is_default: i === 0 }));
     }
 
     setSubmitting(true);
@@ -176,13 +174,15 @@ export function IngredientDialog({ slug, ingredient, trigger, ingredientOptions 
         ingredientId = result.data.id;
       }
 
-      // Save presentations
-      const presResult = await upsertPresentations(
-        slug,
-        ingredientId!,
-        validPresentations,
-      );
-      if (!presResult.ok) { toast.error(presResult.error); return; }
+      // Save presentations (si no hay y el insumo es nuevo, no hay nada que guardar)
+      if (validPresentations.length > 0 || ingredient) {
+        const presResult = await upsertPresentations(
+          slug,
+          ingredientId!,
+          validPresentations,
+        );
+        if (!presResult.ok) { toast.error(presResult.error); return; }
+      }
 
       toast.success(ingredient ? "Ingrediente actualizado." : "Ingrediente creado.");
       setOpen(false);
