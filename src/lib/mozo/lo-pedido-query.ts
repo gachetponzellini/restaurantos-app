@@ -30,7 +30,11 @@ type RawRow = {
   comanda_items:
     | {
         comanda_id: string;
-        comandas: { batch: number; emitted_at: string | null } | null;
+        comandas: {
+          batch: number;
+          emitted_at: string | null;
+          station_id: string | null;
+        } | null;
       }[]
     | null;
 };
@@ -76,7 +80,7 @@ export async function getLoPedido(
       price_original_cents, price_override_reason, daily_menu_id,
       kitchen_status, cancelled_at, cancelled_reason, is_combo_component,
       order_item_modifiers ( modifier_name ),
-      comanda_items ( comanda_id, comandas ( batch, emitted_at ) )
+      comanda_items ( comanda_id, comandas ( batch, emitted_at, station_id ) )
     `,
     )
     .eq("order_id", orderId);
@@ -91,9 +95,15 @@ export async function getLoPedido(
     // detalle de pedido.
     .filter((row) => !row.is_combo_component)
     .map((row) => {
-      // Un `order_item` va a una sola comanda; el array es la forma que devuelve
-      // PostgREST para la relación.
-      const link = (row.comanda_items ?? [])[0] ?? null;
+      // Un `order_item` puede colgar de más de una comanda: la de su sector y,
+      // por «combina con», la de otro sector que lo referencia. Hay que tomar
+      // la de SU sector; tomar la primera al azar dejaba la comanda propia sin
+      // ítems en la columna y sin su botón «Entregar».
+      const links = row.comanda_items ?? [];
+      const link =
+        links.find((l) => l.comandas?.station_id === row.station_id) ??
+        links[0] ??
+        null;
       return {
         order_item_id: row.id,
         product_id: row.product_id,
