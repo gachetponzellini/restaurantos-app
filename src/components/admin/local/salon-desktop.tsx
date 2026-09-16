@@ -1847,7 +1847,11 @@ export function SalonDesktop({
             entries={mozosEnSalon.entries}
             sinAsignar={mozosEnSalon.sinAsignar}
           />
-          <SalonStats stats={stats} total={allActiveTables.length} />
+          <SalonStats
+            stats={stats}
+            total={allActiveTables.length}
+            cubiertos={allActiveTables.reduce((n, t) => n + t.seats, 0)}
+          />
         </div>
 
         {/* Panel lateral — modos por prioridad: paint (Distribuir mozos) >
@@ -2459,9 +2463,11 @@ export function SalonDesktop({
 function SalonStats({
   stats,
   total,
+  cubiertos,
 }: {
   stats: Record<OperationalStatus, number>;
   total: number;
+  cubiertos: number;
 }) {
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs">
@@ -2469,6 +2475,10 @@ function SalonStats({
         <Users className="size-3.5" />
         <span className="tabular-nums">{total}</span> mesa
         {total === 1 ? "" : "s"}
+      </span>
+      <span className="font-semibold">
+        <span className="tabular-nums">{cubiertos}</span> cubierto
+        {cubiertos === 1 ? "" : "s"}
       </span>
       {STATS_ORDER.map((s) => {
         const c = STATUS_COLORS[s];

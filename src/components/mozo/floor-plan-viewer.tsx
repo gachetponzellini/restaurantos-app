@@ -134,7 +134,9 @@ export function FloorPlanViewer({
    */
   const [conGlobo, setConGlobo] = useState<string | null>(null);
   const mesaDelGlobo = active.find((t) => t.id === conGlobo) ?? null;
-  const delayDelGlobo = mesaDelGlobo ? extras[mesaDelGlobo.id]?.delay : undefined;
+  const delayDelGlobo = mesaDelGlobo
+    ? extras[mesaDelGlobo.id]?.delay
+    : undefined;
 
   return (
     // El plano se AJUSTA a la caja que le da el contenedor (ancho y alto), lo
@@ -179,14 +181,17 @@ export function FloorPlanViewer({
         ))}
 
         {/* La capa del globo: última, así queda arriba de todas las mesas. */}
-        {!paintMode && mesaDelGlobo && delayDelGlobo && delayDelGlobo.level >= 1 && (
-          <GloboDeDemora
-            table={mesaDelGlobo}
-            delay={delayDelGlobo}
-            planWidth={plan.width}
-            planHeight={plan.height}
-          />
-        )}
+        {!paintMode &&
+          mesaDelGlobo &&
+          delayDelGlobo &&
+          delayDelGlobo.level >= 1 && (
+            <GloboDeDemora
+              table={mesaDelGlobo}
+              delay={delayDelGlobo}
+              planWidth={plan.width}
+              planHeight={plan.height}
+            />
+          )}
       </svg>
     </div>
   );
@@ -359,6 +364,9 @@ function ViewerTable({
       subLine = `${extra!.reservation!.starts_at ? formatTime(extra!.reservation!.starts_at) : ""} · ${extra!.reservation!.party_size}p`;
     } else if (minutesOpen != null && minutesOpen >= 0) {
       subLine = formatOpenCompact(minutesOpen);
+    } else if (opStatus === "libre" && table.seats > 0) {
+      // Mesa libre sin reserva: cuántos cubiertos tiene (Juan, 2026-09-16).
+      subLine = `${table.seats} cub.`;
     }
   }
 
