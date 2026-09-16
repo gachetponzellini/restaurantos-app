@@ -1,5 +1,10 @@
 "use server";
 
+import {
+  CANALES,
+  liquidarPorCanal,
+  type CanalRendicion,
+} from "@/lib/caja/canal-rendicion";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -790,6 +795,11 @@ export async function registrarRendicionMozo(
    * defecto — que es de donde sale la plata en un local de una sola caja.
    */
   cajaId?: string,
+  /**
+   * Spec 203 · D4 — lo entregado por canal. Obligatorio cuando hay efectivo en
+   * más de un canal; con uno solo, `delivered_cash_cents` va a ese canal.
+   */
+  entregadoPorCanal?: Partial<Record<CanalRendicion, number>>,
 ): Promise<ActionResult<{ rendicion: MozoRendicion; propina_pagada_cents: number }>> {
   const business = await getBusiness(businessSlug);
   if (!business) return actionError("Negocio no encontrado.");
@@ -809,7 +819,7 @@ export async function registrarRendicionMozo(
 
   const { data: mozoUser } = await service
     .from("business_users")
-    .select("user_id, full_name")
+    .select("user_id, full_name, role")
     .eq("business_id", business.id)
     .eq("user_id", mozoId)
     .maybeSingle();
@@ -843,19 +853,45 @@ export async function registrarRendicionMozo(
     (mozoUser as { full_name: string | null }).full_name ?? "Sin nombre",
     undefined,
     corteIso,
+    // Spec 203 — con el rol, el encargado rinde sólo takeaway y delivery.
+    (mozoUser as { role: string | null }).role ?? undefined,
   );
 
+  // Spec 203 · D4 — el entregado se reparte por canal. Con un solo canal con
+  // efectivo el monto del formulario es de ese canal; con varios, cada uno trae
+  // el suyo y el total es la suma. Declarar que no entregó es declarar $0: el
+  // monto del formulario no se usa, así no hay dos verdades en la misma fila.
+  const conEfectivo = CANALES.filter(
+    (c) => (pendiente.por_canal[c]?.efectivo_cents ?? 0) > 0,
+  );
+  let entregadoCanales: Partial<Record<CanalRendicion, number>>;
+  if (entregadoPorCanal) {
+    if (Object.values(entregadoPorCanal).some((v) => (v ?? 0) < 0)) {
+      return actionError("El monto entregado no puede ser negativo.");
+    }
+    entregadoCanales = entregadoPorCanal;
+  } else if (conEfectivo.length > 1 && estado === "rendida") {
+    return actionError("Cargá lo entregado de cada canal por separado.");
+  } else {
+    entregadoCanales = conEfectivo[0] ? { [conEfectivo[0]]: delivered_cash_cents } : {};
+  }
+  const liquidacion = liquidarPorCanal(
+    pendiente.por_canal,
+    entregadoCanales,
+    estado === "no_entrego",
+  );
   const expected_cash_cents = pendiente.efectivo_cents;
-  // Declarar que no entregó es declarar $0: el monto que venga del formulario
-  // no se usa, así no hay dos verdades en la misma fila.
-  const entregado = estado === "no_entrego" ? 0 : delivered_cash_cents;
+  const entregado = liquidacion.delivered_cash_cents;
   const difference_cents = entregado - expected_cash_cents;
+  const hayDiferenciaEnCanal = Object.values(liquidacion.por_canal).some(
+    (c) => c.diferencia_cents !== 0,
+  );
   const motivo = notes?.trim() || null;
 
   if (estado === "no_entrego" && !motivo) {
     return actionError("Decí por qué no entregó: queda registrado como deuda.");
   }
-  if (estado === "rendida" && difference_cents !== 0 && !motivo) {
+  if (estado === "rendida" && (difference_cents !== 0 || hayDiferenciaEnCanal) && !motivo) {
     return actionError(
       "Hay diferencia entre lo esperado y lo entregado. Registrá el motivo.",
     );
@@ -879,6 +915,7 @@ export async function registrarRendicionMozo(
       difference_cents,
       notes: motivo,
       por_metodo: pendiente.por_metodo,
+      por_canal: liquidacion.por_canal,
       estado,
       propina_pagada_cents,
       // El mismo instante con el que se leyó: define el piso del próximo período.

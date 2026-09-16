@@ -135,3 +135,29 @@ describe("el papel de la rendición (spec 178)", () => {
     expect(bytes).toContain("RENDICION DE TURNO");
   });
 });
+
+describe("rendición · efectivo por canal (spec 203)", () => {
+  it("imprime takeaway y delivery por separado", async () => {
+    const { buildRendicionLines } = await import("./rendicion-ticket");
+    const lines = buildRendicionLines({
+      negocio_name: "KCC",
+      mozo_name: "Sofia",
+      registrado_por: "Sofia",
+      fecha: "2026-09-16T23:00:00Z",
+      estado: "rendida",
+      por_metodo: { cash: 750_000 },
+      por_canal: {
+        takeaway: { esperado_cents: 300_000, entregado_cents: 300_000, diferencia_cents: 0 },
+        delivery: { esperado_cents: 450_000, entregado_cents: 400_000, diferencia_cents: -50_000 },
+      },
+      expected_cash_cents: 750_000,
+      delivered_cash_cents: 700_000,
+      difference_cents: -50_000,
+      propina_pagada_cents: 0,
+      notes: "faltó un vuelto",
+    }).map((l) => l.text);
+    expect(lines).toContain("TAKEAWAY");
+    expect(lines).toContain("DELIVERY");
+  });
+});
+

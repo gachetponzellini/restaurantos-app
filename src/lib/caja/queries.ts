@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { calculateExpectedCash, separarRetiroDelCierre } from "./expected-cash";
-import { calcularRendicionMozo } from "./liquidacion-mozo";
+import { calcularRendicionPorCanal, canalDelCobro } from "./canal-rendicion";
 import { MOVIMIENTO_LABEL } from "./movimiento-label";
 import { mozosQueDebenRendir } from "./deben-rendir";
 import {
@@ -989,7 +989,7 @@ export async function getRendicionPendienteMozo(
 
   let query = service
     .from("payments")
-    .select("method, amount_cents, tip_cents")
+    .select("method, amount_cents, tip_cents, orders(table_id, delivery_type)")
     .eq("attributed_mozo_id", mozoId)
     // Scope por negocio (spec 36 · R-C2): sin esto, un mozo activo en dos
     // locales (House/Golf) veía en su rendición los pagos del OTRO negocio.
@@ -1007,13 +1007,26 @@ export async function getRendicionPendienteMozo(
   }
 
   const { data } = await query;
-  const payments = (data ?? []) as Array<{
+  const payments = (data ?? []) as unknown as Array<{
     method: PaymentMethod;
     amount_cents: number;
     tip_cents: number;
+    orders: { table_id: string | null; delivery_type: string | null } | null;
   }>;
 
-  const rendicion = calcularRendicionMozo(payments);
+  // Spec 203 — cada cobro con su canal; el encargado rinde sólo lo sin mesa.
+  const rendicion = calcularRendicionPorCanal(
+    payments.map((p) => ({
+      method: p.method,
+      amount_cents: p.amount_cents,
+      tip_cents: p.tip_cents,
+      canal: canalDelCobro({
+        table_id: p.orders?.table_id ?? null,
+        delivery_type: p.orders?.delivery_type ?? null,
+      }),
+    })),
+    mozoRole,
+  );
 
   return {
     mozo_id: mozoId,
@@ -1024,7 +1037,8 @@ export async function getRendicionPendienteMozo(
     tickets_cents: rendicion.tickets_cents,
     por_metodo: rendicion.por_metodo,
     total_propinas_cents: rendicion.total_propinas_cents,
-    pagos_count: payments.length,
+    pagos_count: rendicion.pagos_count,
+    por_canal: rendicion.por_canal,
   };
 }
 

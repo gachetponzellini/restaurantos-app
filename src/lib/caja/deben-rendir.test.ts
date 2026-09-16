@@ -68,10 +68,12 @@ describe("mozosQueDebenRendir (spec 139 · D3 + D4)", () => {
   });
 });
 
-describe("el encargado no rinde: maneja la caja (issue #264)", () => {
+describe("el encargado rinde takeaway y delivery (spec 203)", () => {
   const base = { efectivo_cents: 10_000, pagos_count: 3 };
 
-  it("deja afuera a encargado y admin, aunque hayan cobrado", () => {
+  // La pendiente del encargado ya viene sin el salón: si trae cobros, son de
+  // mostrador o delivery.
+  it("encargado y admin con cobros sin mesa rinden", () => {
     const r = mozosQueDebenRendir(
       [
         { ...base, mozo_id: "m1", mozo_name: "Pedro", mozo_role: "mozo" },
@@ -80,7 +82,23 @@ describe("el encargado no rinde: maneja la caja (issue #264)", () => {
       ],
       [],
     );
-    expect(r.map((m) => m.mozo_id)).toEqual(["m1"]);
+    expect(r.map((m) => m.mozo_id).sort()).toEqual(["a1", "e1", "m1"]);
+  });
+
+  it("el encargado que sólo cobró en el salón (pendiente vacía) no rinde", () => {
+    const r = mozosQueDebenRendir(
+      [{ efectivo_cents: 0, pagos_count: 0, mozo_id: "e1", mozo_name: "Sofía", mozo_role: "encargado" }],
+      [],
+    );
+    expect(r).toHaveLength(0);
+  });
+
+  it("el encargado rinde aunque esté asignado como operador de la caja", () => {
+    const r = mozosQueDebenRendir(
+      [{ ...base, mozo_id: "e1", mozo_name: "Sofía", mozo_role: "encargado" }],
+      ["e1"],
+    );
+    expect(r).toHaveLength(1);
   });
 
   it("sigue dejando afuera al operador de la caja, sea del rol que sea", () => {

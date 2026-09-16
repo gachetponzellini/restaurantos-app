@@ -1737,6 +1737,7 @@ async function buildPrintableRendicionTickets(
         registered_by,
         estado,
         por_metodo,
+        por_canal,
         expected_cash_cents,
         delivered_cash_cents,
         difference_cents,
@@ -1763,6 +1764,7 @@ async function buildPrintableRendicionTickets(
     registered_by: string | null;
     estado: "rendida" | "no_entrego";
     por_metodo: Record<string, number> | null;
+    por_canal: RendicionTicketData["por_canal"] | null;
     expected_cash_cents: number;
     delivered_cash_cents: number;
     difference_cents: number;
@@ -1801,6 +1803,7 @@ async function buildPrintableRendicionTickets(
       fecha: r.created_at,
       estado: r.estado,
       por_metodo: r.por_metodo ?? {},
+      por_canal: r.por_canal ?? {},
       expected_cash_cents: r.expected_cash_cents,
       delivered_cash_cents: r.delivered_cash_cents,
       difference_cents: r.difference_cents,

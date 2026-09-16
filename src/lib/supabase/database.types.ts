@@ -2446,6 +2446,7 @@ export type Database = {
           id: string;
           mozo_id: string;
           notes: string | null;
+          por_canal: Json;
           por_metodo: Json;
           propina_pagada_cents: number;
           registered_by: string;
@@ -2460,6 +2461,7 @@ export type Database = {
           id?: string;
           mozo_id: string;
           notes?: string | null;
+          por_canal?: Json;
           por_metodo?: Json;
           propina_pagada_cents?: number;
           registered_by: string;
@@ -2474,6 +2476,7 @@ export type Database = {
           id?: string;
           mozo_id?: string;
           notes?: string | null;
+          por_canal?: Json;
           por_metodo?: Json;
           propina_pagada_cents?: number;
           registered_by?: string;

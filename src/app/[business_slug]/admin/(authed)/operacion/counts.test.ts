@@ -70,15 +70,15 @@ describe("operacion/counts — predicados de pills (FR-012)", () => {
     expect(countRendicionesPendientes(pendientes)).toBe(2);
   });
 
-  it("countRendicionesPendientes: el encargado no cuenta — maneja la caja (issue #264)", () => {
-    // Su efectivo entra derecho al cajón, así que no tiene nada que entregar.
-    // Antes sumaba todas las noches y la pill nunca bajaba a cero.
+  it("countRendicionesPendientes: el encargado cuenta si tiene takeaway o delivery (spec 203)", () => {
+    // La pendiente del encargado ya viene sin el salón (#264): si trae cobros,
+    // son de mostrador o delivery y los tiene que rendir.
     const pendientes = [
       pendiente(4, "mozo", "Pedro"),
       pendiente(9, "encargado", "Sofía"),
-      pendiente(2, "admin", "Martín"),
+      pendiente(0, "admin", "Martín"),
     ];
-    expect(countRendicionesPendientes(pendientes)).toBe(1);
+    expect(countRendicionesPendientes(pendientes)).toBe(2);
   });
 
   it("countReservasPorSentar: solo las confirmadas (las sentadas ya están en mesa)", () => {

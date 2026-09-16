@@ -31,6 +31,13 @@ export type RendicionTicketData = {
   estado: "rendida" | "no_entrego";
   /** Lo cobrado en el período, neto de propina, por método. */
   por_metodo: Partial<Record<string, number>>;
+  /** Spec 203 — efectivo por canal. `{}` en las rendiciones viejas. */
+  por_canal?: Partial<
+    Record<
+      "salon" | "takeaway" | "delivery",
+      { esperado_cents: number; entregado_cents: number; diferencia_cents: number }
+    >
+  >;
   expected_cash_cents: number;
   delivered_cash_cents: number;
   difference_cents: number;
@@ -109,6 +116,24 @@ export function buildRendicionLines(d: RendicionTicketData): Line[] {
     push(fila("Debia entregar", monto(d.expected_cash_cents)));
     push(fila("Entrego", monto(d.delivered_cash_cents)));
     push(fila("DIFERENCIA", diferencia(d.difference_cents)), { bold: true });
+  }
+
+  // ── Spec 203 — el efectivo por canal ───────────────────────────────────
+  // Sólo si hay algo que partir: una rendición de salón pura queda como antes.
+  const canales = (["salon", "takeaway", "delivery"] as const).filter(
+    (c) => d.por_canal?.[c],
+  );
+  if (canales.length > 1 || (canales.length === 1 && canales[0] !== "salon")) {
+    const LABEL = { salon: "SALON", takeaway: "TAKEAWAY", delivery: "DELIVERY" };
+    for (const c of canales) {
+      const x = d.por_canal![c]!;
+      push(LABEL[c], { bold: true });
+      push(fila("  Debia entregar", monto(x.esperado_cents)));
+      if (d.estado !== "no_entrego") {
+        push(fila("  Entrego", monto(x.entregado_cents)));
+        push(fila("  Diferencia", diferencia(x.diferencia_cents)));
+      }
+    }
   }
   push(RULE_COND);
 

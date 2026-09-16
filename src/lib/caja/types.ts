@@ -1,3 +1,8 @@
+import type {
+  CanalRendicion,
+  LiquidacionDeCanal,
+  PendienteDeCanal,
+} from "./canal-rendicion";
 export type Caja = {
   id: string;
   business_id: string;
@@ -354,6 +359,8 @@ export type MozoRendicion = {
   estado: RendicionEstado;
   /** Lo que se le pagó de propina en esta rendición, congelado (spec 178). */
   propina_pagada_cents: number;
+  /** Esperado / entregado / diferencia por canal (spec 203). `{}` en las viejas. */
+  por_canal: Partial<Record<CanalRendicion, LiquidacionDeCanal>>;
   created_at: string;
 };
 
@@ -370,6 +377,8 @@ export type RendicionMozoPendiente = {
   por_metodo: Record<PaymentMethod, number>;
   total_propinas_cents: number;
   pagos_count: number;
+  /** Lo mismo, partido por canal (spec 203). Sólo canales con cobros. */
+  por_canal: Partial<Record<CanalRendicion, PendienteDeCanal>>;
 };
 
 export type CajaUserAssignment = {

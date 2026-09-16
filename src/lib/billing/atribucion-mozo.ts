@@ -12,8 +12,10 @@
  * También arregla un caso que ya existía sin terminal: cada item que el
  * encargado cargaba desde el panel le pasaba a él la propina de esa mesa.
  *
- * Lo que no tiene mesa (mostrador, delivery) sigue cayendo en `loaded_by`, que
- * ahí es la respuesta correcta: la cargó quien la cargó.
+ * Lo que no tiene mesa (mostrador, takeaway, delivery) es de **quien lo cobra**
+ * (spec 203 · D1): el usuario logueado que registra el pago. Antes caía en
+ * `loaded_by`, y como el encargado no rendía (#264) ese efectivo no lo rendía
+ * nadie. `loaded_by` queda sólo de fallback, para un cobro sin usuario.
  *
  * Vive acá y no en `cobro-actions` porque ese módulo es `"use server"`: todos
  * sus exports tienen que ser funciones async, así que una función pura no puede
@@ -22,6 +24,13 @@
 export function elegirMozoAtribuido(input: {
   mesaMozoId: string | null;
   lastLoadedBy: string | null;
+  /** La orden tiene mesa. Sin esto se asume que sí (comportamiento anterior). */
+  tieneMesa?: boolean;
+  /** El usuario logueado que registra el cobro (`payments.operated_by`). */
+  operadoPor?: string | null;
 }): string | null {
+  if (input.tieneMesa === false) {
+    return input.operadoPor ?? input.lastLoadedBy;
+  }
   return input.mesaMozoId ?? input.lastLoadedBy;
 }

@@ -36,4 +36,53 @@ describe("elegirMozoAtribuido", () => {
       LUCIA,
     );
   });
+
+  // Spec 203 · D1
+  describe("sin mesa: es de quien cobra", () => {
+    const SOFIA = "33333333-3333-3333-3333-333333333333";
+
+    it("takeaway/delivery van al usuario logueado que cobra, no al que cargó", () => {
+      expect(
+        elegirMozoAtribuido({
+          mesaMozoId: null,
+          lastLoadedBy: LUCIA,
+          tieneMesa: false,
+          operadoPor: SOFIA,
+        }),
+      ).toBe(SOFIA);
+    });
+
+    it("un pedido online sin ítems cargados por staff igual queda del que cobra", () => {
+      expect(
+        elegirMozoAtribuido({
+          mesaMozoId: null,
+          lastLoadedBy: null,
+          tieneMesa: false,
+          operadoPor: SOFIA,
+        }),
+      ).toBe(SOFIA);
+    });
+
+    it("sin usuario que cobre cae en el que cargó", () => {
+      expect(
+        elegirMozoAtribuido({
+          mesaMozoId: null,
+          lastLoadedBy: LUCIA,
+          tieneMesa: false,
+          operadoPor: null,
+        }),
+      ).toBe(LUCIA);
+    });
+
+    it("con mesa, el que cobra no cambia nada", () => {
+      expect(
+        elegirMozoAtribuido({
+          mesaMozoId: LUCIA,
+          lastLoadedBy: TERMINAL,
+          tieneMesa: true,
+          operadoPor: SOFIA,
+        }),
+      ).toBe(LUCIA);
+    });
+  });
 });

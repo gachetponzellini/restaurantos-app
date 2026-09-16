@@ -108,6 +108,7 @@ function pendiente(
     por_metodo: { ...EMPTY_METODO },
     total_propinas_cents: 0,
     pagos_count: 3,
+    por_canal: {},
     ...over,
   };
 }

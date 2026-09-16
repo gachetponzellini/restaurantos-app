@@ -33,6 +33,40 @@ import type { RendicionData } from "@/app/[business_slug]/admin/(authed)/operaci
 import { cn } from "@/lib/utils";
 import { METHOD_COLOR, METHOD_LABEL } from "./caja-metricas";
 import type { PaymentMethod } from "@/lib/caja/types";
+import {
+  CANALES,
+  CANAL_LABEL,
+  type CanalRendicion,
+} from "@/lib/caja/canal-rendicion";
+
+/**
+ * Los canales con efectivo a entregar (spec 203). Con más de uno —o con uno que
+ * no sea el salón— se rinde y se muestra por separado.
+ */
+function canalesConEfectivo(p: RendicionMozoPendiente): CanalRendicion[] {
+  return CANALES.filter((c) => (p.por_canal?.[c]?.efectivo_cents ?? 0) > 0);
+}
+
+function mostrarPorCanal(p: RendicionMozoPendiente): boolean {
+  const canales = CANALES.filter((c) => p.por_canal?.[c]);
+  return canales.length > 1 || (canales.length === 1 && canales[0] !== "salon");
+}
+
+function EfectivoPorCanal({ pendiente }: { pendiente: RendicionMozoPendiente }) {
+  if (!mostrarPorCanal(pendiente)) return null;
+  return (
+    <ul className="mt-2 space-y-1">
+      {CANALES.filter((c) => pendiente.por_canal?.[c]).map((c) => (
+        <li key={c} className="flex items-baseline justify-between gap-2 text-xs">
+          <span className="text-zinc-600">{CANAL_LABEL[c]}</span>
+          <span className="font-semibold tabular-nums text-zinc-800">
+            {formatCurrency(pendiente.por_canal[c]!.efectivo_cents)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 type AssignmentWithNames = CajaUserAssignment & {
   user_name: string | null;
@@ -389,6 +423,7 @@ function MozoPendienteCard({
             {formatCurrency(p.efectivo_cents)}
           </p>
         </div>
+        <EfectivoPorCanal pendiente={p} />
         {/* Spec 177 · Parte B — la propina deja de ser un número informativo:
             se le paga en esta misma rendición, del cajón. */}
         {p.total_propinas_cents > 0 && (
@@ -434,19 +469,41 @@ function RendirModal({
   // Spec 139 · D1 — la otra salida: el mozo se fue y la plata queda como deuda
   // declarada, con motivo. No es una rendición en $0.
   const [noEntrego, setNoEntrego] = useState(false);
+  // Spec 203 · D4 — con más de un canal con efectivo, un monto por canal.
+  const [deliveredPorCanal, setDeliveredPorCanal] = useState<
+    Partial<Record<CanalRendicion, string>>
+  >({});
 
   useEffect(() => {
     if (!open) {
+      setDeliveredPorCanal({});
       setDelivered("");
       setNotes("");
       setNoEntrego(false);
     }
   }, [open]);
 
-  const cents =
-    delivered === "" ? null : Math.max(0, Math.round(Number(delivered) * 100));
+  const aCents = (v: string | undefined) =>
+    v === undefined || v === "" ? null : Math.max(0, Math.round(Number(v) * 100));
+  const canales = canalesConEfectivo(pendiente);
+  const porCanal = canales.length > 1;
+  const centsPorCanal = Object.fromEntries(
+    canales.map((c) => [c, aCents(deliveredPorCanal[c])]),
+  ) as Partial<Record<CanalRendicion, number | null>>;
+  const cents = porCanal
+    ? canales.some((c) => centsPorCanal[c] === null)
+      ? null
+      : canales.reduce((acc, c) => acc + (centsPorCanal[c] ?? 0), 0)
+    : aCents(delivered);
   const diff = cents === null ? 0 : cents - pendiente.efectivo_cents;
-  const requiresNotes = cents !== null && diff !== 0;
+  const hayDiferenciaEnCanal =
+    porCanal &&
+    canales.some(
+      (c) =>
+        centsPorCanal[c] !== null &&
+        centsPorCanal[c] !== pendiente.por_canal[c]!.efectivo_cents,
+    );
+  const requiresNotes = cents !== null && (diff !== 0 || hayDiferenciaEnCanal);
 
   /**
    * El mozo cobró, pero nada en efectivo: hizo todo con tarjeta, QR o
@@ -488,6 +545,7 @@ function RendirModal({
             <p className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums">
               {formatCurrency(pendiente.efectivo_cents)}
             </p>
+            <EfectivoPorCanal pendiente={pendiente} />
           </div>
         )}
 
@@ -518,10 +576,52 @@ function RendirModal({
           </p>
         )}
 
+        {porCanal && !noEntrego && (
+          <div className="mt-4 grid gap-3">
+            {canales.map((c) => {
+              const esperado = pendiente.por_canal[c]!.efectivo_cents;
+              const entregado = centsPorCanal[c];
+              const d = entregado === null || entregado === undefined ? null : entregado - esperado;
+              return (
+                <div key={c} className="grid gap-1.5">
+                  <Label className="flex items-baseline justify-between text-sm font-medium">
+                    <span>{CANAL_LABEL[c]} · efectivo que entrega</span>
+                    <span className="text-xs font-normal text-zinc-500 tabular-nums">
+                      debería {formatCurrency(esperado)}
+                      {d !== null && d !== 0 && (
+                        <span className={cn("ml-1 font-semibold", d < 0 ? "text-rose-700" : "text-amber-700")}>
+                          ({d > 0 ? "+" : "−"}
+                          {formatCurrency(Math.abs(d))})
+                        </span>
+                      )}
+                    </span>
+                  </Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold text-zinc-400">
+                      $
+                    </span>
+                    <Input
+                      type="number"
+                      aria-label={`${CANAL_LABEL[c]} · efectivo que entrega`}
+                      value={deliveredPorCanal[c] ?? ""}
+                      onChange={(e) =>
+                        setDeliveredPorCanal((prev) => ({ ...prev, [c]: e.target.value }))
+                      }
+                      placeholder="0"
+                      inputMode="decimal"
+                      className="pl-7 text-base tabular-nums"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div
           className={cn(
             "mt-4 grid gap-1.5",
-            (noEntrego || sinEfectivo) && "hidden",
+            (noEntrego || sinEfectivo || porCanal) && "hidden",
           )}
         >
           <Label className="text-sm font-medium">Efectivo que entrega</Label>
@@ -560,7 +660,7 @@ function RendirModal({
           </div>
         )}
 
-        {!noEntrego && cents !== null && diff === 0 && (
+        {!noEntrego && cents !== null && diff === 0 && !hayDiferenciaEnCanal && (
           <div className="mt-4 flex items-center justify-between rounded-lg bg-emerald-50 p-3 text-emerald-900 ring-1 ring-emerald-200">
             <span className="text-sm font-semibold">Cuadra perfecto</span>
             <CheckCircle2 className="size-4" />
@@ -612,6 +712,10 @@ function RendirModal({
                   notes.trim() || null,
                   slug,
                   noEntrego ? "no_entrego" : "rendida",
+                  undefined,
+                  porCanal && !noEntrego
+                    ? (centsPorCanal as Partial<Record<CanalRendicion, number>>)
+                    : undefined,
                 );
                 if (!r.ok) {
                   toast.error(r.error);

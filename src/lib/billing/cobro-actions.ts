@@ -154,6 +154,8 @@ async function loadCaja(
 async function deriveAttributedMozo(
   service: GenericClient,
   orderId: string,
+  /** Quien registra el cobro: se queda con lo que no tiene mesa (spec 203 · D1). */
+  operadoPor: string,
 ): Promise<string | null> {
   // 1. El mozo de la mesa de la order — la fuente de verdad de la atribución.
   const { data: orderRow } = await service
@@ -186,7 +188,12 @@ async function deriveAttributedMozo(
   const lastLoadedBy =
     (data as { loaded_by: string | null } | null)?.loaded_by ?? null;
 
-  return elegirMozoAtribuido({ mesaMozoId, lastLoadedBy });
+  return elegirMozoAtribuido({
+    mesaMozoId,
+    lastLoadedBy,
+    tieneMesa: Boolean(tableId),
+    operadoPor,
+  });
 }
 
 /**
@@ -716,7 +723,7 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
     return actionError("Datos del comprobante inválidos.");
   }
 
-  const attributed = await deriveAttributedMozo(service, order.id);
+  const attributed = await deriveAttributedMozo(service, order.id, ctx.userId);
 
   // El registro del pago va por una RPC transaccional (migración 0007): lock
   // FOR UPDATE de la orden/split + guarda anti-duplicado (split/orden ya
@@ -866,7 +873,7 @@ export async function iniciarPagoMp(
   }
 
   // Insert payment row pendiente para que el webhook pueda asociar el id.
-  const attributed = await deriveAttributedMozo(service, order.id);
+  const attributed = await deriveAttributedMozo(service, order.id, ctx.userId);
   // La forma del comprobante se valida ANTES de generar la preferencia: si es
   // inválida, que el cliente ni siquiera vea el link. Es el mismo criterio que
   // `registrarPago` (issue #263).

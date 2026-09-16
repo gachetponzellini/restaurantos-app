@@ -55,6 +55,13 @@ function pendienteMixto(
     por_metodo: { ...EMPTY_METODO, cash: 1_850_000, card_manual: 3_850_000 },
     total_propinas_cents: 0,
     pagos_count: 2,
+    por_canal: {
+      salon: {
+        efectivo_cents: 1_850_000,
+        pagos_count: 2,
+        por_metodo: { ...EMPTY_METODO, cash: 1_850_000, card_manual: 3_850_000 },
+      },
+    },
     ...over,
   };
 }
@@ -197,6 +204,8 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
         null,
         "demo",
         "rendida",
+        undefined,
+        undefined,
       );
     });
 
@@ -219,6 +228,61 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
   });
 });
 
+// ── Spec 203 — el encargado rinde takeaway y delivery por separado ────────
+describe("rendición · por canal (spec 203)", () => {
+  function sofia() {
+    return pendienteMixto({
+      mozo_id: "e1",
+      mozo_name: "Sofía",
+      mozo_role: "encargado",
+      efectivo_cents: 750_000,
+      por_metodo: { ...EMPTY_METODO, cash: 750_000 },
+      por_canal: {
+        takeaway: { efectivo_cents: 300_000, pagos_count: 2, por_metodo: { ...EMPTY_METODO, cash: 300_000 } },
+        delivery: { efectivo_cents: 450_000, pagos_count: 3, por_metodo: { ...EMPTY_METODO, cash: 450_000 } },
+      },
+    });
+  }
+
+  it("la tarjeta muestra el efectivo de takeaway y de delivery", () => {
+    renderTab([sofia()]);
+    expect(screen.getByText("Takeaway")).toBeInTheDocument();
+    expect(screen.getByText("Delivery")).toBeInTheDocument();
+  });
+
+  it("el modal pide un monto por canal y manda cada uno", async () => {
+    const user = userEvent.setup();
+    const { registrarRendicionMozo } = await import("@/lib/caja/actions");
+    vi.mocked(registrarRendicionMozo).mockClear();
+    renderTab([sofia()]);
+    await user.click(screen.getByRole("button", { name: /registrar rendición/i }));
+
+    await user.type(await screen.findByLabelText(/takeaway · efectivo que entrega/i), "3000");
+    await user.type(screen.getByLabelText(/delivery · efectivo que entrega/i), "4500");
+    await user.click(screen.getAllByRole("button", { name: /registrar rendición/i }).at(-1)!);
+
+    expect(registrarRendicionMozo).toHaveBeenCalledWith(
+      "e1",
+      750_000,
+      null,
+      "demo",
+      "rendida",
+      undefined,
+      { takeaway: 300_000, delivery: 450_000 },
+    );
+  });
+
+  it("una diferencia en un canal pide motivo aunque el total cuadre", async () => {
+    const user = userEvent.setup();
+    renderTab([sofia()]);
+    await user.click(screen.getByRole("button", { name: /registrar rendición/i }));
+
+    await user.type(await screen.findByLabelText(/takeaway · efectivo que entrega/i), "3500");
+    await user.type(screen.getByLabelText(/delivery · efectivo que entrega/i), "4000");
+    expect(screen.getByText(/¿qué pasó\?/i)).toBeInTheDocument();
+  });
+});
+
 // ── Spec 178 — el papel de la rendición, a pedido ─────────────────────────
 describe("rendición · el ticket por mozo (spec 178)", () => {
   const rendida: Historial[number] = {
@@ -231,6 +295,7 @@ describe("rendición · el ticket por mozo (spec 178)", () => {
     expected_cash_cents: 1_850_000,
     delivered_cash_cents: 1_850_000,
     difference_cents: 0,
+    por_canal: {},
     notes: null,
     por_metodo: { ...EMPTY_METODO, cash: 1_850_000 },
     estado: "rendida",
