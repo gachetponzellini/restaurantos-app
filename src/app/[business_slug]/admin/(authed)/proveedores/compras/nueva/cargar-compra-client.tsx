@@ -841,10 +841,16 @@ export function CargarCompraClient({
         // compra sin renglones, sin número y con la lectura todavía corriendo.
         // Guardar queda sólo en el botón del pie, que es el único lugar donde
         // la persona está mirando lo que va a pasar.
+        //
+        // spec 199·D3 · la excepción es el propio botón. «Darle el ok final con
+        // el Enter» (Rocío): el detalle lleva el foco hasta acá desde el último
+        // total, y con el foco SOBRE el botón la persona está mirando exactamente
+        // lo que va a pasar — que era la razón de la regla. En un campo, nunca.
         onKeyDown={(e) => {
           if (e.key !== "Enter") return;
           const el = e.target as HTMLElement;
           if (el.tagName === "TEXTAREA") return;
+          if (el instanceof HTMLButtonElement && el.type === "submit") return;
           e.preventDefault();
         }}
         className={cn(

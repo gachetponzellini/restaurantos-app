@@ -11,6 +11,8 @@ import type { SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
 import {
   aEnvases,
   aUnidades,
+  precioDelEnvaseDesdeTotal,
+  precioUnitarioCents,
   subtotalCents,
   type ModoCarga,
 } from "@/lib/proveedores/renglon-en-unidades";
@@ -104,11 +106,51 @@ export function RenglonesEditor({
   const [modos, setModos] = useState<ModoCarga[]>([]);
   const modoDe = (i: number): ModoCarga => modos[i] ?? "unidad";
 
+  /**
+   * El total de la línea TIPEADO, por renglón — spec 199·D2.
+   *
+   * «Yo quiero cargar la cantidad que me vino, lo que me salió, y listo» (Rocío).
+   * El total es lo que se escribe, pero no es lo que se guarda: lo guardado son
+   * envases y el precio de UN envase, redondeado al centavo. Cuando la división no
+   * es exacta el recalculado queda a centavos del papel, así que se recuerda lo
+   * tipeado para mostrarlo tal cual. Un renglón que vino de la lectura no tiene
+   * total tipeado y muestra el recalculado.
+   */
+  const [totales, setTotales] = useState<(number | null)[]>([]);
+  const totalDe = (i: number, it: SupplierInvoiceItemInput) =>
+    totales[i] ?? subtotalCents(it.units, it.unit_cost_cents);
+  const setTotal = (i: number, cents: number | null) =>
+    setTotales((prev) => {
+      const copia = [...prev];
+      copia[i] = cents;
+      return copia;
+    });
+
   const filas: Renglon[] = value.map((v, i) => ({ ...v, key: `${i}` }));
-  const sumaCents = value.reduce(
-    (n, it) => n + Math.round(it.units * it.unit_cost_cents),
-    0,
-  );
+  const sumaCents = value.reduce((n, it, i) => n + totalDe(i, it), 0);
+
+  /**
+   * Enter avanza — spec 199·D3. «Estaría bueno que con el Enter se pueda correr,
+   * aparte del tabulador, y darle el ok final.» Cantidad → total → cantidad del
+   * renglón siguiente; desde el último total, el foco va a «Cargar compra», donde
+   * un Enter guarda. Un Enter en un campo nunca guarda (173).
+   */
+  const avanzarConEnter = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Enter") return;
+    const actual = e.target as HTMLElement;
+    if (!actual.dataset.campo) return;
+    e.preventDefault();
+    const campos = Array.from(
+      e.currentTarget.querySelectorAll<HTMLInputElement>("input[data-campo]"),
+    );
+    const siguiente = campos[campos.indexOf(actual as HTMLInputElement) + 1];
+    if (siguiente) {
+      siguiente.focus();
+      siguiente.select();
+      return;
+    }
+    actual.closest("form")?.querySelector<HTMLButtonElement>("button[type=submit]")?.focus();
+  };
 
   const set = (i: number, patch: Partial<SupplierInvoiceItemInput>) =>
     onChange(value.map((v, j) => (i === j ? { ...v, ...patch } : v)));
@@ -143,7 +185,10 @@ export function RenglonesEditor({
   }
 
   return (
-    <div className="@container space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
+    <div
+      className="@container space-y-2 rounded-lg border border-zinc-200 bg-white p-3"
+      onKeyDown={avanzarConEnter}
+    >
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-zinc-700">Detalle por insumo</p>
         <button
@@ -166,7 +211,9 @@ export function RenglonesEditor({
         const modo: ModoCarga = tieneEnvase ? modoDe(i) : "unidad";
         const enPantalla = aUnidades(modo, f.units, f.unit_cost_cents, neto);
         const unidadDeCarga = modo === "envase" ? (ins?.presentationName ?? "envase") : (ins?.unit ?? "");
-        const subtotal = subtotalCents(f.units, f.unit_cost_cents);
+        const total = totalDe(i, f);
+        // El precio que se MUESTRA: total ÷ la cantidad en la unidad de carga.
+        const precioMostrado = precioUnitarioCents(total, enPantalla.cantidad);
 
         return (
           <div key={f.key} className="space-y-0.5">
@@ -179,7 +226,12 @@ export function RenglonesEditor({
                     set(i, {
                       ingredient_id: e.target.value,
                       presentation_id: nuevo?.presentationId ?? null,
-                      unit_cost_cents: nuevo?.costCents ?? 0,
+                      // Con un total ya tipeado manda el papel; sin él, el último
+                      // costo conocido del insumo es una sugerencia razonable.
+                      unit_cost_cents:
+                        totales[i] != null
+                          ? precioDelEnvaseDesdeTotal(totales[i]!, f.units)
+                          : (nuevo?.costCents ?? 0),
                     });
                   }}
                   className="h-8 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs @md:h-9 @md:text-sm"
@@ -199,12 +251,18 @@ export function RenglonesEditor({
                   className="h-8 text-right text-xs tabular-nums @md:h-9 @md:text-sm"
                   value={enPantalla.cantidad}
                   aria-label={`Cantidad en ${unidadDeCarga}`}
+                  data-campo="cantidad"
                   onValue={(cantidad) => {
-                    // Sólo se recalculan los envases: el precio del envase no se
-                    // toca, así una cantidad nueva no le mete un centavo de
-                    // redondeo al costo del insumo.
                     const envases = aEnvases(modo, cantidad ?? 0, 0, neto).units;
-                    set(i, { units: envases });
+                    // 199 · el total se queda: cambiar la cantidad cambia el
+                    // precio, que es lo que se deriva. Sin total tipeado, se
+                    // conserva el precio del envase como antes.
+                    set(i, {
+                      units: envases,
+                      ...(totales[i] != null
+                        ? { unit_cost_cents: precioDelEnvaseDesdeTotal(totales[i]!, envases) }
+                        : null),
+                    });
                   }}
                 />
               </div>
@@ -235,34 +293,37 @@ export function RenglonesEditor({
                 <span className="mb-2 shrink-0 text-xs text-zinc-500">{ins?.unit}</span>
               )}
 
-              <span className="mb-2 text-[11px] text-zinc-400">×</span>
+              {/* El precio unitario, CALCULADO — spec 199·D1. «Que sólo lo
+                  muestre, que se calcula con los otros dos» (Juan). En gris y
+                  sin borde: se ve que no se escribe. */}
+              <span
+                className="mb-2 min-w-24 shrink-0 text-right text-xs tabular-nums text-zinc-500"
+                aria-label={`Precio por ${unidadDeCarga}`}
+              >
+                {precioMostrado === null ? "—" : `${formatCurrency(precioMostrado)}/${unidadDeCarga}`}
+              </span>
 
-              <div className="w-24 @md:w-28">
+              {/* El total de la línea, que es lo que dice la factura — 199. */}
+              <div className="w-28 @md:w-32">
                 <InputNumeroAR
-                  className="h-8 text-right text-xs tabular-nums @md:h-9 @md:text-sm"
+                  className="h-8 text-right text-xs font-semibold tabular-nums @md:h-9 @md:text-sm"
                   decimales={2}
-                  value={enPantalla.precioCents / 100}
-                  aria-label={`Precio por ${unidadDeCarga}`}
+                  value={total / 100}
+                  aria-label="Total de la línea"
+                  data-campo="total"
                   onValue={(pesos) => {
-                    // Simétrico: se recalcula el precio del envase, la cantidad
-                    // de envases queda.
-                    const precio = aEnvases(modo, 0, Math.round((pesos ?? 0) * 100), neto);
-                    set(i, { unit_cost_cents: precio.unitCostCents });
+                    const cents = pesos === null ? null : Math.round(pesos * 100);
+                    setTotal(i, cents);
+                    set(i, { unit_cost_cents: precioDelEnvaseDesdeTotal(cents ?? 0, f.units) });
                   }}
                 />
               </div>
-
-              {/* El subtotal del renglón — 198·D6. Es lo que se compara contra
-                  la línea impresa; sin él, cuando la suma no cierra no hay forma
-                  de saber en qué renglón está la diferencia. */}
-              <span className="mb-2 min-w-20 shrink-0 text-right text-xs font-semibold tabular-nums text-zinc-800 @md:text-sm">
-                {formatCurrency(subtotal)}
-              </span>
 
               <button
                 type="button"
                 onClick={() => {
                   setModos((prev) => prev.filter((_, j) => j !== i));
+                  setTotales((prev) => prev.filter((_, j) => j !== i));
                   onChange(value.filter((_, j) => j !== i));
                 }}
                 className="mb-1 rounded p-1 text-zinc-300 transition hover:bg-zinc-100 hover:text-red-600"
@@ -290,7 +351,7 @@ export function RenglonesEditor({
 
             {/* spec 188 · el IVA, sobre el precio que se está tipeando. */}
             <LineaIva
-              netoCents={enPantalla.precioCents || null}
+              netoCents={precioMostrado}
               tasa={tasaComprobante}
               base={baseDelPrecio}
               prefijo={`El ${unidadDeCarga || "precio"}`}

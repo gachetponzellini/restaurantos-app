@@ -69,3 +69,27 @@ export function aUnidades(
 export function subtotalCents(units: number, unitCostCents: number): number {
   return Math.round(units * unitCostCents);
 }
+
+/**
+ * El precio de UN envase a partir del total de la línea — spec 199·D2.
+ *
+ * *«Yo quiero cargar la cantidad que me vino, lo que me salió, y listo, y que
+ * después haga sola la división»* — Rocío. Se tipea el total impreso; esto
+ * deriva lo que la RPC necesita.
+ *
+ * Redondea a centavos enteros, así que `envases × precio` puede quedar a unos
+ * centavos del total cuando la división no es exacta. Por eso la pantalla muestra
+ * el total TIPEADO y no el recalculado: el papel manda.
+ */
+export function precioDelEnvaseDesdeTotal(totalCents: number, units: number): number {
+  return units > 0 ? Math.round(totalCents / units) : 0;
+}
+
+/**
+ * El precio unitario que se MUESTRA — spec 199·D1: `total ÷ cantidad`, en la
+ * unidad en que se está cargando (el kg, o el envase). `null` sin cantidad: no hay
+ * precio que mostrar, y un cero sería un precio falso.
+ */
+export function precioUnitarioCents(totalCents: number, cantidad: number): number | null {
+  return cantidad > 0 ? Math.round(totalCents / cantidad) : null;
+}

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { clasificarArchivo, esHeic, TOPE_PDF_BYTES } from "./archivos";
-import { aEnvases, aUnidades, subtotalCents } from "./renglon-en-unidades";
+import {
+  aEnvases,
+  aUnidades,
+  precioDelEnvaseDesdeTotal,
+  precioUnitarioCents,
+  subtotalCents,
+} from "./renglon-en-unidades";
 
 const archivo = (name: string, type = "", size = 500_000) => ({ name, type, size });
 
@@ -101,5 +107,48 @@ describe("el renglón en kilos — spec 198·D5", () => {
       units: 8.26,
       unitCostCents: 175_000_00,
     });
+  });
+});
+
+/**
+ * Spec 199 — «pongo 5 kilos y el total, 58 mil, y me suma 290 mil».
+ */
+describe("se carga el total, no el precio — spec 199", () => {
+  it("5 kg por $58.000 son $11.600 el kg, no $290.000", () => {
+    expect(precioUnitarioCents(58_000_00, 5)).toBe(11_600_00);
+  });
+
+  it("lo guardado: 25 panes de 200 g a $2.320, que suman exacto $58.000", () => {
+    const { units } = aEnvases("unidad", 5, 0, 0.2);
+    const precio = precioDelEnvaseDesdeTotal(58_000_00, units);
+    expect(units).toBe(25);
+    expect(precio).toBe(2_320_00);
+    expect(subtotalCents(units, precio)).toBe(58_000_00);
+  });
+
+  it("en kg o en envases se guarda lo mismo", () => {
+    const enKg = precioDelEnvaseDesdeTotal(58_000_00, aEnvases("unidad", 5, 0, 0.2).units);
+    const enPanes = precioDelEnvaseDesdeTotal(58_000_00, aEnvases("envase", 25, 0, 0.2).units);
+    expect(enKg).toBe(enPanes);
+    // y el pan se muestra a $2.320
+    expect(precioUnitarioCents(58_000_00, 25)).toBe(2_320_00);
+  });
+
+  /**
+   * D2 · la división que no es exacta. El precio del envase se redondea al
+   * centavo y el recalculado queda a centavos del total: por eso la pantalla
+   * muestra el total tipeado.
+   */
+  it("3 kg por $10.000: $3.333,33 el kg, y el envase redondeado al centavo", () => {
+    expect(precioUnitarioCents(10_000_00, 3)).toBe(3_333_33);
+    const units = aEnvases("unidad", 3, 0, 0.2).units;
+    const precio = precioDelEnvaseDesdeTotal(10_000_00, units);
+    expect(precio).toBe(66_667);
+    expect(Math.abs(subtotalCents(units, precio) - 10_000_00)).toBeLessThanOrEqual(units);
+  });
+
+  it("sin cantidad no hay precio que mostrar, ni envase que cobrar", () => {
+    expect(precioUnitarioCents(58_000_00, 0)).toBeNull();
+    expect(precioDelEnvaseDesdeTotal(58_000_00, 0)).toBe(0);
   });
 });

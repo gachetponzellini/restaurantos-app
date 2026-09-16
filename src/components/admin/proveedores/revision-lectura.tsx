@@ -15,6 +15,8 @@ import {
 import { tasaDeRenglon, type PriceBase } from "@/lib/proveedores/iva";
 import type { MATCH_SOURCES, SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
 import { InputNumeroAR } from "./input-numero-ar";
+import { precioDelEnvaseDesdeTotal } from "@/lib/proveedores/renglon-en-unidades";
+
 import { LineaIva } from "./linea-iva";
 
 export type OrigenAlias = "exacto" | "fuzzy" | "llm" | "manual" | "manual_corregido";
@@ -32,6 +34,12 @@ export type RenglonRevisable = RenglonPropuesto & {
   pagina?: number;
   /** Aparece igual en la página anterior: se avisa, nunca se descarta. */
   posibleDuplicado?: boolean;
+  /**
+   * El total de la línea que tipeó la persona — spec 199·D4. Sólo de pantalla:
+   * lo guardado es el precio del envase, derivado de acá. Sin tipear, el total
+   * que se muestra es envases × precio.
+   */
+  totalCents?: number | null;
 };
 
 /** Qué se aprende de un renglón confirmado, por de dónde salió la propuesta. */
@@ -105,10 +113,9 @@ export function RevisionLectura({
   const [filas, setFilas] = useState(renglones);
 
   const incluidas = filas.filter((f) => f.incluir && f.ingredientId && f.units && f.unitCostCents);
-  const sumaCents = incluidas.reduce(
-    (n, f) => n + Math.round((f.units ?? 0) * (f.unitCostCents ?? 0)),
-    0,
-  );
+  const totalDe = (f: RenglonRevisable) =>
+    f.totalCents ?? Math.round((f.units ?? 0) * (f.unitCostCents ?? 0));
+  const sumaCents = incluidas.reduce((n, f) => n + totalDe(f), 0);
 
   const sinInsumo = filas.filter((f) => !f.ingredientId).length;
 
@@ -156,7 +163,7 @@ export function RevisionLectura({
     );
   };
 
-  const set = (i: number, patch: Partial<RenglonPropuesto>) =>
+  const set = (i: number, patch: Partial<RenglonRevisable>) =>
     setFilas((prev) => prev.map((f, j) => (i === j ? { ...f, ...patch } : f)));
 
   if (filas.length === 0) {
@@ -274,22 +281,43 @@ export function RevisionLectura({
                         <InputNumeroAR
                           className="h-7 w-16 text-xs @md:h-9 @md:w-20 @md:text-sm"
                           value={f.units}
-                          onValue={(n) => set(i, { units: n ?? 0 })}
+                          onValue={(n) => {
+                            const envases = n ?? 0;
+                            // 199 · con un total tipeado, cambiar los envases
+                            // cambia el precio: el total es lo que dice el papel.
+                            set(i, {
+                              units: envases,
+                              ...(f.totalCents != null
+                                ? { unitCostCents: precioDelEnvaseDesdeTotal(f.totalCents, envases) }
+                                : null),
+                            });
+                          }}
                           aria-label="Envases"
-                        />
-                        <span className="text-[11px] text-zinc-400">×</span>
-                        <InputNumeroAR
-                          className="h-7 w-24 text-xs @md:h-9 @md:w-28 @md:text-sm"
-                          decimales={2}
-                          value={f.unitCostCents / 100}
-                          onValue={(pesos) =>
-                            set(i, { unitCostCents: Math.round((pesos ?? 0) * 100) })
-                          }
-                          aria-label="Precio por envase"
                         />
                         <span className="truncate text-[11px] text-zinc-400">
                           {f.presentationName ?? insumo?.unit}
                         </span>
+                        {/* spec 199·D4 · el precio del envase se calcula; se
+                            tipea el total de la línea, que es lo impreso. */}
+                        <span
+                          className="shrink-0 text-[11px] tabular-nums text-zinc-500"
+                          aria-label="Precio por envase"
+                        >
+                          a {formatCurrency(f.unitCostCents)} c/u =
+                        </span>
+                        <InputNumeroAR
+                          className="h-7 w-28 text-xs font-semibold @md:h-9 @md:w-32 @md:text-sm"
+                          decimales={2}
+                          value={totalDe(f) / 100}
+                          onValue={(pesos) => {
+                            const cents = pesos === null ? null : Math.round(pesos * 100);
+                            set(i, {
+                              totalCents: cents,
+                              unitCostCents: precioDelEnvaseDesdeTotal(cents ?? 0, f.units ?? 0),
+                            });
+                          }}
+                          aria-label="Total de la línea"
+                        />
                       </div>
                     )}
                   </div>
@@ -301,7 +329,7 @@ export function RevisionLectura({
                     <p className="text-[11px] text-zinc-500 tabular-nums">
                       → entran {cantidad(f.quantityBase)} {insumo.unit}
                       {f.units !== null && f.unitCostCents !== null && (
-                        <> · {formatCurrency(Math.round(f.units * f.unitCostCents))}</>
+                        <> · {formatCurrency(totalDe(f))}</>
                       )}
                     </p>
                   )}
