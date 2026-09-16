@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +14,7 @@ import {
 } from "@/lib/proveedores/lectura/a-propuesta";
 import { tasaDeRenglon, type PriceBase } from "@/lib/proveedores/iva";
 import type { MATCH_SOURCES, SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
+import { InputNumeroAR } from "./input-numero-ar";
 import { LineaIva } from "./linea-iva";
 
 export type OrigenAlias = "exacto" | "fuzzy" | "llm" | "manual" | "manual_corregido";
@@ -269,24 +269,21 @@ export function RevisionLectura({
 
                     {f.units !== null && f.unitCostCents !== null && (
                       <div className="flex items-center gap-1.5 @md:shrink-0">
-                        <Input
+                        {/* spec 198·D4 · mismo bug que el editor manual: el
+                            `Number()` por tecla se comía la coma y el punto. */}
+                        <InputNumeroAR
                           className="h-7 w-16 text-xs @md:h-9 @md:w-20 @md:text-sm"
-                          inputMode="decimal"
                           value={f.units}
-                          onChange={(e) => set(i, { units: Number(e.target.value) || 0 })}
+                          onValue={(n) => set(i, { units: n ?? 0 })}
                           aria-label="Envases"
                         />
                         <span className="text-[11px] text-zinc-400">×</span>
-                        <Input
+                        <InputNumeroAR
                           className="h-7 w-24 text-xs @md:h-9 @md:w-28 @md:text-sm"
-                          inputMode="decimal"
+                          decimales={2}
                           value={f.unitCostCents / 100}
-                          onChange={(e) =>
-                            set(i, {
-                              unitCostCents: Math.round(
-                                (Number(e.target.value.replace(",", ".")) || 0) * 100,
-                              ),
-                            })
+                          onValue={(pesos) =>
+                            set(i, { unitCostCents: Math.round((pesos ?? 0) * 100) })
                           }
                           aria-label="Precio por envase"
                         />

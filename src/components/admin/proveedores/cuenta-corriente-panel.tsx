@@ -360,12 +360,22 @@ export function CuentaCorrientePanel({
                   rel="noopener noreferrer"
                   className="block overflow-hidden rounded-lg border"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={fotos[elegida.id] ?? undefined}
-                    alt="Foto del comprobante"
-                    className="max-h-48 w-full object-cover"
-                  />
+                  {/* spec 198·D2 · un comprobante cargado en PDF no se puede
+                      mostrar en un <img>: se ofrece abrirlo. La URL firmada
+                      conserva el path, así que la extensión alcanza. */}
+                  {/\.pdf(\?|$)/i.test(fotos[elegida.id] ?? "") ? (
+                    <span className="flex items-center gap-2 px-3 py-4 text-sm font-medium text-zinc-700">
+                      <FileText className="size-5 text-zinc-400" />
+                      Abrir el PDF del comprobante
+                    </span>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={fotos[elegida.id] ?? undefined}
+                      alt="Foto del comprobante"
+                      className="max-h-48 w-full object-cover"
+                    />
+                  )}
                 </a>
               </div>
             )}

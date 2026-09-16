@@ -54,6 +54,12 @@ export const MAX_PAGINAS = 5;
 const MAX_BYTES = 3_600_000;
 
 /**
+ * El PDF no pasa por el achicado: su techo es el del uploader (198·D2). Sigue
+ * cortando el techo del lote, que es el que protege a la función serverless.
+ */
+const MAX_BYTES_PDF = 10 * 1024 * 1024;
+
+/**
  * Y un techo sobre la SUMA, que el de arriba no cubre.
  *
  * Cinco imágenes de 3,5 MB pasan el control de a una y son 17,5 MB de buffers que
@@ -150,11 +156,23 @@ export async function leerPagina(
   deCuantas: number,
 ): Promise<ResultadoLectura> {
   if (!hayApiKey()) return { ok: false, error: "sin_api_key" };
-  if (bytes.byteLength > MAX_BYTES) return { ok: false, error: "imagen_muy_pesada" };
 
   const real = detectarMime(bytes);
   if (real === null) return { ok: false, error: "formato_no_soportado" };
-  if (real === "application/pdf") return { ok: false, error: "formato_no_soportado" };
+
+  /**
+   * spec 198·D2 · el PDF se lee como PDF.
+   *
+   * Acá había un `return formato_no_soportado` para el PDF, y un mensaje que
+   * mandaba a sacarle una foto al papel. Pero es como mandan la factura A casi
+   * todos los proveedores con facturación electrónica, y la API lo lee nativo
+   * —con sus varias hojas— como bloque `document`. Convertirlo a imagen sería
+   * hacer peor algo que el modelo hace directo.
+   */
+  const esPdf = real === "application/pdf";
+  if (bytes.byteLength > (esPdf ? MAX_BYTES_PDF : MAX_BYTES)) {
+    return { ok: false, error: "imagen_muy_pesada" };
+  }
 
   /**
    * El `media_type` que viaja es el DETECTADO, no el declarado.
@@ -206,20 +224,33 @@ export async function leerPagina(
         {
           role: "user",
           content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: real,
-                data: Buffer.from(bytes).toString("base64"),
-              },
-            },
+            esPdf
+              ? {
+                  type: "document" as const,
+                  source: {
+                    type: "base64" as const,
+                    media_type: "application/pdf" as const,
+                    data: Buffer.from(bytes).toString("base64"),
+                  },
+                }
+              : {
+                  type: "image" as const,
+                  source: {
+                    type: "base64" as const,
+                    media_type: real as MimeSoportado,
+                    data: Buffer.from(bytes).toString("base64"),
+                  },
+                },
             // «PÁGINA 1 DE 1» también se manda a propósito: le dice al modelo que
             // no hay otra foto, y por lo tanto que el total tiene que estar acá o
             // no está en ningún lado.
             {
               type: "text",
-              text: `PÁGINA ${pagina} DE ${deCuantas}.\n\nTranscribí lo que hay en esta foto.`,
+              text: esPdf
+                ? // Un PDF puede traer varias hojas en UNA «página» del rail: el
+                  // total está en la última hoja, no en la primera.
+                  `PÁGINA ${pagina} DE ${deCuantas}. Es un PDF: puede tener varias hojas, transcribilas todas como un solo comprobante.\n\nTranscribí lo que hay en este documento.`
+                : `PÁGINA ${pagina} DE ${deCuantas}.\n\nTranscribí lo que hay en esta foto.`,
             },
           ],
         },

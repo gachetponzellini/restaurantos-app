@@ -40,9 +40,11 @@ vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
 import { leerComprobantePaginas, leerPagina, MAX_PAGINAS } from "@/lib/proveedores/lectura/leer";
 
 /** Una imagen con el header que corresponde y el peso que se pida. */
-function imagen(tipo: "jpeg" | "png" | "heic", bytes = 64): ArrayBuffer {
+function imagen(tipo: "jpeg" | "png" | "heic" | "pdf", bytes = 64): ArrayBuffer {
   const buf = new Uint8Array(bytes);
   if (tipo === "jpeg") buf.set([0xff, 0xd8, 0xff]);
+  // %PDF
+  if (tipo === "pdf") buf.set([0x25, 0x50, 0x44, 0x46]);
   if (tipo === "png") buf.set([0x89, 0x50, 0x4e, 0x47]);
   // ftyp en el offset 4 — lo que sale de un iPhone sin convertir.
   if (tipo === "heic") buf.set([0x66, 0x74, 0x79, 0x70], 4);
@@ -112,6 +114,44 @@ describe("el media_type que viaja es el de los bytes, no el declarado", () => {
 
     expect(r).toEqual({ ok: false, error: "formato_no_soportado" });
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * spec 198·D2 — el PDF de la factura electrónica.
+ *
+ * Antes caía en `formato_no_soportado` con un mensaje que mandaba a sacarle una
+ * foto al papel. La API lo lee nativo como bloque `document`.
+ */
+describe("el PDF se lee como PDF (spec 198)", () => {
+  it("viaja como document, no como image", async () => {
+    const r = await leerPagina(imagen("pdf"), "application/pdf", 1, 1);
+
+    expect(r.ok).toBe(true);
+    const bloque = contenidoUser(0).messages[0]!.content[0]!;
+    expect(bloque.type).toBe("document");
+    expect(bloque.source!.media_type).toBe("application/pdf");
+  });
+
+  it("un PDF que Storage guardó como octet-stream se lee igual: mandan los bytes", async () => {
+    const r = await leerPagina(imagen("pdf"), "application/octet-stream", 1, 1);
+    expect(r.ok).toBe(true);
+    expect(contenidoUser(0).messages[0]!.content[0]!.type).toBe("document");
+  });
+
+  it("le avisa al modelo que un PDF puede traer varias hojas", async () => {
+    await leerPagina(imagen("pdf"), "application/pdf", 1, 1);
+    const texto = contenidoUser(0).messages[0]!.content[1]!.text!;
+    expect(texto).toMatch(/varias hojas/);
+  });
+
+  /** El techo del PDF es propio: 3,6 MB era para la foto ya achicada. */
+  it("un PDF de 5 MB entra; la misma foto de 5 MB no", async () => {
+    expect((await leerPagina(imagen("pdf", 5_000_000), "application/pdf", 1, 1)).ok).toBe(true);
+    expect(await leerPagina(imagen("jpeg", 5_000_000), "image/jpeg", 1, 1)).toEqual({
+      ok: false,
+      error: "imagen_muy_pesada",
+    });
   });
 });
 

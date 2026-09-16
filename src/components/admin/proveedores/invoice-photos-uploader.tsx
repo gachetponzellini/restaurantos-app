@@ -5,6 +5,12 @@ import { toast } from "sonner";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { achicarImagen, LADO_LARGO_DEFAULT } from "@/lib/images/achicar";
+import {
+  clasificarArchivo,
+  esHeic,
+  MENSAJE_HEIC,
+  TOPE_PDF_BYTES,
+} from "@/lib/proveedores/archivos";
 import { InvoiceVisor, type EstadoPagina, type PaginaFoto } from "./invoice-visor";
 
 /** El techo del endpoint de lectura: las páginas se leen en llamadas paralelas. */
@@ -13,7 +19,11 @@ export const MAX_FOTOS = 5;
 const BUCKET = "supplier-invoices";
 const TOPE_BYTES = 5 * 1024 * 1024;
 
-const extensionDe = (file: File) => (file.type === "image/png" ? "png" : "jpg");
+const extensionDe = (file: File, tipo: "imagen" | "pdf") =>
+  tipo === "pdf" ? "pdf" : file.type === "image/png" ? "png" : "jpg";
+
+/** Un rechazo que ya sabe explicarse: se muestra tal cual en la miniatura. */
+class ErrorDeSubida extends Error {}
 
 export type FotosComprobante = {
   paginas: PaginaFoto[];
@@ -109,11 +119,18 @@ export function useFotosComprobante({
       if (aceptados.length === 0) return;
 
       const eraVacio = paginasRef.current.length === 0;
-      const nuevas: PaginaFoto[] = aceptados.map((file) => {
+      // El visor ya descartó —y avisó— lo que no es foto ni PDF (198·D1). Acá
+      // se clasifica de nuevo sólo para saber CÓMO subir cada uno.
+      const tipos = aceptados.map((file) => {
+        const c = clasificarArchivo(file);
+        return c.ok ? c.tipo : "imagen";
+      });
+
+      const nuevas: PaginaFoto[] = aceptados.map((file, idx) => {
         const id = crypto.randomUUID();
         const previewUrl = URL.createObjectURL(file);
         objectUrls.current.set(id, previewUrl);
-        return { id, path: null, previewUrl, estado: "subiendo" as const };
+        return { id, path: null, previewUrl, tipo: tipos[idx], estado: "subiendo" as const };
       });
 
       aplicar((prev) => [...prev, ...nuevas]);
@@ -124,14 +141,44 @@ export function useFotosComprobante({
       const supabase = createSupabaseBrowserClient();
       nuevas.forEach(async (pagina, idx) => {
         try {
-          const file = await achicarImagen(aceptados[idx], LADO_LARGO_DEFAULT);
-          if (file.size > TOPE_BYTES) {
-            throw new Error("La foto pesa más de 5 MB incluso achicada.");
+          const original = aceptados[idx]!;
+          const tipo = tipos[idx]!;
+
+          let file: File;
+          if (tipo === "pdf") {
+            // spec 198·D2 · el PDF sube tal cual: no hay nada que achicar, y la
+            // API lo lee nativo. El tope es propio porque no pasa por el achicado.
+            if (original.size > TOPE_PDF_BYTES) {
+              throw new ErrorDeSubida("El PDF pesa más de 10 MB.");
+            }
+            file = original;
+          } else {
+            file = await achicarImagen(original, LADO_LARGO_DEFAULT);
+            /**
+             * spec 198·D3 · la HEIC que el navegador no pudo abrir.
+             *
+             * `achicarImagen` devuelve el MISMO archivo cuando no lo puede
+             * decodificar. Con una HEIC eso pasa en Chrome/Windows, y antes se
+             * subía igual con extensión `.jpg` y bytes HEIC adentro: ni se veía
+             * la vista previa ni la leía el modelo. Se corta acá y se dice cómo.
+             */
+            if (file === original && esHeic(original)) {
+              throw new ErrorDeSubida(MENSAJE_HEIC);
+            }
+            if (file.size > TOPE_BYTES) {
+              throw new ErrorDeSubida("La foto pesa más de 5 MB incluso achicada.");
+            }
           }
-          const path = `${businessId}/${pagina.id}.${extensionDe(file)}`;
-          const { error } = await supabase.storage
-            .from(BUCKET)
-            .upload(path, file, { cacheControl: "3600", upsert: false });
+
+          const path = `${businessId}/${pagina.id}.${extensionDe(file, tipo)}`;
+          const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+            // Explícito: un PDF bajado de WhatsApp llega como octet-stream, y
+            // sin esto Storage lo guarda así y el visor lo descarga en vez de
+            // mostrarlo.
+            contentType: tipo === "pdf" ? "application/pdf" : file.type || "image/jpeg",
+          });
           if (error) throw error;
 
           // Se quitó mientras subía: el archivo ya está en el bucket y nadie lo
@@ -147,10 +194,10 @@ export function useFotosComprobante({
           );
         } catch (e) {
           if (!sigueViva(pagina.id)) return;
+          // Los errores con motivo propio se muestran tal cual; el resto es un
+          // problema de red o de Storage, y ahí el mensaje genérico es el honesto.
           const mensaje =
-            e instanceof Error && e.message.includes("5 MB")
-              ? e.message
-              : "No pudimos subir esta foto. Probá de nuevo.";
+            e instanceof ErrorDeSubida ? e.message : "No pudimos subir este archivo. Probá de nuevo.";
           aplicar((prev) =>
             prev.map((p) => (p.id === pagina.id ? { ...p, estado: "error", error: mensaje } : p)),
           );

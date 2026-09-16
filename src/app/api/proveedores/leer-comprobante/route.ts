@@ -118,8 +118,10 @@ const MENSAJES: Record<string, string> = {
   lote_muy_pesado:
     "Las fotos juntas pesan demasiado. Sacá alguna del comprobante o volvé a sacarlas sin zoom.",
   demasiadas_paginas: `Un comprobante entra en hasta ${MAX_PAGINAS} fotos.`,
+  // spec 198 · el PDF ahora se lee: lo que llega acá es sobre todo la HEIC de un
+  // iPhone que nadie convirtió, y el mensaje dice cómo convertirla.
   formato_no_soportado:
-    "Ese archivo no es una foto que pueda leer. Si es un PDF o una captura de pantalla, sacale una foto al papel con la cámara.",
+    "No pude leer este archivo. Si es una foto de iPhone (HEIC), mandala como JPG: en el iPhone, Ajustes → Cámara → Formatos → «Más compatible».",
   no_encontrada: "No encontramos esta foto. Volvé a subirla.",
   timeout: "La lectura tardó más de lo esperado. Cargalo a mano y avisanos.",
   request_rechazado: "Falló la lectura por un problema nuestro, no por la foto. Cargalo a mano y avisanos.",

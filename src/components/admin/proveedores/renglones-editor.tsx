@@ -4,12 +4,21 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/currency";
 import type { PriceBase } from "@/lib/proveedores/iva";
 import type { SupplierInvoiceItemInput } from "@/lib/proveedores/schema";
 
+import {
+  aEnvases,
+  aUnidades,
+  subtotalCents,
+  type ModoCarga,
+} from "@/lib/proveedores/renglon-en-unidades";
+
+import { InputNumeroAR } from "./input-numero-ar";
 import { LineaIva } from "./linea-iva";
+
+const cantidad = (n: number) => n.toLocaleString("es-AR", { maximumFractionDigits: 3 });
 
 export type InsumoOption = {
   id: string;
@@ -87,6 +96,14 @@ export function RenglonesEditor({
     if (value.length > 0) setAbierto(true);
   }, [value.length]);
 
+  /**
+   * «Cómo viene» cada renglón — 198·D5. Vive al lado de `value` y no adentro:
+   * es cómo se LEE el renglón, no lo que se guarda (lo guardado son siempre
+   * envases), así que no viaja al server. Default: la unidad del insumo.
+   */
+  const [modos, setModos] = useState<ModoCarga[]>([]);
+  const modoDe = (i: number): ModoCarga => modos[i] ?? "unidad";
+
   const filas: Renglon[] = value.map((v, i) => ({ ...v, key: `${i}` }));
   const sumaCents = value.reduce(
     (n, it) => n + Math.round(it.units * it.unit_cost_cents),
@@ -143,78 +160,142 @@ export function RenglonesEditor({
 
       {filas.map((f, i) => {
         const ins = insumos.find((x) => x.id === f.ingredient_id);
+        const neto = ins?.netQuantity ?? 0;
+        const tieneEnvase = Boolean(ins?.presentationId) && neto > 0;
+        // Sin envase no hay nada que elegir: la cantidad ya es la unidad base.
+        const modo: ModoCarga = tieneEnvase ? modoDe(i) : "unidad";
+        const enPantalla = aUnidades(modo, f.units, f.unit_cost_cents, neto);
+        const unidadDeCarga = modo === "envase" ? (ins?.presentationName ?? "envase") : (ins?.unit ?? "");
+        const subtotal = subtotalCents(f.units, f.unit_cost_cents);
+
         return (
           <div key={f.key} className="space-y-0.5">
-          <div className="flex items-end gap-1.5 @md:gap-2">
-            <div className="min-w-0 flex-1">
-              <select
-                value={f.ingredient_id}
-                onChange={(e) => {
-                  const nuevo = insumos.find((x) => x.id === e.target.value);
-                  set(i, {
-                    ingredient_id: e.target.value,
-                    presentation_id: nuevo?.presentationId ?? null,
-                    unit_cost_cents: nuevo?.costCents ?? 0,
-                  });
-                }}
-                className="h-8 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs @md:h-9 @md:text-sm"
-                aria-label="Insumo"
-              >
-                {insumos.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-16 @md:w-20">
-              <Input
-                className="h-8 text-xs @md:h-9 @md:text-sm"
-                inputMode="decimal"
-                value={f.units}
-                onChange={(e) => set(i, { units: Number(e.target.value) || 0 })}
-                aria-label="Envases"
-              />
-            </div>
-            <div className="w-24 @md:w-28">
-              <Input
-                className="h-8 text-xs @md:h-9 @md:text-sm"
-                inputMode="decimal"
-                value={f.unit_cost_cents / 100}
-                onChange={(e) =>
-                  set(i, {
-                    unit_cost_cents: Math.round(
-                      (Number(e.target.value.replace(",", ".")) || 0) * 100,
-                    ),
-                  })
-                }
-                aria-label="Precio por envase"
-              />
-            </div>
-            {ins && (
-              <span className="mb-2 hidden shrink-0 truncate text-[11px] text-zinc-400 @md:block">
-                {ins.presentationName ?? ins.unit}
+            <div className="flex flex-wrap items-end gap-1.5 @md:flex-nowrap @md:gap-2">
+              <div className="min-w-0 basis-full @md:basis-auto @md:flex-1">
+                <select
+                  value={f.ingredient_id}
+                  onChange={(e) => {
+                    const nuevo = insumos.find((x) => x.id === e.target.value);
+                    set(i, {
+                      ingredient_id: e.target.value,
+                      presentation_id: nuevo?.presentationId ?? null,
+                      unit_cost_cents: nuevo?.costCents ?? 0,
+                    });
+                  }}
+                  className="h-8 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs @md:h-9 @md:text-sm"
+                  aria-label="Insumo"
+                >
+                  {insumos.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* La cantidad, en lo que diga la factura (198·D4 y D5). */}
+              <div className="w-20 @md:w-24">
+                <InputNumeroAR
+                  className="h-8 text-right text-xs tabular-nums @md:h-9 @md:text-sm"
+                  value={enPantalla.cantidad}
+                  aria-label={`Cantidad en ${unidadDeCarga}`}
+                  onValue={(cantidad) => {
+                    // Sólo se recalculan los envases: el precio del envase no se
+                    // toca, así una cantidad nueva no le mete un centavo de
+                    // redondeo al costo del insumo.
+                    const envases = aEnvases(modo, cantidad ?? 0, 0, neto).units;
+                    set(i, { units: envases });
+                  }}
+                />
+              </div>
+
+              {/* «Cómo viene» — «seleccionamos si se cuenta por kilos o por
+                  litros» (Rocío). La unidad del insumo es el default; el envase
+                  queda para la factura que sí dice «3 cajas». Cambiarlo NO
+                  cambia la plata: lo guardado sigue igual, sólo cambia cómo se
+                  lee. */}
+              {tieneEnvase ? (
+                <select
+                  value={modo}
+                  onChange={(e) => {
+                    const nuevo = e.target.value as ModoCarga;
+                    setModos((prev) => {
+                      const copia = [...prev];
+                      copia[i] = nuevo;
+                      return copia;
+                    });
+                  }}
+                  className="h-8 max-w-28 truncate rounded-md border border-zinc-200 bg-white px-1.5 text-xs @md:h-9"
+                  aria-label="Cómo viene"
+                >
+                  <option value="unidad">{ins?.unit}</option>
+                  <option value="envase">{ins?.presentationName ?? "envase"}</option>
+                </select>
+              ) : (
+                <span className="mb-2 shrink-0 text-xs text-zinc-500">{ins?.unit}</span>
+              )}
+
+              <span className="mb-2 text-[11px] text-zinc-400">×</span>
+
+              <div className="w-24 @md:w-28">
+                <InputNumeroAR
+                  className="h-8 text-right text-xs tabular-nums @md:h-9 @md:text-sm"
+                  decimales={2}
+                  value={enPantalla.precioCents / 100}
+                  aria-label={`Precio por ${unidadDeCarga}`}
+                  onValue={(pesos) => {
+                    // Simétrico: se recalcula el precio del envase, la cantidad
+                    // de envases queda.
+                    const precio = aEnvases(modo, 0, Math.round((pesos ?? 0) * 100), neto);
+                    set(i, { unit_cost_cents: precio.unitCostCents });
+                  }}
+                />
+              </div>
+
+              {/* El subtotal del renglón — 198·D6. Es lo que se compara contra
+                  la línea impresa; sin él, cuando la suma no cierra no hay forma
+                  de saber en qué renglón está la diferencia. */}
+              <span className="mb-2 min-w-20 shrink-0 text-right text-xs font-semibold tabular-nums text-zinc-800 @md:text-sm">
+                {formatCurrency(subtotal)}
               </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setModos((prev) => prev.filter((_, j) => j !== i));
+                  onChange(value.filter((_, j) => j !== i));
+                }}
+                className="mb-1 rounded p-1 text-zinc-300 transition hover:bg-zinc-100 hover:text-red-600"
+                aria-label="Quitar renglón"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+
+            {/* La conversión, cuando la hay: es lo que va a entrar al stock y a
+                cuánto queda el envase, que es el costo que se propaga. */}
+            {modo === "unidad" && tieneEnvase && f.units > 0 && (
+              <p className="pl-0.5 text-[11px] text-zinc-500 tabular-nums">
+                Entran {cantidad(enPantalla.cantidad)} {ins?.unit} ·{" "}
+                {cantidad(f.units)} × {ins?.presentationName} a{" "}
+                {formatCurrency(f.unit_cost_cents)} c/u
+              </p>
             )}
-            <button
-              type="button"
-              onClick={() => onChange(value.filter((_, j) => j !== i))}
-              className="mb-1 rounded p-1 text-zinc-300 transition hover:bg-zinc-100 hover:text-red-600"
-              aria-label="Quitar renglón"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-          {/* spec 188 · el mismo cartel que la revisión de la lectura. El precio
-              que se tipea es por ENVASE, así que el IVA se muestra sobre el
-              envase: es el número que la persona está mirando. */}
-          <LineaIva
-            netoCents={f.unit_cost_cents || null}
-            tasa={tasaComprobante}
-            base={baseDelPrecio}
-            prefijo={`El ${ins?.presentationName ?? "envase"}`}
-            className="pl-0.5 text-[11px] text-zinc-500 tabular-nums"
-          />
+            {ins && !tieneEnvase && (
+              <p className="pl-0.5 text-[11px] text-zinc-400">
+                Este insumo no tiene envase cargado: entra el stock, pero no se actualiza
+                el costo.
+              </p>
+            )}
+
+            {/* spec 188 · el IVA, sobre el precio que se está tipeando. */}
+            <LineaIva
+              netoCents={enPantalla.precioCents || null}
+              tasa={tasaComprobante}
+              base={baseDelPrecio}
+              prefijo={`El ${unidadDeCarga || "precio"}`}
+              className="pl-0.5 text-[11px] text-zinc-500 tabular-nums"
+            />
           </div>
         );
       })}

@@ -11,6 +11,7 @@ import {
 import {
   AlertTriangle,
   Check,
+  FileText,
   ImagePlus,
   Loader2,
   Maximize2,
@@ -23,12 +24,19 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ImagenAmpliable } from "@/components/shared/imagen-ampliable";
+import { clasificarArchivo } from "@/lib/proveedores/archivos";
 import { cn } from "@/lib/utils";
 
 export type EstadoPagina = "subiendo" | "lista" | "leyendo" | "leida" | "error";
 
 export type PaginaFoto = {
   id: string;
+  /**
+   * spec 198·D2 · el PDF no se muestra en un `<img>`: va al visor de PDF del
+   * navegador. Opcional porque las fotos de antes de la 198 no lo traen, y son
+   * todas imagen.
+   */
+  tipo?: "imagen" | "pdf";
   /** La ruta en el bucket. `null` mientras sube: recién ahí se puede leer. */
   path: string | null;
   /** `URL.createObjectURL` del archivo, o la URL firmada si viene de la base. */
@@ -110,7 +118,21 @@ export function InvoiceVisor({
 
   const sumarArchivos = useCallback(
     (entrada: FileList | File[] | null) => {
-      const files = Array.from(entrada ?? []).filter((f) => f.type.startsWith("image/"));
+      /**
+       * spec 198·D1 · lo que no entra se DICE.
+       *
+       * Acá había un `filter(type.startsWith("image/"))` y un `return` pelado:
+       * se elegía un PDF —o una foto de iPhone, que Chrome en Windows reporta
+       * sin tipo— y no pasaba absolutamente nada. «No me deja cargar la foto
+       * desde los archivos, no sé por qué.»
+       */
+      const todos = Array.from(entrada ?? []);
+      const files: File[] = [];
+      for (const f of todos) {
+        const c = clasificarArchivo(f);
+        if (c.ok) files.push(f);
+        else toast.error(`«${f.name}» ${c.motivo}`);
+      }
       if (files.length === 0) return;
       const lugar = maxPaginas - total;
       if (lugar <= 0) {
@@ -134,9 +156,9 @@ export function InvoiceVisor({
    */
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
-        f.type.startsWith("image/"),
-      );
+      // Sólo se intercepta si hay ALGÚN archivo: pegar texto en el importe no
+      // puede disparar un aviso de «no es una foto».
+      const files = Array.from(e.clipboardData?.files ?? []);
       if (files.length === 0) return;
       e.preventDefault();
       sumarArchivos(files);
@@ -260,7 +282,9 @@ export function InvoiceVisor({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        // `.heic` explícito: en Windows el tipo viene vacío y `image/*` la deja
+        // gris en el explorador de archivos.
+        accept="image/*,application/pdf,.pdf,.heic,.heif"
         multiple
         hidden
         onChange={(e) => {
@@ -323,13 +347,20 @@ export function InvoiceVisor({
                         : "border-transparent hover:border-zinc-300",
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.previewUrl}
-                      alt={etiquetaDe(idx)}
-                      draggable={false}
-                      className="h-24 w-full object-cover"
-                    />
+                    {p.tipo === "pdf" ? (
+                      <span className="flex h-24 w-full flex-col items-center justify-center gap-1 text-zinc-500">
+                        <FileText className="size-6" />
+                        <span className="text-[10px] font-semibold">PDF</span>
+                      </span>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.previewUrl}
+                        alt={etiquetaDe(idx)}
+                        draggable={false}
+                        className="h-24 w-full object-cover"
+                      />
+                    )}
                     <span className="absolute left-1 top-1 grid size-5 place-items-center rounded bg-zinc-900/85 text-[11px] font-bold text-white">
                       {idx + 1}
                     </span>
@@ -390,25 +421,40 @@ export function InvoiceVisor({
             >
               {pagina && (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    key={pagina.id}
-                    src={pagina.previewUrl}
-                    alt={etiquetaDe(i)}
-                    draggable={false}
-                    onLoad={(e) =>
-                      setNatural({
-                        w: e.currentTarget.naturalWidth,
-                        h: e.currentTarget.naturalHeight,
-                      })
-                    }
-                    style={{ width: `${escala * 100}%`, maxWidth: "none" }}
-                    className="block h-auto select-none"
-                  />
+                  {pagina.tipo === "pdf" ? (
+                    // spec 198·D2 · el visor de PDF del navegador, que ya trae su
+                    // zoom y sus hojas. El paneo y el zoom de la foto no aplican.
+                    <iframe
+                      key={pagina.id}
+                      src={pagina.previewUrl}
+                      title={etiquetaDe(i)}
+                      className="h-full min-h-[60vh] w-full rounded-lg bg-white"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={pagina.id}
+                      src={pagina.previewUrl}
+                      alt={etiquetaDe(i)}
+                      draggable={false}
+                      onLoad={(e) =>
+                        setNatural({
+                          w: e.currentTarget.naturalWidth,
+                          h: e.currentTarget.naturalHeight,
+                        })
+                      }
+                      style={{ width: `${escala * 100}%`, maxWidth: "none" }}
+                      className="block h-auto select-none"
+                    />
+                  )}
                   {(pagina.estado === "subiendo" || pagina.estado === "leyendo") && (
                     <span className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-zinc-900/85 px-3 py-1.5 text-xs font-medium text-white">
                       <Loader2 className="size-3.5 animate-spin" />
-                      {pagina.estado === "subiendo" ? "Subiendo la foto…" : "Leyendo la factura…"}
+                      {pagina.estado === "subiendo"
+                        ? pagina.tipo === "pdf"
+                          ? "Subiendo el PDF…"
+                          : "Subiendo la foto…"
+                        : "Leyendo la factura…"}
                     </span>
                   )}
                   {pagina.estado === "error" && (
@@ -422,8 +468,10 @@ export function InvoiceVisor({
             </div>
           </div>
 
-          {/* Barra de herramientas. */}
-          <div className="flex shrink-0 items-center gap-1">
+          {/* Barra de herramientas. Sobre un PDF no aplica: el visor del
+              navegador trae su propio zoom, y «ampliar» un PDF en el visor de
+              fotos mostraría una imagen rota. */}
+          <div className={cn("flex shrink-0 items-center gap-1", pagina?.tipo === "pdf" && "hidden")}>
             <Button
               type="button"
               size="icon-sm"
