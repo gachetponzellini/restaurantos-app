@@ -1395,11 +1395,20 @@ async function buildPrintableCuentaTickets(
           )
         ),
         order_items(
+          id,
           quantity,
           unit_price_cents,
           notes,
           cancelled_at,
           products(name)
+        ),
+        order_splits(
+          split_index,
+          label,
+          expected_amount_cents,
+          paid_amount_cents,
+          status,
+          order_split_items(order_item_id)
         )
       )
     `,
@@ -1442,12 +1451,23 @@ async function buildPrintableCuentaTickets(
         } | null;
       } | null;
       order_items: {
+        id: string;
         quantity: number;
         unit_price_cents: number;
         notes: string | null;
         cancelled_at: string | null;
         products: { name: string } | null;
       }[];
+      order_splits:
+        | {
+            split_index: number;
+            label: string | null;
+            expected_amount_cents: number;
+            paid_amount_cents: number;
+            status: string;
+            order_split_items: { order_item_id: string }[] | null;
+          }[]
+        | null;
     };
 
     const floorPlan = order.tables?.floor_plans ?? null;
@@ -1480,6 +1500,26 @@ async function buildPrintableCuentaTickets(
           line_total_cents: it.unit_price_cents * it.quantity,
           // `notes` NO viaja: ver el comentario del control de pedido.
         })),
+      // Spec 201: la división sale en el mismo papel. Los ítems de cada parte
+      // se resuelven acá contra `order_items` (los modos por monto/personas no
+      // traen ninguno); un ítem anulado no se lista.
+      splits: (order.order_splits ?? []).map((sp) => ({
+        split_index: sp.split_index,
+        label: sanitizeTicketText(sp.label),
+        expected_amount_cents: sp.expected_amount_cents,
+        paid_amount_cents: sp.paid_amount_cents,
+        status: sp.status,
+        items: (sp.order_split_items ?? []).flatMap(({ order_item_id }) => {
+          const it = order.order_items.find(
+            (x) => x.id === order_item_id && !x.cancelled_at,
+          );
+          return it
+            ? [
+                `${it.quantity}x ${sanitizeTicketText(it.products?.name) ?? "—"}`,
+              ]
+            : [];
+        }),
+      })),
     };
 
     const content = buildCuentaTicketContent(data);

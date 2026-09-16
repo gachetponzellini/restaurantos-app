@@ -37,6 +37,20 @@ export type CuentaTicketItem = {
   notes?: string | null;
 };
 
+/**
+ * Una parte de la cuenta dividida (spec 201). Espejo de `order_splits`, ya
+ * resuelto para el papel: los ítems sólo vienen en los modos que los asignan
+ * (`por_items`, `por_comensal`).
+ */
+export type CuentaTicketSplit = {
+  split_index: number;
+  label?: string | null;
+  expected_amount_cents: number;
+  paid_amount_cents: number;
+  status: string;
+  items?: string[] | null;
+};
+
 export type CuentaTicketData = {
   print_job_id: string;
   business_name: string;
@@ -58,6 +72,8 @@ export type CuentaTicketData = {
   /** True desde la segunda impresión de la misma cuenta. */
   reprint?: boolean;
   items?: CuentaTicketItem[] | null;
+  /** Sub-cuentas de la mesa (spec 201). Las `cancelled` no se imprimen. */
+  splits?: CuentaTicketSplit[] | null;
 };
 
 /** Centavos → "110500.00". Sin símbolo de moneda: la térmica es ASCII. */
@@ -156,6 +172,49 @@ export function buildCuentaTicketLines(c: CuentaTicketData): Line[] {
   }
   if (c.tip_cents > 0) push(row("Propina:", money(c.tip_cents)));
   push(row("TOTAL:", money(c.total_cents)), { size: "tall", bold: true });
+
+  // ── Cuenta dividida (spec 201) ────────────────────────────────────────────
+  // Un solo papel con todas las partes: se lee en la mesa y cada uno busca la
+  // suya. El redondeo ya lo resolvió la división al crearse (el resto de
+  // centavos va a la parte 1, `prorrateEqualSplits`), así que acá se imprime lo
+  // guardado. Lo único que el papel agrega es «Sin asignar»: si se cargaron
+  // ítems después de dividir, las partes ya no suman el total y eso tiene que
+  // verse, no esconderse repartiéndolo por las nuestras.
+  const partes = (c.splits ?? [])
+    .filter((sp) => sp.status !== "cancelled")
+    .sort((a, b) => a.split_index - b.split_index);
+  if (partes.length > 0) {
+    push(RULE);
+    push(`CUENTA DIVIDIDA EN ${partes.length}`, {
+      bold: true,
+      align: "center",
+    });
+    partes.forEach((sp, i) => {
+      const nombre = sp.label?.trim()
+        ? `Parte ${i + 1} - ${sp.label.trim()}`
+        : `Parte ${i + 1}`;
+      const resta = Math.max(
+        0,
+        sp.expected_amount_cents - sp.paid_amount_cents,
+      );
+      const valor =
+        sp.status === "paid" || resta === 0
+          ? "PAGADO"
+          : sp.paid_amount_cents > 0
+            ? `resta ${money(resta)}`
+            : money(sp.expected_amount_cents);
+      for (const l of itemConImporte(nombre, valor, COLS.sm))
+        push(l, { bold: true, spacing: COMPACT_SPACING });
+      for (const it of sp.items ?? [])
+        for (const l of wrap(`- ${it}`, COLS.sm))
+          push(l, { spacing: COMPACT_SPACING });
+    });
+    const asignado = partes.reduce((n, sp) => n + sp.expected_amount_cents, 0);
+    if (c.total_cents - asignado > 0)
+      push(row("Sin asignar:", money(c.total_cents - asignado)), {
+        bold: true,
+      });
+  }
 
   // ── Cobro parcial ─────────────────────────────────────────────────────────
   // Si alguien de la mesa ya puso plata, lo que importa es cuánto FALTA.

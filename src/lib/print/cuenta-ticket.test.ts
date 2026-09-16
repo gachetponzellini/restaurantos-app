@@ -150,4 +150,106 @@ describe("buildCuentaTicketLines", () => {
     expect(text(base())).not.toContain("Subtotal:");
     expect(text(base({ tip_cents: 100000 }))).toContain("Subtotal:");
   });
+
+  // Spec 201 — la división de la cuenta sale en el mismo papel.
+  describe("spec 201 · cuenta dividida", () => {
+    const split = (over: Record<string, unknown>) => ({
+      split_index: 0,
+      label: null,
+      expected_amount_cents: 0,
+      paid_amount_cents: 0,
+      status: "pending",
+      ...over,
+    });
+
+    it("lista cada parte con su monto, en orden, sin las canceladas", () => {
+      const t = text(
+        base({
+          total_cents: 9000000,
+          splits: [
+            split({ split_index: 2, expected_amount_cents: 3000000 }),
+            split({
+              split_index: 1,
+              expected_amount_cents: 3000000,
+              label: "Juan",
+            }),
+            split({ split_index: 0, expected_amount_cents: 3000000 }),
+            split({
+              split_index: 3,
+              expected_amount_cents: 9000000,
+              status: "cancelled",
+            }),
+          ],
+        }),
+      );
+      expect(t).toContain("CUENTA DIVIDIDA EN 3");
+      expect(t).toMatch(/Parte 1 +30000\.00/);
+      expect(t).toMatch(/Parte 2 - Juan +30000\.00/);
+      expect(t).toMatch(/Parte 3 +30000\.00/);
+      expect(t).not.toContain("Parte 4");
+      expect(t).not.toContain("Sin asignar");
+    });
+
+    it("marca las pagadas y lo que resta de una a medio pagar", () => {
+      const t = text(
+        base({
+          total_cents: 6000000,
+          splits: [
+            split({
+              split_index: 0,
+              expected_amount_cents: 3000000,
+              paid_amount_cents: 3000000,
+              status: "paid",
+            }),
+            split({
+              split_index: 1,
+              expected_amount_cents: 3000000,
+              paid_amount_cents: 1000000,
+            }),
+          ],
+        }),
+      );
+      expect(t).toMatch(/Parte 1 +PAGADO/);
+      expect(t).toMatch(/Parte 2 +resta 20000\.00/);
+    });
+
+    it("muestra los ítems de cada parte cuando la división es por ítems", () => {
+      const t = text(
+        base({
+          total_cents: 6900000,
+          splits: [
+            split({
+              split_index: 0,
+              expected_amount_cents: 6600000,
+              items: ["2x Brochette de lomo"],
+            }),
+            split({
+              split_index: 1,
+              expected_amount_cents: 300000,
+              items: ["1x Agua sin gas"],
+            }),
+          ],
+        }),
+      );
+      expect(t).toContain("- 2x Brochette de lomo");
+      expect(t).toContain("- 1x Agua sin gas");
+    });
+
+    it("si se cargó algo después de dividir, lo muestra como sin asignar", () => {
+      const t = text(
+        base({
+          total_cents: 7000000,
+          splits: [
+            split({ split_index: 0, expected_amount_cents: 3000000 }),
+            split({ split_index: 1, expected_amount_cents: 3000000 }),
+          ],
+        }),
+      );
+      expect(t).toMatch(/Sin asignar: +10000\.00/);
+    });
+
+    it("sin división no cambia nada", () => {
+      expect(text(base({ splits: [] }))).not.toContain("DIVIDIDA");
+    });
+  });
 });
