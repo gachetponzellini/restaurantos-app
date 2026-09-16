@@ -40,11 +40,6 @@ function base(over: Partial<ControlTicketData> = {}): ControlTicketData {
   };
 }
 
-/** Mismo formato de importe que usa el ticket. */
-function money(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-
 /** El ticket como texto plano, para asertar sobre el contenido. */
 function text(data: ControlTicketData): string {
   return buildControlTicketLines(data)
@@ -87,16 +82,17 @@ describe("buildControlTicketLines", () => {
     // largo por nada. La lista bajó a cuerpo normal (2026-09-03); el resto —lo
     // que el repartidor lee de parado— conserva su tamaño.
     const data = base();
-    const deItems = new Set(
-      (data.items ?? []).flatMap((it) => [
-        `${it.quantity}x ${it.product_name}`,
-        money(it.line_total_cents),
-      ]),
+    const deItems = (data.items ?? []).map(
+      (it) => `${it.quantity}x ${it.product_name}`,
     );
     for (const l of buildControlTicketLines(data)) {
       if ((l.size ?? "sm") !== "sm") continue;
       const t = l.text.trim();
-      expect(/^-*$/.test(t) || deItems.has(t) || t.startsWith("+ ")).toBe(true);
+      expect(
+        /^-*$/.test(t) ||
+          deItems.some((d) => t.startsWith(d)) ||
+          t.startsWith("+ "),
+      ).toBe(true);
     }
   });
 
@@ -117,12 +113,10 @@ describe("buildControlTicketLines", () => {
     const papelSiTodoFueraNormal = lines.length * 64;
 
     // Los renglones de la lista avanzan la mitad; el resto del ticket no cambia.
-    expect(lines.filter((l) => l.spacing === 32)).toHaveLength(
-      items.length * 2,
-    );
+    expect(lines.filter((l) => l.spacing === 32)).toHaveLength(items.length);
     expect(papel).toBeLessThan(papelSiTodoFueraNormal);
-    // 24 renglones a 32 en vez de 64 = 768 pt menos, ~27 mm de papel por ticket.
-    expect(papelSiTodoFueraNormal - papel).toBe(items.length * 2 * 32);
+    // Spec 200: un renglón por ítem (importe al lado), a 32 en vez de 64.
+    expect(papelSiTodoFueraNormal - papel).toBe(items.length * 32);
   });
 
   it("el destino, la hora y el cobro siguen en cuerpo grande", () => {
@@ -160,12 +154,12 @@ describe("buildControlTicketLines", () => {
 
   it("un delivery lleva dirección y línea de repartidor; un retiro no", () => {
     const del = text(base());
-    expect(del).toContain("DELIVERY\n#123"); // a doble ancho entra en dos renglones
+    expect(del).toContain("DELIVERY #123"); // 80 mm: 17 col a doble ancho
     expect(del).toContain("Repartidor:");
     expect(del).toContain("Direccion: Calle 123");
 
     const ret = text(base({ delivery_type: "pickup" }));
-    expect(ret).toContain("RETIRO #123"); // 11 col justas: no se parte
+    expect(ret).toContain("RETIRO #123");
     expect(ret).not.toContain("Repartidor:");
     expect(ret).not.toContain("Direccion:");
   });
@@ -212,5 +206,87 @@ describe("buildControlTicketLines", () => {
     const t = text(base());
     expect(t).toContain("DOCUMENTO NO VALIDO");
     expect(t).toContain("COMO FACTURA");
+  });
+
+  // Spec 200 — el retiro de mostrador de kcc salía de 23 renglones para 2 ítems.
+  describe("spec 200 · el control sale corto", () => {
+    const retiro = (over: Partial<ControlTicketData> = {}) =>
+      base({
+        delivery_type: "pickup",
+        business_address: null,
+        business_phone: null,
+        customer_name: "Mostrador",
+        customer_phone: "-",
+        delivery_fee_cents: 0,
+        subtotal_cents: 8900000,
+        total_cents: 8900000,
+        payment_status: "paid",
+        items: [
+          { product_name: "Suprema", quantity: 4, line_total_cents: 6000000 },
+          {
+            product_name: "Ojo de Bife",
+            quantity: 1,
+            line_total_cents: 2900000,
+          },
+        ],
+        ...over,
+      });
+
+    it("el importe va en el renglón del ítem, a 36 columnas", () => {
+      const lines = buildControlTicketLines(retiro()).map((l) => l.text);
+      const suprema = lines.find((l) => l.startsWith("4x Suprema"));
+      expect(suprema).toBe("4x Suprema" + " ".repeat(18) + "60000.00");
+      expect(suprema).toHaveLength(36);
+      expect(lines).not.toContain(" ".repeat(28) + "60000.00");
+    });
+
+    it("un nombre largo sigue abajo sin pisar el importe", () => {
+      const lines = buildControlTicketLines(
+        retiro({
+          items: [
+            {
+              product_name: "Milanesa de entrecot a la napolitana con fritas",
+              quantity: 1,
+              line_total_cents: 2900000,
+            },
+          ],
+        }),
+      ).map((l) => l.text);
+      const i = lines.findIndex((l) => l.startsWith("1x Milanesa"));
+      expect(lines[i].endsWith("29000.00")).toBe(true);
+      expect(lines[i]).toHaveLength(36);
+      expect(lines[i + 1]).toMatch(/fritas$/);
+    });
+
+    it("no imprime Mostrador, ni el tel «-», ni el subtotal repetido", () => {
+      const t = text(retiro());
+      expect(t).not.toContain("Cliente:");
+      expect(t).not.toContain("Tel:");
+      expect(t).not.toContain("Subtotal:");
+      expect(t).toContain("TOTAL:");
+    });
+
+    it("pagado va en un solo renglón", () => {
+      const t = text(retiro());
+      expect(t).toContain("PAGADO NO COBRAR");
+    });
+
+    it("en un retiro la cabecera y el pie bajan a cuerpo normal", () => {
+      const lines = buildControlTicketLines(retiro());
+      const tam = (txt: string) =>
+        lines.find((l) => l.text === txt)?.size ?? "sm";
+      expect(tam("RESTAURANT DEL GOLF")).toBe("sm");
+      expect(tam("DOCUMENTO NO VALIDO COMO FACTURA")).toBe("sm");
+      expect(tam("RETIRO #123")).toBe("xl");
+      // En delivery siguen grandes: el repartidor lo lee de parado.
+      const del = buildControlTicketLines(base());
+      expect(del.find((l) => l.text === "RESTAURANT DEL GOLF")?.size).toBe(
+        "tall",
+      );
+    });
+
+    it("el mismo retiro pasa de 23 renglones a 15", () => {
+      expect(buildControlTicketLines(retiro()).length).toBe(15);
+    });
   });
 });

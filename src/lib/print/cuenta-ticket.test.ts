@@ -87,7 +87,7 @@ describe("buildCuentaTicketLines", () => {
   });
 
   it("aclara que la propina no está incluida, o la muestra si ya se cargó", () => {
-    expect(text(base())).toContain("La propina\nno esta incluida");
+    expect(text(base())).toContain("La propina no esta incluida");
     const conPropina = text(
       base({ tip_cents: 1000000, total_cents: 12050000 }),
     );
@@ -138,5 +138,16 @@ describe("buildCuentaTicketLines", () => {
 
   it("aguanta una mesa sin consumo", () => {
     expect(text(base({ items: [] }))).toContain("(sin consumo)");
+  });
+
+  // Spec 200 — la foto de kcc: 7 ítems, cada uno en dos renglones, en 2/3 del rollo.
+  it("importe al lado del ítem, a 36 col, compacto y sin subtotal repetido", () => {
+    const lines = buildCuentaTicketLines(base());
+    const agua = lines.find((l) => l.text.startsWith("1x Agua sin gas"));
+    expect(agua?.text).toHaveLength(36);
+    expect(agua?.text.endsWith("3000.00")).toBe(true);
+    expect(agua?.spacing).toBe(32);
+    expect(text(base())).not.toContain("Subtotal:");
+    expect(text(base({ tip_cents: 100000 }))).toContain("Subtotal:");
   });
 });

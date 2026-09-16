@@ -65,6 +65,34 @@ const LINE_SPACING = 64;
  */
 export const COMPACT_SPACING = 32;
 
+/**
+ * Ancho de la **cuenta y el control** (spec 200): esos papeles salen por la
+ * comandera de caja, que en golf y kcc es de **80 mm** (576 pt de cabezal), no
+ * de 58. Con la celda Font A + `CHAR_RIGHT_SPACING` (16 pt) ⇒ 36 col; en doble
+ * ancho 32 pt ⇒ 18, usamos 17 por margen. La foto de kcc (2026-09-16) mostraba
+ * el texto en los 2/3 izquierdos del rollo: era el ancho de 58 en papel de 80.
+ *
+ * La comanda de cocina NO lo usa: sus bytes están congelados contra el agente.
+ */
+export const COLS_80: Record<Size, number> = { sm: 36, tall: 36, xl: 17 };
+export const RULE_80 = "-".repeat(COLS_80.sm);
+
+/**
+ * Un ítem con su importe en el MISMO renglón, pegado a la derecha (spec 200).
+ * Antes el importe iba en un renglón propio y cada ítem gastaba dos. Si el
+ * nombre no entra al lado del importe, sigue en los renglones de abajo.
+ */
+export function itemConImporte(
+  label: string,
+  importe: string,
+  cols: number,
+): string[] {
+  const v = toAscii(importe);
+  const partes = wrap(label, Math.max(1, cols - v.length - 1));
+  const [primera, ...resto] = partes;
+  return [primera + " ".repeat(cols - primera.length - v.length) + v, ...resto];
+}
+
 export const RULE = "------------------------"; // 24 col (≈ ancho útil 58mm con el espaciado)
 /** Separador a lo ancho de la condensada (42 col), para el papel del cierre. */
 export const RULE_COND = "-".repeat(COLS_COND);

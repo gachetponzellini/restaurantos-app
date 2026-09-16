@@ -14,11 +14,12 @@
 
 import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import {
-  COLS,
+  COLS_80 as COLS,
   COMPACT_SPACING,
+  itemConImporte,
   renderEscPos,
   renderPlain,
-  RULE,
+  RULE_80 as RULE,
   TIMEZONE,
   toAscii,
   wrap,
@@ -146,6 +147,10 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
   };
 
   const isDelivery = c.delivery_type === "delivery";
+  // Spec 200: en un RETIRO nadie lee el papel de parado — se lo da el cajero al
+  // cliente en el mostrador. Lo que no es operativo (cabecera, emitido, pie)
+  // baja a cuerpo normal; el número, la hora y el cobro siguen grandes.
+  const cuerpo = isDelivery ? "tall" : "sm";
 
   if (c.reprint) {
     banner("REIMPRESION");
@@ -153,15 +158,20 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
   }
 
   // ── Cabecera del negocio ──────────────────────────────────────────────────
-  push(String(c.business_name).toUpperCase(), { bold: true, align: "center" });
+  push(String(c.business_name).toUpperCase(), {
+    size: cuerpo,
+    bold: true,
+    align: "center",
+  });
   if (c.business_address)
     for (const l of wrap(c.business_address, COLS.sm))
-      push(l, { align: "center" });
-  if (c.business_phone) push(c.business_phone, { align: "center" });
+      push(l, { size: cuerpo, align: "center" });
+  if (c.business_phone)
+    push(c.business_phone, { size: cuerpo, align: "center" });
   push(RULE, { size: "sm" });
 
   // ── Qué es y de qué pedido ────────────────────────────────────────────────
-  push("Control de Pedido", { align: "center" });
+  push("Control de Pedido", { size: cuerpo, align: "center" });
   banner(`${isDelivery ? "DELIVERY" : "RETIRO"} #${c.daily_number}`);
   push(RULE, { size: "sm" });
 
@@ -172,7 +182,7 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
     const cuando = stamp(c.scheduled_at);
     if (cuando) push(`ENTREGAR: ${cuando}`, { size: "tall", bold: true });
   }
-  push(`Emitido: ${stamp(c.emitted_at)}`);
+  push(`Emitido: ${stamp(c.emitted_at)}`, { size: cuerpo });
   if (isDelivery) push("Repartidor: ____________");
   push(RULE, { size: "sm" });
 
@@ -191,7 +201,12 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
   const compacto = { size: "sm", spacing: COMPACT_SPACING } as const;
   const items = c.items ?? [];
   for (const it of items) {
-    for (const l of wrap(`${it.quantity}x ${it.product_name}`, COLS.sm))
+    // Spec 200: el importe al lado del nombre, no en un renglón propio.
+    for (const l of itemConImporte(
+      `${it.quantity}x ${it.product_name}`,
+      money(it.line_total_cents),
+      COLS.sm,
+    ))
       push(l, { ...compacto, bold: true });
     // Sin sangría: `wrap` corta por palabra y se come los espacios de la
     // izquierda, así que el prefijo tiene que ser un carácter visible.
@@ -200,13 +215,15 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
         push(l, { ...compacto });
     // La nota del ítem NO va, por lo mismo que en la cuenta: es la aclaración
     // del mozo para la cocina, y este papel lo ve el cliente que retira.
-    push(row("", money(it.line_total_cents)), { ...compacto });
   }
   if (items.length === 0) push("(sin items)");
   push(RULE, { size: "sm" });
 
   // ── Plata ─────────────────────────────────────────────────────────────────
-  push(row("Subtotal:", money(c.subtotal_cents)));
+  // Spec 200: el subtotal sólo dice algo si hay envío o descuento en el medio;
+  // si no, es el total repetido.
+  if (c.delivery_fee_cents > 0 || c.discount_cents > 0)
+    push(row("Subtotal:", money(c.subtotal_cents)));
   if (c.delivery_fee_cents > 0)
     push(row("Envio:", money(c.delivery_fee_cents)));
   if (c.discount_cents > 0)
@@ -218,8 +235,7 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
   // Cobrar de más o de menos es plata del local, así que el estado del pago va
   // en el tamaño más grande del ticket y sin ambigüedad.
   if (c.payment_status === "paid") {
-    banner("PAGADO");
-    banner("NO COBRAR");
+    banner("PAGADO NO COBRAR");
   } else {
     // A doble ancho no entran etiqueta y monto en el mismo renglón: van uno
     // debajo del otro, centrados, que es como se lee de un vistazo.
@@ -231,9 +247,14 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
   push(RULE, { size: "sm" });
 
   // ── A dónde y para quién ──────────────────────────────────────────────────
-  if (c.customer_name)
-    for (const l of wrap(`Cliente: ${c.customer_name}`, COLS.sm)) push(l);
-  if (c.customer_phone) push(`Tel: ${c.customer_phone}`);
+  // Spec 200: «Mostrador» y «-» son los placeholders del alta rápida en caja,
+  // no datos del cliente — impresos sólo gastan papel.
+  const antesDelDestino = L.length;
+  const cliente = c.customer_name?.trim();
+  if (cliente && cliente.toLowerCase() !== "mostrador")
+    for (const l of wrap(`Cliente: ${cliente}`, COLS.sm)) push(l);
+  if (c.customer_phone && /\d/.test(c.customer_phone))
+    push(`Tel: ${c.customer_phone}`);
   if (isDelivery && c.delivery_address)
     for (const l of wrap(
       `${copyDeEntrega(c.business_slug ?? "").labelTicket}: ${c.delivery_address}`,
@@ -244,9 +265,9 @@ export function buildControlTicketLines(c: ControlTicketData): Line[] {
     for (const l of wrap(`Obs: ${c.delivery_notes}`, COLS.sm))
       push(l, { bold: true });
 
-  push(RULE, { size: "sm" });
-  push("DOCUMENTO NO VALIDO", { align: "center" });
-  push("COMO FACTURA", { align: "center" });
+  // Sin bloque de destino, el separador de arriba ya cierra: no van dos seguidos.
+  if (L.length > antesDelDestino) push(RULE, { size: "sm" });
+  push("DOCUMENTO NO VALIDO COMO FACTURA", { size: cuerpo, align: "center" });
 
   return L;
 }

@@ -9,10 +9,12 @@
 // misma térmica.
 
 import {
-  COLS,
+  COLS_80 as COLS,
+  COMPACT_SPACING,
+  itemConImporte,
   renderEscPos,
   renderPlain,
-  RULE,
+  RULE_80 as RULE,
   TIMEZONE,
   toAscii,
   wrap,
@@ -122,22 +124,29 @@ export function buildCuentaTicketLines(c: CuentaTicketData): Line[] {
   push(RULE);
 
   // ── Lo consumido ──────────────────────────────────────────────────────────
+  // Spec 200: importe en el mismo renglón e interlineado compacto — la cuenta
+  // no tiene doble alto en la lista, así que los 64 pt eran aire puro.
   const items = c.items ?? [];
   for (const it of items) {
-    for (const l of wrap(`${it.quantity}x ${it.product_name}`, COLS.sm))
-      push(l, { bold: true });
+    for (const l of itemConImporte(
+      `${it.quantity}x ${it.product_name}`,
+      money(it.line_total_cents),
+      COLS.sm,
+    ))
+      push(l, { bold: true, spacing: COMPACT_SPACING });
     // La nota del ítem NO va: `order_items.notes` es lo que el mozo escribe
     // PARA LA COCINA («sin sal», «bien cocido», «para la señora del fondo»).
     // Este papel se lo lleva el cliente, y ahí esas aclaraciones son ruido en
     // el mejor caso y una nota sobre él mismo en el peor. Va en la comanda,
     // que es para quien cocina. Pedido de la encargada de golf (2026-09-03).
-    push(row("", money(it.line_total_cents)));
   }
   if (items.length === 0) push("(sin consumo)");
   push(RULE);
 
   // ── La plata ──────────────────────────────────────────────────────────────
-  push(row("Subtotal:", money(c.subtotal_cents)));
+  // Spec 200: sin descuento ni propina, el subtotal es el total repetido.
+  if (c.discount_cents > 0 || c.tip_cents > 0)
+    push(row("Subtotal:", money(c.subtotal_cents)));
   if (c.discount_cents > 0) {
     push(row("Descuento:", `-${money(c.discount_cents)}`));
     // El motivo del descuento va en el papel: si el cliente pregunta por qué el
@@ -163,11 +172,9 @@ export function buildCuentaTicketLines(c: CuentaTicketData): Line[] {
   // Centradas y ya cortadas a mano: `wrap` no alinea, y una línea más larga que
   // el ancho útil la parte la impresora donde le pinta.
   if (c.tip_cents === 0) {
-    push("La propina", { align: "center" });
-    push("no esta incluida", { align: "center" });
+    push("La propina no esta incluida", { align: "center" });
   }
-  push("DOCUMENTO NO VALIDO", { align: "center" });
-  push("COMO FACTURA", { align: "center" });
+  push("DOCUMENTO NO VALIDO COMO FACTURA", { align: "center" });
   push("Gracias!", { align: "center" });
 
   return L;
