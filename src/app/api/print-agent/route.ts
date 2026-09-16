@@ -45,6 +45,7 @@ import { registrarLatido } from "@/lib/print-agent/heartbeat";
 import type { PrintAgentCredential } from "@/lib/print-agent/credentials";
 
 import { unauthorized, autenticarAgente } from "./agent-auth";
+import { buildMozoShortNames } from "@/lib/mozo/mozo-short-name";
 
 /**
  * Sanea texto que va al stream ESC/POS de la comandera: quita bytes de control
@@ -454,7 +455,7 @@ async function buildTrabajos(
         delivery_type,
         kitchen_notes,
         kitchen_at,
-        tables!orders_table_id_fkey(label)
+        tables!orders_table_id_fkey(label, mozo_id)
       ),
       comanda_items(
         order_item_id,
@@ -498,6 +499,14 @@ async function buildTrabajos(
   // gastar la query de `otrosPorPedido` en un negocio que la tiene apagada.
   // Control/cuenta/factura/cierre/rendición —más abajo— no se enteran de este
   // flag: siguen su propio switch.
+  // #325 — el mozo de la mesa en el ticket, con el mismo nombre corto que el
+  // plano. Se busca sólo si hay comandas para imprimir: el GET es el camino que
+  // corre cada pocos segundos (spec 183) y casi siempre vuelve vacío.
+  const hayParaImprimir = comandaPrintingEnabled && (comandas ?? []).length > 0;
+  const nombreDelMozo = hayParaImprimir
+    ? await loadNombresDeMozos(service, businessId)
+    : new Map<string, string>();
+
   const otrosPorPedido = comandaPrintingEnabled
     ? await loadItemsPorPedido(service, [
         ...new Set(
@@ -531,7 +540,7 @@ async function buildTrabajos(
             delivery_type: string | null;
             kitchen_notes: string | null;
             kitchen_at: string | null;
-            tables: { label: string } | null;
+            tables: { label: string; mozo_id: string | null } | null;
           };
           const station = c.stations as unknown as {
             name: string;
@@ -565,6 +574,12 @@ async function buildTrabajos(
             // tickets del mismo pedido que salieron por sectores distintos.
             daily_number: order?.daily_number ?? null,
             table_label: sanitizeTicketText(order?.tables?.label) ?? "—",
+            // El mozo que tiene la mesa (#325), no quien abrió el pedido: en un
+            // local que carga desde la terminal, `orders.mozo_id` es siempre la
+            // terminal. Sin mozo asignado, `null` y el renglón no sale.
+            mozo_name: order?.tables?.mozo_id
+              ? sanitizeTicketText(nombreDelMozo.get(order.tables.mozo_id))
+              : null,
             // Destino del pedido: delivery / retiro no tienen mesa (salía «MESA —»).
             delivery_type: (order?.delivery_type ?? null) as
               | "dine_in"
@@ -688,6 +703,33 @@ async function buildTrabajos(
   ].filter((t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip));
 
   return trabajos;
+}
+
+/**
+ * Nombre corto de cada mozo del negocio («Pedro», «Juan B.»), el mismo que
+ * muestra el plano (#325). Se arma con todo el equipo porque el desempate de
+ * dos «Juan» necesita ver a los dos.
+ *
+ * Los roles son los de `getMozosByBusiness`: la `terminal` no está, porque no
+ * es una persona y nunca queda como mozo de una mesa (spec 140 · D1).
+ */
+async function loadNombresDeMozos(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+): Promise<Map<string, string>> {
+  const { data, error } = await service
+    .from("business_users")
+    .select("user_id, full_name")
+    .eq("business_id", businessId)
+    .in("role", ["admin", "encargado", "mozo"]);
+  if (error) {
+    // Sin nombres el ticket sale igual, sin el renglón del mozo.
+    console.error("print-agent GET · nombres de mozos", error);
+    return new Map();
+  }
+  return buildMozoShortNames(
+    (data ?? []) as { user_id: string; full_name: string | null }[],
+  );
 }
 
 /** Item de un pedido con su sector, para el bloque «COMBINA CON» de los tickets. */

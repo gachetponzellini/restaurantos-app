@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type Row = Record<string, unknown>;
 let rows: Row[]; // filas del GET
 let itemRows: Row[]; // `order_items` del pedido → bloque «COMBINA CON» del ticket
+let mozoRows: Row[]; // `business_users` → nombre corto del mozo de la mesa (#325)
 let postRow: Row | null; // fila del select del POST (maybeSingle)
 let captured: { updates: Record<string, unknown>[]; orFilters: string[] };
 let notifyCalls: { businessId: string; comandaId: string }[];
@@ -116,7 +117,9 @@ vi.mock("@/lib/supabase/service", () => ({
                   ? itemRows
                   : table === "business_hours"
                     ? horarioRows
-                    : rows,
+                    : table === "business_users"
+                      ? mozoRows
+                      : rows,
               error: null,
             }),
         };
@@ -261,6 +264,7 @@ beforeEach(() => {
   process.env.PRINT_AGENT_KEY = "test-key";
   rows = [makeRow("Cocina", "192.168.10.50"), makeRow("Bar", null)];
   itemRows = [];
+  mozoRows = [];
   postRow = null;
   captured = { updates: [], orFilters: [] };
   notifyCalls = [];
@@ -272,6 +276,61 @@ beforeEach(() => {
   horarioRows = [];
   actividadCount = 0;
   cadenciaCalls = [];
+});
+
+describe("GET /api/print-agent — el mozo de la mesa en la comanda (#325)", () => {
+  const conMesa = (mesa: { mozo_id: string | null }, abrio: string) =>
+    makeRow("Cocina", "192.168.10.50", {
+      orders: {
+        id: "o1",
+        business_id: "biz1",
+        daily_number: 7,
+        table_id: "t1",
+        delivery_type: "dine_in",
+        // Quien ABRIÓ el pedido: en KCC, la cuenta compartida de la terminal.
+        mozo_id: abrio,
+        tables: { label: "12", mozo_id: mesa.mozo_id },
+      },
+    });
+
+  const cocina = async () => {
+    const body = (await (await GET(getReq())).json()) as {
+      comandas: {
+        station_name: string;
+        mozo_name?: string | null;
+        content_plain: string;
+      }[];
+    };
+    return body.comandas.find((c) => c.station_name === "Cocina")!;
+  };
+
+  it("sale el mozo asignado a la MESA, no quien abrió el pedido", async () => {
+    rows = [conMesa({ mozo_id: "u-pedro" }, "u-terminal")];
+    mozoRows = [
+      { user_id: "u-pedro", full_name: "Pedro Gómez" },
+      { user_id: "u-lucia", full_name: "Lucía Díaz" },
+    ];
+    const c = await cocina();
+    expect(c.mozo_name).toBe("Pedro");
+    expect(c.content_plain).toContain("Mozo: Pedro");
+  });
+
+  it("con dos mozos del mismo nombre, el nombre corto los desempata", async () => {
+    rows = [conMesa({ mozo_id: "u-juan-b" }, "u-terminal")];
+    mozoRows = [
+      { user_id: "u-juan-b", full_name: "Juan Bonadeo" },
+      { user_id: "u-juan-c", full_name: "Juan Castro" },
+    ];
+    expect((await cocina()).mozo_name).toBe("Juan B.");
+  });
+
+  it("mesa sin mozo asignado: no hay renglón, ni se cae a quien abrió", async () => {
+    rows = [conMesa({ mozo_id: null }, "u-terminal")];
+    mozoRows = [{ user_id: "u-terminal", full_name: "Terminal Salón" }];
+    const c = await cocina();
+    expect(c.mozo_name).toBeNull();
+    expect(c.content_plain).not.toContain("Mozo:");
+  });
 });
 
 describe("GET /api/print-agent — printer_ip por comanda (spec 28)", () => {

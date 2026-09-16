@@ -36,8 +36,18 @@ const base: TicketComanda = {
   cancelled_reason: null,
   reprint: false,
   items: [
-    { quantity: 1, product_name: "Milanesa napolitana", modifiers: [], notes: null },
-    { quantity: 2, product_name: "Ñoquis", modifiers: ["con crema"], notes: "bien calientes" },
+    {
+      quantity: 1,
+      product_name: "Milanesa napolitana",
+      modifiers: [],
+      notes: null,
+    },
+    {
+      quantity: 2,
+      product_name: "Ñoquis",
+      modifiers: ["con crema"],
+      notes: "bien calientes",
+    },
     { quantity: 1, product_name: "Café con leche", modifiers: [], notes: null },
   ],
 };
@@ -109,9 +119,18 @@ describe("buildTicketLines · ítems grandes y espaciados", () => {
   it("una palabra más larga que el ancho se corta duro, no se pierde", () => {
     const lines = buildTicketLines({
       ...base,
-      items: [{ quantity: 1, product_name: "Supercalifragilistico", modifiers: [], notes: null }],
+      items: [
+        {
+          quantity: 1,
+          product_name: "Supercalifragilistico",
+          modifiers: [],
+          notes: null,
+        },
+      ],
     }).filter((l) => l.size === "xl");
-    expect(lines.map((l) => l.text).join("")).toContain("Supercalifragilistico");
+    expect(lines.map((l) => l.text).join("")).toContain(
+      "Supercalifragilistico",
+    );
     for (const l of lines) expect(l.text.length).toBeLessThanOrEqual(11);
   });
 });
@@ -129,9 +148,14 @@ describe("buildTicketLines · margen arriba para el porta-comandas (#289)", () =
   });
 
   it("el margen va ANTES del ENTREGAR: es justo lo que el riel tapaba", () => {
-    const texts = buildTicketLines({ ...base, kitchen_time: "20:15" }).map((l) => l.text);
+    const texts = buildTicketLines({ ...base, kitchen_time: "20:15" }).map(
+      (l) => l.text,
+    );
     expect(texts.slice(0, TOP_MARGIN)).toEqual(Array(TOP_MARGIN).fill(""));
-    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual(["ENTREGAR", "20:15"]);
+    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual([
+      "ENTREGAR",
+      "20:15",
+    ]);
   });
 
   it("los blancos del margen son renglones de verdad en el ESC/POS (avanzan papel)", () => {
@@ -150,21 +174,30 @@ describe("buildTicketLines · margen arriba para el porta-comandas (#289)", () =
 describe("buildTicketLines · todo en cuerpo grande", () => {
   it("el encabezado y los avisos van en el tamaño más grande (xl)", () => {
     const head = buildTicketLines(base).filter((l) => l.align === "center");
-    expect(head.find((l) => l.text === "COCINA")).toMatchObject({ size: "xl", bold: true });
-    expect(head.find((l) => l.text === "MESA 5")).toMatchObject({ size: "xl", bold: true });
+    expect(head.find((l) => l.text === "COCINA")).toMatchObject({
+      size: "xl",
+      bold: true,
+    });
+    expect(head.find((l) => l.text === "MESA 5")).toMatchObject({
+      size: "xl",
+      bold: true,
+    });
 
-    const anulada = buildTicketLines(cases.anulada).map((l) => `${l.size}:${l.text}`);
+    const anulada = buildTicketLines(cases.anulada).map(
+      (l) => `${l.size}:${l.text}`,
+    );
     expect(anulada).toContain("xl:ANULADA");
     expect(anulada).toContain("xl:NO PREPARAR");
-    expect(buildTicketLines(cases.reimpresion).map((l) => `${l.size}:${l.text}`)).toContain(
-      "xl:REIMPRESION",
-    );
+    expect(
+      buildTicketLines(cases.reimpresion).map((l) => `${l.size}:${l.text}`),
+    ).toContain("xl:REIMPRESION");
   });
 
   it("nada sale en cuerpo normal salvo las líneas separadoras y los blancos", () => {
     for (const c of Object.values(cases))
       for (const l of buildTicketLines(c))
-        if ((l.size ?? "sm") === "sm") expect([RULE_TEXT, ""]).toContain(l.text);
+        if ((l.size ?? "sm") === "sm")
+          expect([RULE_TEXT, ""]).toContain(l.text);
   });
 
   it("un sector de nombre largo se corta por palabra, no lo parte la impresora", () => {
@@ -213,8 +246,12 @@ describe("buildTicketLines · número de pedido (con qué arma la cocina)", () =
   });
 
   it("el número va junto al destino, arriba de la tanda", () => {
-    const texts = buildTicketLines({ ...base, daily_number: 123 }).map((l) => l.text);
-    expect(texts.indexOf("PEDIDO 123")).toBeGreaterThan(texts.indexOf("MESA 5"));
+    const texts = buildTicketLines({ ...base, daily_number: 123 }).map(
+      (l) => l.text,
+    );
+    expect(texts.indexOf("PEDIDO 123")).toBeGreaterThan(
+      texts.indexOf("MESA 5"),
+    );
     expect(texts.indexOf("PEDIDO 123")).toBeLessThan(texts.indexOf("Tanda 2"));
   });
 
@@ -230,9 +267,55 @@ describe("buildTicketLines · número de pedido (con qué arma la cocina)", () =
   });
 
   it("sin `daily_number` (payload de un server viejo) cae al id de la comanda", () => {
-    const texts = buildTicketLines({ ...base, daily_number: null }).map((l) => l.text);
+    const texts = buildTicketLines({ ...base, daily_number: null }).map(
+      (l) => l.text,
+    );
     expect(texts.some((t) => t.startsWith("PEDIDO"))).toBe(false);
     expect(texts).toContain("Comanda #ab12cd34");
+  });
+});
+
+describe("buildTicketLines · el mozo de la mesa (#325)", () => {
+  const textos = (c: TicketComanda) => buildTicketLines(c).map((l) => l.text);
+
+  it("imprime «Mozo: Pedro» en doble alto, debajo de la tanda", () => {
+    const lines = buildTicketLines({ ...base, mozo_name: "Pedro" });
+    const i = lines.findIndex((l) => l.text === "Mozo: Pedro");
+    expect(i).toBeGreaterThan(-1);
+    expect(lines[i]).toMatchObject({
+      size: "tall",
+      bold: true,
+      align: "center",
+    });
+    const tanda = lines.findIndex((l) => l.text.startsWith("Tanda "));
+    expect(i).toBe(tanda + 1);
+  });
+
+  it("sin mozo asignado no sale el renglón (ni «Mozo: —»)", () => {
+    expect(
+      textos({ ...base, mozo_name: null }).some((t) => t.startsWith("Mozo")),
+    ).toBe(false);
+    expect(textos(base).some((t) => t.startsWith("Mozo"))).toBe(false);
+  });
+
+  it("delivery, retiro y mostrador no tienen mozo aunque llegue un nombre", () => {
+    for (const extra of [
+      { delivery_type: "delivery" as const },
+      { delivery_type: "pickup" as const },
+      { table_label: "—" },
+    ]) {
+      const t = textos({ ...base, ...extra, mozo_name: "Pedro" });
+      expect(t.some((x) => x.startsWith("Mozo"))).toBe(false);
+    }
+  });
+
+  it("también en la anulada: la cocina sabe a quién avisarle", () => {
+    const t = textos({ ...base, cancelled: true, mozo_name: "Pedro" });
+    expect(t).toContain("Mozo: Pedro");
+  });
+
+  it("los acentos pasan a ASCII como el resto del ticket", () => {
+    expect(textos({ ...base, mozo_name: "Lucía" })).toContain("Mozo: Lucia");
   });
 });
 
@@ -285,7 +368,9 @@ describe("buildTicketLines · destino del pedido", () => {
   });
 
   it("venta de mostrador (dine_in sin mesa) → MOSTRADOR, no «MESA —»", () => {
-    const texts = buildTicketLines({ ...base, table_label: "—" }).map((l) => l.text);
+    const texts = buildTicketLines({ ...base, table_label: "—" }).map(
+      (l) => l.text,
+    );
     expect(texts).toContain("MOSTRADOR");
     expect(texts.some((t) => t.startsWith("MESA"))).toBe(false);
   });
@@ -293,7 +378,9 @@ describe("buildTicketLines · destino del pedido", () => {
   it("dine_in o ausente → «MESA x», el encabezado de siempre", () => {
     expect(buildTicketLines(base).map((l) => l.text)).toContain("MESA 5");
     expect(
-      buildTicketLines({ ...base, delivery_type: "dine_in" }).map((l) => l.text),
+      buildTicketLines({ ...base, delivery_type: "dine_in" }).map(
+        (l) => l.text,
+      ),
     ).toContain("MESA 5");
   });
 });
@@ -321,21 +408,26 @@ describe("buildTicketLines · con qué combina (otros sectores)", () => {
     const lines = buildTicketLines(conOtros);
     const vaCon = lines.findIndex((l) => l.text === "COMBINA CON");
     expect(vaCon).toBeGreaterThan(0);
-    for (const l of lines.slice(vaCon))
-      if (l.text) expect(l.size).toBe("tall");
+    for (const l of lines.slice(vaCon)) if (l.text) expect(l.size).toBe("tall");
   });
 
   it("un sector sin items no aparece", () => {
-    expect(buildTicketLines(conOtros).map((l) => l.text)).not.toContain("FRITERA");
+    expect(buildTicketLines(conOtros).map((l) => l.text)).not.toContain(
+      "FRITERA",
+    );
   });
 
   it("una comanda anulada no lo imprime: no hay nada que coordinar", () => {
-    const texts = buildTicketLines({ ...conOtros, cancelled: true }).map((l) => l.text);
+    const texts = buildTicketLines({ ...conOtros, cancelled: true }).map(
+      (l) => l.text,
+    );
     expect(texts).not.toContain("COMBINA CON");
   });
 
   it("sin el campo, el ticket sale igual que siempre (aditivo)", () => {
-    expect(buildTicketLines(base).map((l) => l.text)).not.toContain("COMBINA CON");
+    expect(buildTicketLines(base).map((l) => l.text)).not.toContain(
+      "COMBINA CON",
+    );
   });
 });
 
@@ -346,7 +438,10 @@ describe("buildTicketLines · nota de cocina («ENTREGAR x»)", () => {
     // En doble ancho entran 11 col, así que «ENTREGAR 21:30» ocupa dos
     // renglones — cortado por palabra, no partido al medio.
     const texts = buildTicketLines(conNota).map((l) => l.text);
-    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual(["ENTREGAR", "21:30"]);
+    expect(texts.slice(TOP_MARGIN, TOP_MARGIN + 2)).toEqual([
+      "ENTREGAR",
+      "21:30",
+    ]);
   });
 
   it("va arriba de todo: antes del sector y de los ítems", () => {
@@ -372,7 +467,9 @@ describe("buildTicketLines · nota de cocina («ENTREGAR x»)", () => {
   });
 
   it("una comanda anulada no la imprime", () => {
-    const texts = buildTicketLines({ ...conNota, cancelled: true }).map((l) => l.text);
+    const texts = buildTicketLines({ ...conNota, cancelled: true }).map(
+      (l) => l.text,
+    );
     expect(texts.some((t) => t.startsWith("ENTREGAR"))).toBe(false);
   });
 
@@ -396,7 +493,10 @@ describe("buildTicketLines · la observación de la tanda (spec 128)", () => {
   // Lo que el mozo escribe UNA vez al enviar y sale igual en las comandas de
   // todos los sectores de esa tanda: «va todo junto», «la mesa tiene apuro».
   // Es de la tanda, así que viaja con la comanda y no con el pedido.
-  const conObs = { ...base, comanda_notes: "va todo junto, la mesa tiene apuro" };
+  const conObs = {
+    ...base,
+    comanda_notes: "va todo junto, la mesa tiene apuro",
+  };
 
   it("la imprime con el prefijo OBS", () => {
     const texts = buildTicketLines(conObs).map((l) => l.text);
@@ -418,7 +518,9 @@ describe("buildTicketLines · la observación de la tanda (spec 128)", () => {
     // El `xl` está reservado para lo que cambia el MOMENTO de salida
     // (ENTREGAR / ANULADA / REIMPRESION). La observación se lee con el ticket
     // en la mano, no de lejos.
-    const linea = buildTicketLines(conObs).find((l) => l.text.startsWith("OBS:"));
+    const linea = buildTicketLines(conObs).find((l) =>
+      l.text.startsWith("OBS:"),
+    );
     expect(linea).toMatchObject({ size: "tall", bold: true });
   });
 
@@ -437,7 +539,9 @@ describe("buildTicketLines · la observación de la tanda (spec 128)", () => {
   });
 
   it("una comanda anulada no la imprime: no hay nada que preparar", () => {
-    const texts = buildTicketLines({ ...conObs, cancelled: true }).map((l) => l.text);
+    const texts = buildTicketLines({ ...conObs, cancelled: true }).map(
+      (l) => l.text,
+    );
     expect(texts.some((t) => t.startsWith("OBS:"))).toBe(false);
   });
 
@@ -474,14 +578,24 @@ describe("buildTicketLines · solo ASCII imprimible", () => {
   it("traduce los símbolos comunes y descarta el resto", () => {
     const texts = buildTicketLines({
       ...base,
-      items: [{ quantity: 1, product_name: "Cafe", modifiers: [], notes: "50° — ok • 🔥 “ya”" }],
+      items: [
+        {
+          quantity: 1,
+          product_name: "Cafe",
+          modifiers: [],
+          notes: "50° — ok • 🔥 “ya”",
+        },
+      ],
     }).map((l) => l.text);
-    expect(texts.find((t) => t.startsWith("obs:"))).toBe('obs: 50o - ok * "ya"');
+    expect(texts.find((t) => t.startsWith("obs:"))).toBe(
+      'obs: 50o - ok * "ya"',
+    );
   });
 
   it("ninguna línea de ningún ticket sale fuera de 0x20–0x7e", () => {
     for (const c of Object.values(cases))
-      for (const l of buildTicketLines(c)) expect(l.text).toMatch(/^[\x20-\x7e]*$/);
+      for (const l of buildTicketLines(c))
+        expect(l.text).toMatch(/^[\x20-\x7e]*$/);
   });
 });
 
@@ -604,7 +718,10 @@ describe("buildTicketLines · la marca del menú (spec 145)", () => {
     }).map((l) => l.text);
     const marca = texts.filter((t) => t.startsWith("MENU EJECUTIVO"));
     expect(marca.length).toBeGreaterThan(0);
-    for (const l of texts.slice(texts.indexOf(marca[0]), texts.indexOf("1x Milanesa")))
+    for (const l of texts.slice(
+      texts.indexOf(marca[0]),
+      texts.indexOf("1x Milanesa"),
+    ))
       expect(l.length).toBeLessThanOrEqual(COLS.tall);
   });
 
@@ -612,13 +729,17 @@ describe("buildTicketLines · la marca del menú (spec 145)", () => {
     expect(
       buildTicketLines({
         ...base,
-        items: [{ quantity: 1, product_name: "Milanesa", combo_name: "Menú Niños" }],
+        items: [
+          { quantity: 1, product_name: "Milanesa", combo_name: "Menú Niños" },
+        ],
       }).map((l) => l.text),
     ).toContain("MENU NINOS");
   });
 
   it("un hijo anulado sigue diciendo ANULADO, con la marca arriba", () => {
-    const texts = buildTicketLines({ ...conMenu, cancelled: true }).map((l) => l.text);
+    const texts = buildTicketLines({ ...conMenu, cancelled: true }).map(
+      (l) => l.text,
+    );
     const marca = texts.indexOf("MENU EJECUTIVO");
     expect(marca).toBeGreaterThan(0);
     expect(texts[marca + 1]).toBe("ANULADO 1x");

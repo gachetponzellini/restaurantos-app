@@ -268,6 +268,19 @@ function ticketLines(c) {
   // renglón de doble ancho.
   if (c.daily_number != null) banner(`PEDIDO ${c.daily_number}`);
   push(`Tanda ${c.batch}`, { size: "tall", bold: true, align: "center" });
+  // El mozo de la mesa (#325) — espejo de src/lib/print/ticket.ts.
+  const esDeMesa =
+    c.delivery_type !== "delivery" &&
+    c.delivery_type !== "pickup" &&
+    Boolean(c.table_label) &&
+    c.table_label !== "—" &&
+    c.table_label !== "-";
+  if (esDeMesa && c.mozo_name && String(c.mozo_name).trim())
+    push(`Mozo: ${String(c.mozo_name).trim()}`, {
+      size: "tall",
+      bold: true,
+      align: "center",
+    });
 
   // Metadata de referencia: lo más chico del ticket, pero igual en doble alto
   // (nada sale en cuerpo normal salvo las líneas separadoras). El id de la

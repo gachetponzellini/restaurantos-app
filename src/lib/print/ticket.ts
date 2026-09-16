@@ -181,6 +181,17 @@ export type TicketComanda = {
    * identificador de la comanda.
    */
   daily_number?: number | null;
+  /**
+   * El mozo que tiene la mesa, ya en su nombre corto («Pedro», «Juan B.»), el
+   * mismo que muestra el plano (#325). En el pase la cocina sabe a quién
+   * llamar sin salir a preguntar.
+   *
+   * Sale de `tables.mozo_id` y NO de `orders.mozo_id`: ése es quien ABRIÓ el
+   * pedido, y en un local que carga desde la compu compartida (spec 140) es
+   * siempre la terminal. Sin mozo asignado llega `null` y el renglón no sale.
+   * Campo aditivo — un agente viejo lo ignora.
+   */
+  mozo_name?: string | null;
 };
 
 export type Size = "sm" | "tall" | "xl";
@@ -386,6 +397,21 @@ export function buildTicketLines(c: TicketComanda): Line[] {
   // (11 col) y con el `#` se partía en dos.
   if (c.daily_number != null) banner(`PEDIDO ${c.daily_number}`);
   push(`Tanda ${c.batch}`, { size: "tall", bold: true, align: "center" });
+  // El mozo de la mesa (#325). Sólo en salón: delivery, retiro y mostrador no
+  // tienen mozo. Va también en la anulada, que es cuando la cocina más necesita
+  // saber a quién avisarle.
+  const esDeMesa =
+    c.delivery_type !== "delivery" &&
+    c.delivery_type !== "pickup" &&
+    Boolean(c.table_label) &&
+    c.table_label !== "—" &&
+    c.table_label !== "-";
+  if (esDeMesa && c.mozo_name?.trim())
+    push(`Mozo: ${c.mozo_name.trim()}`, {
+      size: "tall",
+      bold: true,
+      align: "center",
+    });
 
   // Metadata de referencia (no operativa): la más chica del ticket, pero igual
   // en doble alto — nada sale en cuerpo normal salvo las líneas separadoras.
