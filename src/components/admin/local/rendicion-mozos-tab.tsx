@@ -31,6 +31,8 @@ import { useOnActivate } from "@/lib/ui/use-tab-param";
 import { getRendicionTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import type { RendicionData } from "@/app/[business_slug]/admin/(authed)/operacion/data";
 import { cn } from "@/lib/utils";
+import { METHOD_COLOR, METHOD_LABEL } from "./caja-metricas";
+import type { PaymentMethod } from "@/lib/caja/types";
 
 type AssignmentWithNames = CajaUserAssignment & {
   user_name: string | null;
@@ -303,6 +305,56 @@ export function RendicionMozosTab({
   );
 }
 
+/**
+ * Lo que cobró con otros métodos (tarjeta, QR, transferencia…), **sólo para
+ * informar** (#330). La spec 151 sacó estos montos de la rendición porque no
+ * se rinden —esa plata ya entró a la caja—; el encargado igual quiere verlos
+ * al rendir, así que vuelven con la leyenda escrita para que nadie los cuente
+ * como plata a entregar.
+ */
+function OtrosCobrosInformativo({
+  porMetodo,
+  className,
+}: {
+  porMetodo: Record<PaymentMethod, number>;
+  className?: string;
+}) {
+  const filas = (Object.entries(porMetodo) as Array<[PaymentMethod, number]>)
+    .filter(([method, cents]) => method !== "cash" && cents > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (filas.length === 0) return null;
+
+  return (
+    <div className={className}>
+      <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+        Otros cobros · informativo
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {filas.map(([method, cents]) => (
+          <li
+            key={method}
+            className="flex items-baseline justify-between gap-2 text-xs"
+          >
+            <span className="inline-flex items-baseline gap-1.5 text-zinc-600">
+              <span
+                className="inline-block size-2 shrink-0 translate-y-px rounded-full"
+                style={{ background: METHOD_COLOR[method] }}
+              />
+              {METHOD_LABEL[method]}
+            </span>
+            <span className="tabular-nums text-zinc-700">
+              {formatCurrency(cents)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-[0.7rem] text-zinc-500">
+        No se rinde: ya entró a la caja. Sólo se rinde el efectivo.
+      </p>
+    </div>
+  );
+}
+
 function MozoPendienteCard({
   pendiente,
   onRendir,
@@ -347,6 +399,10 @@ function MozoPendienteCard({
             </p>
           </div>
         )}
+        <OtrosCobrosInformativo
+          porMetodo={p.por_metodo}
+          className="mt-3 border-t border-dashed border-zinc-200 pt-3"
+        />
       </div>
 
       <div className="p-3">
@@ -434,6 +490,11 @@ function RendirModal({
             </p>
           </div>
         )}
+
+        <OtrosCobrosInformativo
+          porMetodo={pendiente.por_metodo}
+          className="rounded-xl p-4 ring-1 ring-zinc-200/70"
+        />
 
         {/* Spec 177 · Parte B — que salga plata del cajón no puede ser una
             sorpresa: el encargado lo lee antes de confirmar. */}

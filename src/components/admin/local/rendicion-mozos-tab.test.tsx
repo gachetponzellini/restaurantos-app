@@ -79,25 +79,24 @@ function renderTab(
 }
 
 describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
-  it("muestra el efectivo y NO el monto cobrado con tarjeta", () => {
+  // #330 — lo cobrado con otros métodos vuelve, pero sólo informativo: el
+  // monto a entregar sigue siendo el efectivo y la leyenda lo dice.
+  it("muestra el efectivo a entregar y la tarjeta como informativo", () => {
     renderTab([pendienteMixto()]);
 
     expect(screen.getByText("$ 18.500")).toBeInTheDocument();
-    // El monto de tarjeta no se rinde: no puede estar en ningún lado de la
-    // tarjeta del mozo. Antes aparecía dos veces — como «Tickets
-    // (tarj./transf.)» y otra vez en «Detalle por método».
-    expect(screen.queryByText("$ 38.500")).not.toBeInTheDocument();
+    expect(screen.getByText(/otros cobros · informativo/i)).toBeInTheDocument();
+    expect(screen.getByText("Tarjeta")).toBeInTheDocument();
+    expect(screen.getByText("$ 38.500")).toBeInTheDocument();
+    expect(screen.getByText(/sólo se rinde el efectivo/i)).toBeInTheDocument();
   });
 
-  it("no queda ni el rótulo de tickets ni el desglose por método", () => {
+  it("no vuelve el rótulo de tickets", () => {
     renderTab([pendienteMixto()]);
-
     expect(screen.queryByText(/tickets/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/detalle por método/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/tarjeta/i)).not.toBeInTheDocument();
   });
 
-  it("el modal pide el efectivo y tampoco nombra la tarjeta", async () => {
+  it("el modal pide el efectivo y la tarjeta queda como informativo", async () => {
     const user = userEvent.setup();
     renderTab([pendienteMixto()]);
 
@@ -108,10 +107,17 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     expect(
       await screen.findByText(/efectivo que debería entregar/i),
     ).toBeInTheDocument();
-    // El monto sigue siendo sólo el efectivo, y no hay línea «+ $X en tickets».
     expect(screen.getAllByText("$ 18.500").length).toBeGreaterThan(0);
-    expect(screen.queryByText("$ 38.500")).not.toBeInTheDocument();
+    // Tarjeta del listado + modal.
+    expect(screen.getAllByText(/sólo se rinde el efectivo/i)).toHaveLength(2);
     expect(screen.queryByText(/en tickets/i)).not.toBeInTheDocument();
+  });
+
+  it("un mozo con sólo efectivo no muestra el bloque informativo", () => {
+    renderTab([
+      pendienteMixto({ por_metodo: { ...EMPTY_METODO, cash: 1_850_000 } }),
+    ]);
+    expect(screen.queryByText(/otros cobros/i)).not.toBeInTheDocument();
   });
 
   // Spec 177 · Parte B — la propina dejó de ser un número informativo: se le
@@ -135,7 +141,7 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
 
     expect(screen.getByText("Diego Mozo")).toBeInTheDocument();
     expect(screen.getByText("$ 0")).toBeInTheDocument();
-    expect(screen.queryByText("$ 38.500")).not.toBeInTheDocument();
+    expect(screen.getByText("$ 38.500")).toBeInTheDocument();
   });
 
   describe("el mozo que no tiene efectivo para entregar", () => {
