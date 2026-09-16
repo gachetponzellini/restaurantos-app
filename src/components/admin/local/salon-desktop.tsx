@@ -76,6 +76,7 @@ import {
 import type { BusinessRole } from "@/lib/admin/context";
 import type { FloorPlanWithTables } from "@/lib/admin/floor-plan/queries";
 import { planReservationsByTable } from "@/lib/mozo/plan-reservation";
+import { VISTA_TODOS, resolverVistaSalon } from "@/lib/admin/salon/vista-salon";
 import { tableDisplayName } from "@/lib/mozo/table-display-name";
 import { MozoPedirClient } from "@/app/[business_slug]/mozo/mesa/[id]/pedir/pedir-client";
 import { CobrarDesktopClient } from "@/app/[business_slug]/admin/(authed)/mesa/[id]/cobrar/cobrar-desktop-client";
@@ -727,7 +728,10 @@ export function SalonDesktop({
     if (typeof window === "undefined") return;
     try {
       const stored = localStorage.getItem(storageKey);
-      if (stored && floorPlans.some((p) => p.plan.id === stored)) {
+      if (
+        stored &&
+        (stored === VISTA_TODOS || floorPlans.some((p) => p.plan.id === stored))
+      ) {
         setActivePlanId(stored);
       } else if (floorPlans[0]) {
         setActivePlanId(floorPlans[0].plan.id);
@@ -739,7 +743,11 @@ export function SalonDesktop({
   }, [storageKey]);
   // Cuando floorPlans cambia (refresh), validar que activePlanId siga vivo.
   useEffect(() => {
-    if (!floorPlans.some((p) => p.plan.id === activePlanId) && floorPlans[0]) {
+    if (
+      activePlanId !== VISTA_TODOS &&
+      !floorPlans.some((p) => p.plan.id === activePlanId) &&
+      floorPlans[0]
+    ) {
       setActivePlanId(floorPlans[0].plan.id);
     }
   }, [floorPlans, activePlanId]);
@@ -767,9 +775,15 @@ export function SalonDesktop({
   // desaparece: sería un segundo control para lo mismo). Con dos, el selector
   // queda pero sólo con esos dos — que es justo el caso de la encargada que
   // cubre dos salones.
-  const effectivePlanId = shownPlans.some((p) => p.plan.id === activePlanId)
-    ? activePlanId
-    : (shownPlans[0]?.plan.id ?? activePlanId);
+  // Spec 202: «Todos» muestra cada salón mostrado en su recuadro.
+  const vista = resolverVistaSalon(
+    shownPlans.map((p) => p.plan.id),
+    activePlanId,
+  );
+  const vistaTodos = vista.modo === "todos";
+  const effectivePlanId = vistaTodos
+    ? VISTA_TODOS
+    : (vista.planId ?? activePlanId);
 
   // Cambiar de salón desde el filtro del operativo también limpia la selección
   // (igual que `setActivePlan`): una mesa seleccionada de otro salón dejaría el
@@ -780,8 +794,12 @@ export function SalonDesktop({
   }, [visibleSig]);
 
   // Plano + mesas del salón activo.
-  const active =
-    shownPlans.find((p) => p.plan.id === effectivePlanId) ?? shownPlans[0];
+  // Con «Todos» no hay un salón activo: `active`/`plan` quedan vacíos y
+  // `tables` es la unión de los salones mostrados (lista, leyenda y panel
+  // operan sobre todas).
+  const active = vistaTodos
+    ? undefined
+    : (shownPlans.find((p) => p.plan.id === effectivePlanId) ?? shownPlans[0]);
   const plan = active?.plan;
 
   // Aplica el overlay optimista (patch parcial) sobre una mesa. Solo pisa las
@@ -792,9 +810,13 @@ export function SalonDesktop({
   };
 
   const tables = useMemo(
-    () => (active?.tables ?? []).map(withOverlay),
+    () =>
+      (vistaTodos
+        ? shownPlans.flatMap((p) => p.tables)
+        : (active?.tables ?? [])
+      ).map(withOverlay),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active, optimisticStatus],
+    [active, vistaTodos, shownPlans, optimisticStatus],
   );
   const activeTables = useMemo(
     () => tables.filter((t) => t.status === "active"),
@@ -1629,6 +1651,55 @@ export function SalonDesktop({
     return { entries, sinAsignar };
   }, [activeTables, mozoNameById, mozoShortNameById]);
 
+  // Tap sobre una mesa del plano — el mismo en un salón o en «Todos».
+  const handlePlanoTableClick = (t: FloorTable) => {
+    if (distribuirOpen) {
+      handlePaintTable(t);
+      return;
+    }
+    // Modo "elegir mesa para la reserva": el tap asigna, no abre
+    // el detalle de la mesa.
+    if (asignarReservaFor) {
+      handleAsignarMesaReserva(t);
+      return;
+    }
+    // Elegir mesa para la reserva que se está creando en el panel.
+    if (pickingForNueva) {
+      if (t.seats < 1) return;
+      setNuevaReservaTable(t);
+      setPickingForNueva(false);
+      return;
+    }
+    // Tocar la mesa que YA está abierta en un modo (pedido,
+    // cuenta, cobro, abrir mesa) no hace nada: un tap de más
+    // sobre el plano no puede tirar abajo lo que estás cargando.
+    if (mesaEnModo === t.id) return;
+    // Tocar OTRA mesa cambia de mesa: el modo abierto cede y
+    // entra el detalle de la nueva. Antes el tap no hacía nada
+    // visible —cobro/cuenta/pedido le ganan al detalle en el
+    // panel— y el plano parecía muerto mientras cargabas un
+    // pedido. El borrador del pedido se guarda por mesa, así que
+    // saltar de una a otra no pierde lo cargado.
+    closeCobro();
+    closeCuenta();
+    closePedir();
+    setWalkInTableId(null);
+    // Tocar una mesa manda al detalle: la venta de mostrador no
+    // es de ninguna mesa, así que cede el panel.
+    setVentaRapidaOpen(false);
+    // Mesa libre → directo a cargar, con el foco en el buscador
+    // (spec 111, FR-010). Antes eran tres clicks y un formulario
+    // —detalle → «Sentar walk-in» → «Abrir mesa»— para llegar al
+    // mismo lugar. La mesa la abre el primer envío (FR-011), así
+    // que un tap de más no deja una mesa abierta en el salón.
+    if (abreCargaDirecto(t)) {
+      setSelectedId(null);
+      openPedir(t);
+      return;
+    }
+    setSelectedId(t.id);
+  };
+
   return (
     <div className="flex h-full flex-col gap-4">
       {/* ── Selector de salón (solo si queda más de uno para elegir) ── */}
@@ -1637,11 +1708,22 @@ export function SalonDesktop({
           ariaLabel="Seleccionar salón"
           activeId={effectivePlanId}
           onSelect={setActivePlan}
-          items={shownPlans.map(({ plan, tables }) => ({
-            id: plan.id,
-            label: plan.name,
-            count: tables.filter((t) => t.status === "active").length,
-          }))}
+          items={[
+            {
+              id: VISTA_TODOS,
+              label: "Todos",
+              count: shownPlans.reduce(
+                (n, p) =>
+                  n + p.tables.filter((t) => t.status === "active").length,
+                0,
+              ),
+            },
+            ...shownPlans.map(({ plan, tables }) => ({
+              id: plan.id,
+              label: plan.name,
+              count: tables.filter((t) => t.status === "active").length,
+            })),
+          ]}
         />
       )}
 
@@ -1718,59 +1800,39 @@ export function SalonDesktop({
                 : "ring-border/60",
             )}
           >
-            {plan ? (
+            {vistaTodos ? (
+              <div className="grid h-full auto-rows-[minmax(260px,1fr)] grid-cols-1 gap-2 overflow-y-auto p-2 2xl:grid-cols-2">
+                {shownPlans.map((fp) => (
+                  <section
+                    key={fp.plan.id}
+                    className="ring-border/60 flex min-h-0 flex-col overflow-hidden rounded-xl ring-1"
+                    aria-label={fp.plan.name}
+                  >
+                    <h3 className="text-muted-foreground px-3 py-1.5 text-xs font-semibold tracking-wide uppercase">
+                      {fp.plan.name}
+                    </h3>
+                    <div className="min-h-0 flex-1">
+                      <FloorPlanViewer
+                        plan={fp.plan}
+                        tables={tables.filter(
+                          (t) => t.floor_plan_id === fp.plan.id,
+                        )}
+                        extras={extras}
+                        paintMode={distribuirOpen}
+                        onTableClick={handlePlanoTableClick}
+                        onBackgroundClick={cerrarDesdePlano}
+                      />
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : plan ? (
               <FloorPlanViewer
                 plan={plan}
                 tables={tables}
                 extras={extras}
                 paintMode={distribuirOpen}
-                onTableClick={(t) => {
-                  if (distribuirOpen) {
-                    handlePaintTable(t);
-                    return;
-                  }
-                  // Modo "elegir mesa para la reserva": el tap asigna, no abre
-                  // el detalle de la mesa.
-                  if (asignarReservaFor) {
-                    handleAsignarMesaReserva(t);
-                    return;
-                  }
-                  // Elegir mesa para la reserva que se está creando en el panel.
-                  if (pickingForNueva) {
-                    if (t.seats < 1) return;
-                    setNuevaReservaTable(t);
-                    setPickingForNueva(false);
-                    return;
-                  }
-                  // Tocar la mesa que YA está abierta en un modo (pedido,
-                  // cuenta, cobro, abrir mesa) no hace nada: un tap de más
-                  // sobre el plano no puede tirar abajo lo que estás cargando.
-                  if (mesaEnModo === t.id) return;
-                  // Tocar OTRA mesa cambia de mesa: el modo abierto cede y
-                  // entra el detalle de la nueva. Antes el tap no hacía nada
-                  // visible —cobro/cuenta/pedido le ganan al detalle en el
-                  // panel— y el plano parecía muerto mientras cargabas un
-                  // pedido. El borrador del pedido se guarda por mesa, así que
-                  // saltar de una a otra no pierde lo cargado.
-                  closeCobro();
-                  closeCuenta();
-                  closePedir();
-                  setWalkInTableId(null);
-                  // Tocar una mesa manda al detalle: la venta de mostrador no
-                  // es de ninguna mesa, así que cede el panel.
-                  setVentaRapidaOpen(false);
-                  // Mesa libre → directo a cargar, con el foco en el buscador
-                  // (spec 111, FR-010). Antes eran tres clicks y un formulario
-                  // —detalle → «Sentar walk-in» → «Abrir mesa»— para llegar al
-                  // mismo lugar. La mesa la abre el primer envío (FR-011), así
-                  // que un tap de más no deja una mesa abierta en el salón.
-                  if (abreCargaDirecto(t)) {
-                    setSelectedId(null);
-                    openPedir(t);
-                    return;
-                  }
-                  setSelectedId(t.id);
-                }}
+                onTableClick={handlePlanoTableClick}
                 onBackgroundClick={cerrarDesdePlano}
               />
             ) : (
@@ -1845,7 +1907,7 @@ export function SalonDesktop({
             <NuevaReservaPanel
               slug={slug}
               tables={activeTables}
-              floorPlanId={plan?.id ?? null}
+              floorPlanId={plan?.id ?? nuevaReservaTable?.floor_plan_id ?? null}
               tablePicker={{
                 pickedTableId: nuevaReservaTable?.id ?? null,
                 pickedLabel: nuevaReservaTable?.label ?? null,

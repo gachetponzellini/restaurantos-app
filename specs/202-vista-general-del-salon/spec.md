@@ -2,7 +2,7 @@
 
 **Issue:** [#328](https://github.com/gachetponzellini/RestaurantOS-app/issues/328) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 📝 propuesta (2026-09-16)
+**Estado:** ✅ implementada (2026-09-16)
 
 **Depende de**: `065` (filtro de salones del operativo), plano partido de KCC
 (Casona / Salón vidriado / Jardín), `FloorPlanViewer`.
@@ -46,9 +46,18 @@ Hoy el operativo (`salon-desktop.tsx`) muestra **un** salón por vez: el
 
 ## Tareas
 
-- [ ] Extraer el render del plano + handlers de mesa a algo reusable por salón.
-- [ ] `SegmentedSelector`: item «Todos» (`id: "all"`) + persistencia.
-- [ ] Grilla de recuadros por salón con título.
-- [ ] Stats/leyenda sobre la unión de salones mostrados.
-- [ ] Test: `effectivePlanId` / `shownPlans` con `"all"` y con filtro 065.
-- [ ] Verify en vivo como encargada (`sofia@demo.test`) — y en kcc con los 3 salones.
+- [x] Extraer el render del plano + handlers de mesa a algo reusable por salón.
+- [x] `SegmentedSelector`: item «Todos» (`id: "all"`) + persistencia.
+- [x] Grilla de recuadros por salón con título.
+- [x] Stats/leyenda sobre la unión de salones mostrados.
+- [x] Test: `effectivePlanId` / `shownPlans` con `"all"` y con filtro 065.
+- [x] Verify en vivo como encargada (`sofia@demo.test`, demo: 2 salones) — tocar una mesa del Salón 2 en «Todos» abre su carga. Pendiente en kcc con los 3 salones.
+
+## Implementación
+
+- `src/lib/admin/salon/vista-salon.ts` (+ test): `resolverVistaSalon` decide un salón o «Todos».
+- `salon-desktop.tsx`: item «Todos» en el `SegmentedSelector`; con «Todos», `tables` es la
+  unión de los salones mostrados y el plano es una grilla (1 columna con scroll, 2 desde
+  `2xl`) de un `FloorPlanViewer` por salón. El tap de mesa se extrajo a
+  `handlePlanoTableClick` y es el mismo en las dos vistas. «Nueva reserva» toma la zona de
+  la mesa elegida. D1: no es default (se recuerda lo último elegido).
