@@ -8,6 +8,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Printer,
   Receipt,
   ShoppingBag,
   X,
@@ -26,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import { formatCurrency } from "@/lib/currency";
 import { entregaLabel } from "@/lib/orders/entrega";
+import { imprimirCuentaPedido } from "@/lib/print/cuenta-print-actions";
 import type { OrderStatus } from "@/lib/orders/status";
 import {
   copyDeEntrega,
@@ -149,6 +151,19 @@ export function OrderDetailSheet({
   const [cancelling, startCancel] = useTransition();
   // Spec 054 — cobrar/facturar el pedido sin mesa desde el detalle.
   const [cobrarOpen, setCobrarOpen] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const handleImprimir = async () => {
+    setImprimiendo(true);
+    const r = await imprimirCuentaPedido(order.id, slug);
+    setImprimiendo(false);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    toast.success(
+      r.data.reprint ? "Cuenta reimpresa." : "Cuenta enviada a la impresora.",
+    );
+  };
   // Spec 125 — editar los ítems del pedido sin pasar por el kanban, y sumarle
   // líneas nuevas con la misma hoja con la que se carga un pedido a mano.
   const [editarOpen, setEditarOpen] = useState(false);
@@ -647,6 +662,16 @@ export function OrderDetailSheet({
                 Cobrar / Facturar
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full font-semibold"
+              disabled={imprimiendo}
+              onClick={() => void handleImprimir()}
+            >
+              <Printer className="size-4" />
+              {imprimiendo ? "Imprimiendo…" : "Imprimir cuenta"}
+            </Button>
             {isPendingOnline && onConfirm && (
               <div className="w-full">
                 <Label

@@ -8,13 +8,10 @@ import {
   CreditCard,
   Banknote,
   Clock,
-  Printer,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
-import { imprimirCuentaPedido } from "@/lib/print/cuenta-print-actions";
 import { tonoDeEspera } from "@/lib/orders/espera";
 import { entregaLabel } from "@/lib/orders/entrega";
 import {
@@ -121,19 +118,6 @@ export function OrderCard({
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Abrir el detalle ya con el cobro arriba (botón «Cobrar» de la tarjeta). */
   const [cobrarDirecto, setCobrarDirecto] = useState(false);
-  const [imprimiendo, setImprimiendo] = useState(false);
-  const handleImprimir = async () => {
-    setImprimiendo(true);
-    const r = await imprimirCuentaPedido(order.id, slug);
-    setImprimiendo(false);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
-    }
-    toast.success(
-      r.data.reprint ? "Cuenta reimpresa." : "Cuenta enviada a la impresora.",
-    );
-  };
   const elapsed = useElapsedMinutes(order.created_at);
   const entrega = entregaLabel(order, timezone);
 
@@ -371,22 +355,6 @@ export function OrderCard({
           <span className="text-foreground text-base font-bold tabular-nums">
             {formatCurrency(order.total_cents)}
           </span>
-          {!isPendingDineIn && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="ml-auto h-8 px-2"
-              disabled={imprimiendo}
-              aria-label="Imprimir cuenta"
-              title="Imprimir cuenta"
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleImprimir();
-              }}
-            >
-              <Printer className="size-4" />
-            </Button>
-          )}
           {isPendingDineIn ? (
             <span className="text-muted-foreground/70 text-[11px] italic">
               Lo carga el mozo

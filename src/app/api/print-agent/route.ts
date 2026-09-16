@@ -1412,7 +1412,8 @@ async function buildPrintableCuentaTickets(
     // `print_jobs` (el CHECK sólo admite `pendiente|impreso`). Reponían el papel
     // media hora después y salía la cuenta de una mesa ya anulada, con el total
     // viejo, y alguien se la llevaba a los que estaban sentados ahí ahora.
-    .eq("orders.lifecycle_status", "open")
+    // Los pedidos online se reimprimen cerrados; la mesa ya exige `open` al encolar.
+    .neq("orders.lifecycle_status", "cancelled")
     .order("emitted_at", { ascending: true });
 
   if (error) {

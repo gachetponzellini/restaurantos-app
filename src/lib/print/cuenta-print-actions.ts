@@ -168,8 +168,9 @@ export async function imprimirCuentaPedido(
   if (!order || order.business_id !== business.id) {
     return actionError("Pedido no encontrado.");
   }
-  if (order.lifecycle_status !== "open") {
-    return actionError("El pedido ya está cerrado.");
+  // El pedido online se imprime también entregado/cobrado: sólo el anulado no.
+  if (order.lifecycle_status === "cancelled") {
+    return actionError("El pedido está anulado.");
   }
   if ((order.total_cents ?? 0) <= 0) {
     return actionError("El pedido no tiene nada cargado.");
