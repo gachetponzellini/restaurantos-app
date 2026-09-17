@@ -72,8 +72,10 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   pending: "Pendiente",
   confirmed: "Confirmado",
   preparing: "En cocina",
-  ready: "Listo",
-  on_the_way: "En camino",
+  // Ya no se usan (el flujo va directo a entregado); se muestran como
+  // "En cocina" para no resucitar los pasos eliminados en pedidos legacy.
+  ready: "En cocina",
+  on_the_way: "En cocina",
   delivered: "Entregado",
   cancelled: "Cancelado",
 };
@@ -91,16 +93,16 @@ const STATUS_DOT: Record<OrderStatus, string> = {
 const NEXT_LABEL: Partial<Record<OrderStatus, string>> = {
   pending: "Confirmar",
   confirmed: "Empezar a preparar",
-  preparing: "Marcar listo",
-  ready: "Salió en camino",
+  preparing: "Marcar entregado",
+  ready: "Marcar entregado",
   on_the_way: "Marcar entregado",
 };
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   pending: "confirmed",
   confirmed: "preparing",
-  preparing: "ready",
-  ready: "on_the_way",
+  preparing: "delivered",
+  ready: "delivered",
   on_the_way: "delivered",
 };
 
@@ -331,15 +333,9 @@ export function OrderDetailSheet({
    *  (`closeOrderIfFullyPaid` también pone `payment_status: paid`). */
   const isPaid = order.payment_status === "paid";
 
-  const nextForDelivery =
-    order.delivery_type === "pickup" && order.status === "ready"
-      ? "delivered"
-      : NEXT_STATUS[order.status];
+  const nextForDelivery = NEXT_STATUS[order.status];
 
-  const advanceLabel =
-    order.delivery_type === "pickup" && order.status === "ready"
-      ? "Marcar entregado"
-      : NEXT_LABEL[order.status];
+  const advanceLabel = NEXT_LABEL[order.status];
 
   const handleCancel = () => {
     if (!reason.trim()) {

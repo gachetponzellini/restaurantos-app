@@ -593,11 +593,11 @@ export const TEMAS: Tema[] = [
           "Un pedido llega por dos caminos: lo carga el cliente desde la carta web, o lo cargás vos con «Cargar pedido» cuando llaman por teléfono. Los dos entran al mismo circuito y se cobran igual. El que carga el staff nace anotado como efectivo, pero lo que vale es el método que registrás al cobrar.",
       },
       {
-        titulo: "Las cinco columnas",
+        titulo: "Las tres columnas",
         texto:
-          "Un pedido recorre «Pendientes» → «En cocina» → «Listos» → «En camino» → «Entregados», y se mueve con el botón de su tarjeta. Un pedido para retirar no pasa por «En camino»: salta de «Listos» a entregado cuando el cliente lo busca. El número al lado de «Pedidos online» es cuántos hay sin atender.",
+          "Un pedido recorre «Pendientes» → «En cocina» → «Entregados», y se mueve con el botón de su tarjeta: confirmar lo manda a cocina, entregar lo cierra. El número al lado de «Pedidos online» es cuántos hay sin atender.",
         imagen: "/ayuda/op-pedidos.png",
-        alt: "Las cinco columnas de pedidos online: Pendientes, En cocina, Listos, En camino y Entregados.",
+        alt: "Las tres columnas de pedidos online: Pendientes, En cocina y Entregados.",
         marcas: [
           { n: 1, x: 7, y: 47 },
           { n: 2, x: 43.5, y: 9 },

@@ -118,12 +118,12 @@ describe("OrdersRealtimeBoard · resincronización", () => {
     };
 
     renderBoard([order()]);
-    await userEvent.click(screen.getByRole("button", { name: "Listo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Entregar" }));
 
     await waitFor(() => expect(updateOrderStatus).toHaveBeenCalled());
-    // La tarjeta ya no ofrece «Listo»: quedó en su estado real (entregado).
+    // La tarjeta ya no ofrece «Entregar»: quedó en su estado real (entregado).
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Listo" })).toBeNull(),
+      expect(screen.queryByRole("button", { name: "Entregar" })).toBeNull(),
     );
   });
 

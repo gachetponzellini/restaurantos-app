@@ -27,16 +27,18 @@ import { OrderDetailSheet } from "./order-detail-sheet";
 const NEXT_LABEL: Partial<Record<OrderStatus, string>> = {
   pending: "Confirmar",
   confirmed: "A cocina",
-  preparing: "Listo",
-  ready: "En camino",
+  // Flujo simplificado: de cocina se entrega directo, sin "Listo" ni
+  // "En camino". `ready`/`on_the_way` quedan para pedidos legacy.
+  preparing: "Entregar",
+  ready: "Entregar",
   on_the_way: "Entregar",
 };
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   pending: "confirmed",
   confirmed: "preparing",
-  preparing: "ready",
-  ready: "on_the_way",
+  preparing: "delivered",
+  ready: "delivered",
   on_the_way: "delivered",
 };
 
@@ -124,8 +126,8 @@ export function OrderCard({
   // Decide qué botón mostrar.
   // Caso 1 · pending + delivery/take-away → "Confirmar pedido" (crea comandas).
   // Caso 2 · pending + dine-in → SIN botón en este UI (lo gestiona el mozo).
-  // Caso 3 · pickup + ready → "Entregar" (saltea on_the_way).
-  // Caso 4 · resto → siguiente estado vía updateOrderStatus.
+  // Caso 3 · preparing (+ legacy ready/on_the_way) → "Entregar" directo a
+  // `delivered`, sin pasar por "Listo"/"En camino".
   // spec 093 · un online en `confirmed` (programado aceptado que ya venció y
   // cayó de «Próximos» a «Nuevos») también tiene que pasar por `confirmarPedido`.
   // Antes caía al botón «Preparar» genérico → `updateOrderStatus`, que lo movía
@@ -183,15 +185,9 @@ export function OrderCard({
     order.payment_status !== "paid" &&
     Boolean(onAccept);
 
-  const nextForDelivery =
-    order.delivery_type === "pickup" && order.status === "ready"
-      ? "delivered"
-      : NEXT_STATUS[order.status];
+  const nextForDelivery = NEXT_STATUS[order.status];
 
-  const advanceLabel =
-    order.delivery_type === "pickup" && order.status === "ready"
-      ? "Entregar"
-      : NEXT_LABEL[order.status];
+  const advanceLabel = NEXT_LABEL[order.status];
 
   const isTerminal =
     order.status === "delivered" || order.status === "cancelled";

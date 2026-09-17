@@ -21,16 +21,17 @@ import { updateOrderStatus } from "@/lib/orders/update-status";
 const NEXT_LABEL: Partial<Record<OrderStatus, string>> = {
   pending: "Confirmar",
   confirmed: "A cocina",
-  preparing: "Marcar listo",
-  ready: "En camino",
+  // Flujo simplificado: de cocina se entrega directo.
+  preparing: "Entregar",
+  ready: "Entregar",
   on_the_way: "Entregar",
 };
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   pending: "confirmed",
   confirmed: "preparing",
-  preparing: "ready",
-  ready: "on_the_way",
+  preparing: "delivered",
+  ready: "delivered",
   on_the_way: "delivered",
 };
 
@@ -51,14 +52,8 @@ export function OrderDetailActions({
   const [reason, setReason] = useState("");
 
   const isTerminal = status === "delivered" || status === "cancelled";
-  const next =
-    deliveryType === "pickup" && status === "ready"
-      ? "delivered"
-      : NEXT_STATUS[status];
-  const advanceLabel =
-    deliveryType === "pickup" && status === "ready"
-      ? "Entregar"
-      : NEXT_LABEL[status];
+  const next = NEXT_STATUS[status];
+  const advanceLabel = NEXT_LABEL[status];
 
   const handleAdvance = () => {
     if (!next) return;

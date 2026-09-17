@@ -25,12 +25,12 @@ export const STATUS_META: Record<
     tone: "text-indigo-800 bg-indigo-50",
   },
   ready: {
-    label: "Listo",
+    label: "En cocina",
     dot: "bg-emerald-500",
     tone: "text-emerald-800 bg-emerald-50",
   },
   on_the_way: {
-    label: "En camino",
+    label: "En cocina",
     dot: "bg-violet-500",
     tone: "text-violet-800 bg-violet-50",
   },

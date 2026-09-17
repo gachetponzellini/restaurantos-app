@@ -50,32 +50,16 @@ const COLUMNS: Column[] = [
   {
     key: "preparing",
     label: "En cocina",
-    statuses: ["preparing"],
+    // Los estados intermedios (`ready`, `on_the_way`) no se usan más: el
+    // board avanza directo de `preparing` a `delivered`. Se siguen mapeando
+    // acá para que los pedidos legacy en esos estados no desaparezcan del
+    // tablero y se puedan entregar con el mismo botón.
+    statuses: ["preparing", "ready", "on_the_way"],
     accent: "bg-amber-500",
     ring: "ring-amber-500/30",
     countBg: "bg-amber-50",
     countText: "text-amber-800",
     emptyHint: "Cocina libre",
-  },
-  {
-    key: "ready",
-    label: "Listos",
-    statuses: ["ready"],
-    accent: "bg-emerald-500",
-    ring: "ring-emerald-500/30",
-    countBg: "bg-emerald-50",
-    countText: "text-emerald-800",
-    emptyHint: "Nada listo aún",
-  },
-  {
-    key: "on_the_way",
-    label: "En camino",
-    statuses: ["on_the_way"],
-    accent: "bg-indigo-500",
-    ring: "ring-indigo-500/30",
-    countBg: "bg-indigo-50",
-    countText: "text-indigo-800",
-    emptyHint: "Sin envíos activos",
   },
   {
     key: "delivered",
@@ -500,7 +484,7 @@ export function OrdersRealtimeBoard({
         deliveryFeeCents={deliveryFeeCents}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {COLUMNS.map((col) => {
           const items = byColumn[col.key];
           return (

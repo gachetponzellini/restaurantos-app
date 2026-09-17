@@ -908,7 +908,6 @@ function ConfirmedView({ theme }: { theme: Theme }) {
           {[
             { label: "Recibido", active: true, done: true },
             { label: "En preparación", active: true, done: false },
-            { label: "En camino", active: false, done: false },
             { label: "Entregado", active: false, done: false },
           ].map((step, i, arr) => (
             <div key={step.label} className="flex items-stretch gap-3">

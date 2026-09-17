@@ -74,14 +74,6 @@ export function OrderTracking({
     },
     { key: "cooking", label: "En cocina", sub: "Están preparando la comida" },
     {
-      key: "delivery",
-      label: deliveryType === "pickup" ? "Listo" : "En camino",
-      sub:
-        deliveryType === "pickup"
-          ? "Podés retirarlo en el local"
-          : "Salió para tu dirección",
-    },
-    {
       key: "delivered",
       label: deliveryType === "pickup" ? "Retirado" : "Entregado",
       sub: "Esperamos que lo disfrutes",
@@ -94,12 +86,13 @@ export function OrderTracking({
       case "confirmed":
         return 0;
       case "preparing":
-        return 1;
+      // `ready`/`on_the_way` ya no se usan (el local entrega directo desde
+      // cocina); se mapean al mismo paso para pedidos legacy.
       case "ready":
       case "on_the_way":
-        return 2;
+        return 1;
       case "delivered":
-        return 3;
+        return 2;
       default:
         return 0;
     }
@@ -167,7 +160,7 @@ export function OrderTracking({
           >
             {cancelled
               ? "Pedido cancelado"
-              : step === 3
+              : step === 2
                 ? "¡Pedido completado!"
                 : deliveryType === "pickup"
                   ? "Retiralo aproximadamente"
@@ -184,7 +177,7 @@ export function OrderTracking({
           >
             {cancelled
               ? "Cancelado"
-              : step === 3
+              : step === 2
                 ? "¡Listo!"
                 : estimatedMinutes
                   ? `~${estimatedMinutes} min`

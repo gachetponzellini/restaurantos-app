@@ -11,28 +11,18 @@ type StatusStyle = {
   pulse: boolean;
 };
 
-function styleFor(
-  status: ActiveOrder["status"],
-  deliveryType: "delivery" | "pickup",
-): StatusStyle {
+function styleFor(status: ActiveOrder["status"]): StatusStyle {
   switch (status) {
     case "pending":
       return { label: "Esperando confirmación", dotColor: "#F5B941", pulse: false };
     case "confirmed":
       return { label: "Confirmado", dotColor: "#F5B941", pulse: false };
     case "preparing":
-      return { label: "Preparando tu pedido", dotColor: "var(--accent)", pulse: true };
+    // `ready`/`on_the_way` ya no se usan (el local entrega directo desde
+    // cocina); los pedidos legacy en esos estados muestran lo mismo.
     case "ready":
-      return {
-        label:
-          deliveryType === "pickup"
-            ? "Listo para retirar"
-            : "Saliendo pronto",
-        dotColor: "#22C55E",
-        pulse: true,
-      };
     case "on_the_way":
-      return { label: "En camino", dotColor: "var(--accent)", pulse: true };
+      return { label: "En cocina", dotColor: "var(--accent)", pulse: true };
     default:
       return { label: "", dotColor: "var(--accent)", pulse: false };
   }
@@ -137,7 +127,7 @@ function SingleOrderContent({
   estimatedMinutes: number | null;
 }) {
   const elapsed = useElapsedMinutes(order.created_at);
-  const style = styleFor(order.status, order.delivery_type);
+  const style = styleFor(order.status);
   const eta = etaLabel(order.status, elapsed, estimatedMinutes);
 
   return (

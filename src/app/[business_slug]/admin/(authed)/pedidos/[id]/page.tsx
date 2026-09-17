@@ -18,8 +18,8 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   pending: "Pendiente",
   confirmed: "Confirmado",
   preparing: "En cocina",
-  ready: "Listo",
-  on_the_way: "En camino",
+  ready: "En cocina",
+  on_the_way: "En cocina",
   delivered: "Entregado",
   cancelled: "Cancelado",
 };

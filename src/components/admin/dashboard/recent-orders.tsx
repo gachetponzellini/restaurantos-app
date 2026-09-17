@@ -3,48 +3,8 @@ import { ArrowUpRight, Bike, Package2 } from "lucide-react";
 
 import { formatCurrency } from "@/lib/currency";
 import type { AdminOrder } from "@/lib/admin/orders-query";
+import { STATUS_META } from "@/lib/orders/status-meta";
 import { cn } from "@/lib/utils";
-
-const STATUS_META: Record<
-  AdminOrder["status"],
-  { label: string; dot: string; tone: string }
-> = {
-  pending: {
-    label: "Pendiente",
-    dot: "bg-amber-500",
-    tone: "text-amber-800 bg-amber-50",
-  },
-  confirmed: {
-    label: "Confirmado",
-    dot: "bg-sky-500",
-    tone: "text-sky-800 bg-sky-50",
-  },
-  preparing: {
-    label: "En cocina",
-    dot: "bg-indigo-500",
-    tone: "text-indigo-800 bg-indigo-50",
-  },
-  ready: {
-    label: "Listo",
-    dot: "bg-emerald-500",
-    tone: "text-emerald-800 bg-emerald-50",
-  },
-  on_the_way: {
-    label: "En camino",
-    dot: "bg-violet-500",
-    tone: "text-violet-800 bg-violet-50",
-  },
-  delivered: {
-    label: "Entregado",
-    dot: "bg-zinc-400",
-    tone: "text-zinc-700 bg-zinc-100",
-  },
-  cancelled: {
-    label: "Cancelado",
-    dot: "bg-rose-500",
-    tone: "text-rose-800 bg-rose-50",
-  },
-};
 
 function shortTime(iso: string): string {
   return new Intl.DateTimeFormat("es-AR", {

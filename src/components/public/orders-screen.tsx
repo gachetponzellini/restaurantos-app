@@ -15,8 +15,9 @@ const STATUS_META: Record<
   pending: { label: "Pendiente", tone: "active" },
   confirmed: { label: "Confirmado", tone: "active" },
   preparing: { label: "En preparación", tone: "active" },
-  ready: { label: "Listo", tone: "active" },
-  on_the_way: { label: "En camino", tone: "active" },
+  // Ya no se usan (el local entrega directo); se muestran igual que cocina.
+  ready: { label: "En preparación", tone: "active" },
+  on_the_way: { label: "En preparación", tone: "active" },
   delivered: { label: "Entregado", tone: "done" },
   cancelled: { label: "Cancelado", tone: "cancelled" },
 };
