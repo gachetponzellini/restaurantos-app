@@ -395,6 +395,18 @@ export function PlanoDelDia({
         </span>
       </div>
 
+      {/* Spec 059/189 — las genéricas no se dibujan, pero se abren: en flexible
+          son la mayoría de la noche y el plano sólo las contaba. Van ARRIBA del
+          plano y abiertas: debajo de un SVG de 72vh quedaban fuera de pantalla. */}
+      {genericas.cantidad > 0 && (
+        <SinMesa
+          reservas={genericas.reservas}
+          cubiertos={genericas.cubiertos}
+          timezone={timezone}
+          floorPlans={floorPlans}
+        />
+      )}
+
       <svg
         viewBox={viewBox}
         className="h-auto w-full"
@@ -468,16 +480,6 @@ export function PlanoDelDia({
         />
       )}
 
-      {/* Spec 059/189 — las genéricas no se dibujan, pero se abren: en flexible
-          son la mayoría de la noche y el plano sólo las contaba. */}
-      {genericas.cantidad > 0 && (
-        <SinMesa
-          reservas={genericas.reservas}
-          cubiertos={genericas.cubiertos}
-          timezone={timezone}
-          floorPlans={floorPlans}
-        />
-      )}
     </div>
   );
 }
@@ -810,12 +812,12 @@ function SinMesa({
   timezone: string;
   floorPlans: Array<{ id: string; name: string }>;
 }) {
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(true);
   const salonDe = (id?: string | null) =>
     floorPlans.find((fp) => fp.id === id)?.name ?? null;
 
   return (
-    <div className="mt-3 rounded-xl bg-muted/50 p-3 ring-1 ring-border">
+    <div className="mb-3 rounded-xl bg-muted/50 p-3 ring-1 ring-border">
       <Button
         type="button"
         variant="ghost"
