@@ -1,16 +1,15 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, type ComponentType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
 
 import { CatalogClient } from "@/components/admin/catalog/catalog-client";
 import { CategoriasTab } from "@/components/admin/catalog/categorias-tab";
 import { CosteoTab } from "@/components/admin/catalog/costeo-tab";
 import { IngredientsTab } from "@/components/admin/catalog/ingredients-tab";
 import { SectoresTab } from "@/components/admin/catalog/sectores-tab";
-import { DailyMenuList } from "@/components/admin/daily-menus/daily-menu-list";
-import { BrandButton } from "@/components/admin/shell/brand-button";
+import { DailyMenuTab } from "@/components/admin/daily-menus/daily-menu-tab";
+import { MenuEditor } from "@/components/admin/daily-menus/menu-editor";
 import { AyudaChip } from "@/components/admin/ayuda-chip";
 import { PageHeader } from "@/components/admin/shell/page-shell";
 import type { BarStockCandidate } from "@/components/admin/stock/stock-bar-tab";
@@ -24,9 +23,32 @@ import type {
 import type { AdminDailyMenu } from "@/lib/admin/daily-menu-query";
 import type { KitchenStockFull } from "@/lib/ingredients/queries";
 import type { MermaReportItem } from "@/lib/ingredients/merma";
-import type { IngredientOverview, ProductCosteo } from "@/lib/ingredients/types";
+import type {
+  IngredientOverview,
+  ProductCosteo,
+} from "@/lib/ingredients/types";
 import type { StockOverviewItem } from "@/lib/stock/queries";
 import { cn } from "@/lib/utils";
+import { catalogAttention } from "@/lib/catalog/attention";
+import {
+  CatalogHeaderActionProvider,
+  CatalogHeaderActionSlot,
+} from "@/components/admin/catalog/ui/header-action";
+import {
+  CatalogDataProvider,
+  type CatalogData,
+} from "@/components/admin/catalog/ui/catalog-data";
+import {
+  CatalogEditorHost,
+  type CatalogEditorProps,
+  type CatalogEditorRef,
+  type CatalogEntityKind,
+} from "@/components/admin/catalog/ui/editor-host";
+import { ProductEditor } from "@/components/admin/catalog/product-editor";
+import { CategoryEditor } from "@/components/admin/catalog/category-editor";
+import { SuperCategoryEditor } from "@/components/admin/catalog/super-category-editor";
+import { StationEditor } from "@/components/admin/catalog/station-editor";
+import { IngredientEditor } from "@/components/admin/catalog/ingredient-editor";
 
 type Tab =
   | "productos"
@@ -123,6 +145,17 @@ function TabsInner({
     ],
   );
 
+  const attention = useMemo(
+    () =>
+      catalogAttention({
+        costeo,
+        stockBebidas,
+        stockBar,
+        ingredients,
+      }),
+    [costeo, stockBebidas, stockBar, ingredients],
+  );
+
   // Costo de mercadería por producto (centavos), sólo productos con receta.
   const costByProduct = useMemo(() => {
     const map: Record<string, number> = {};
@@ -132,180 +165,233 @@ function TabsInner({
     return map;
   }, [costeo]);
 
-  const action =
-    active === "productos" ? (
-      <BrandButton
-        href={`/${slug}/admin/catalogo/productos/nuevo`}
-        size="md"
-        leadingIcon={<Plus />}
-      >
-        Nuevo producto
-      </BrandButton>
-    ) : active === "menu-del-dia" ? (
-      <BrandButton
-        href={`/${slug}/admin/menu-del-dia/nuevo`}
-        size="md"
-        leadingIcon={<Plus />}
-      >
-        Nuevo menú del día
-      </BrandButton>
-    ) : null;
+  const data: CatalogData = {
+    slug,
+    businessId,
+    superCategories,
+    categories,
+    stations,
+    products,
+    menus,
+    todayDow,
+    ingredients,
+    costeo,
+    stockBebidas,
+    stockCocina,
+    stockBar,
+  };
 
   return (
-    <>
-      <PageHeader
-        eyebrow="Gestión"
-        title="Productos e inventario"
-        description="Tu carta, insumos y costos, más el stock de bebidas y cocina. Todo lo que ofrecés y lo que tenés en el local."
-        action={
-          <div className="flex items-center gap-1">
-            {action}
-            <AyudaChip slug={slug} tema="catalogo" />
-          </div>
-        }
-      />
-
-      <nav
-        aria-label="Secciones del catálogo"
-        className="inline-flex rounded-2xl bg-white p-1 ring-1 ring-zinc-200/70"
+    <CatalogDataProvider value={data}>
+      <CatalogEditorHost
+        editors={EDITORS}
+        labelOf={(ref) => labelOf(data, ref)}
       >
-        <TabButton
-          active={active === "productos"}
-          onClick={() => setTab("productos")}
-          count={counts.productos}
-        >
-          Productos
-        </TabButton>
-        <TabButton
-          active={active === "categorias"}
-          onClick={() => setTab("categorias")}
-          count={counts.categorias}
-        >
-          Categorías
-        </TabButton>
-        <TabButton
-          active={active === "sectores"}
-          onClick={() => setTab("sectores")}
-          count={counts.sectores}
-        >
-          Sectores
-        </TabButton>
-        <TabButton
-          active={active === "menu-del-dia"}
-          onClick={() => setTab("menu-del-dia")}
-          count={counts.menuDelDia}
-        >
-          Menú del día
-        </TabButton>
-        <TabButton
-          active={active === "insumos"}
-          onClick={() => setTab("insumos")}
-          count={counts.insumos}
-        >
-          Insumos
-        </TabButton>
-        <TabButton
-          active={active === "costeo"}
-          onClick={() => setTab("costeo")}
-          count={counts.costeo}
-        >
-          Costeo
-        </TabButton>
-        <TabButton
-          active={active === "stock"}
-          onClick={() => setTab("stock")}
-          count={counts.stock}
-        >
-          Stock
-        </TabButton>
-      </nav>
+        <CatalogHeaderActionProvider>
+          <PageHeader
+            eyebrow="Gestión"
+            title="Productos e inventario"
+            description="Tu carta, insumos y costos, más el stock de bebidas y cocina. Todo lo que ofrecés y lo que tenés en el local."
+            action={
+              <div className="flex items-center gap-2">
+                <CatalogHeaderActionSlot />
+                <AyudaChip slug={slug} tema="catalogo" />
+              </div>
+            }
+          />
 
-      <div>
-        {active === "productos" && (
-          <CatalogClient
-            slug={slug}
-            businessId={businessId}
-            categories={categories}
-            stations={stations}
-            products={products}
-            ingredients={ingredients}
+          <CatalogTabs
+            active={active}
+            onChange={setTab}
+            counts={counts}
+            attention={attention}
           />
-        )}
-        {active === "categorias" && (
-          <CategoriasTab
-            slug={slug}
-            superCategories={superCategories}
-            stations={stations}
-            categories={categories}
-            products={products}
-          />
-        )}
-        {active === "sectores" && (
-          <SectoresTab
-            slug={slug}
-            stations={stations}
-            categories={categories}
-            products={products}
-          />
-        )}
-        {active === "menu-del-dia" && (
-          <DailyMenuList slug={slug} menus={menus} todayDow={todayDow} />
-        )}
-        {active === "insumos" && (
-          <IngredientsTab slug={slug} ingredients={ingredients} />
-        )}
-        {active === "costeo" && <CosteoTab items={costeo} />}
-        {active === "stock" && (
-          <StockTab
-            slug={slug}
-            bebidas={stockBebidas}
-            cocina={stockCocina}
-            bar={stockBar}
-            barCandidates={barCandidates}
-            costByProduct={costByProduct}
-            merma={merma}
-            mermaFrom={mermaFrom}
-            mermaTo={mermaTo}
-          />
-        )}
-      </div>
-    </>
+
+          <div>
+            {active === "productos" && <CatalogClient />}
+            {active === "categorias" && <CategoriasTab />}
+            {active === "sectores" && <SectoresTab />}
+            {active === "menu-del-dia" && <DailyMenuTab />}
+            {active === "insumos" && <IngredientsTab />}
+            {active === "costeo" && <CosteoTab />}
+            {active === "stock" && (
+              <StockTab
+                slug={slug}
+                bebidas={stockBebidas}
+                cocina={stockCocina}
+                bar={stockBar}
+                barCandidates={barCandidates}
+                costByProduct={costByProduct}
+                merma={merma}
+                mermaFrom={mermaFrom}
+                mermaTo={mermaTo}
+              />
+            )}
+          </div>
+        </CatalogHeaderActionProvider>
+      </CatalogEditorHost>
+    </CatalogDataProvider>
   );
 }
 
-function TabButton({
+/**
+ * Los editores del catálogo, por tipo de entidad (spec 205 · D6). Estático: el
+ * host los monta con la key de la entidad, y los datos los leen del contexto.
+ */
+const EDITORS: Partial<
+  Record<CatalogEntityKind, ComponentType<CatalogEditorProps>>
+> = {
+  product: ProductEditor,
+  category: CategoryEditor,
+  superCategory: SuperCategoryEditor,
+  menu: MenuEditor,
+  station: StationEditor,
+  ingredient: IngredientEditor,
+};
+
+/** Nombre de una entidad para el «Volver a X» de los editores enlazados. */
+function labelOf(d: CatalogData, ref: CatalogEditorRef): string {
+  switch (ref.kind) {
+    case "product":
+      return d.products.find((p) => p.id === ref.id)?.name ?? "producto";
+    case "category":
+      return d.categories.find((c) => c.id === ref.id)?.name ?? "categoría";
+    case "superCategory":
+      return (
+        d.superCategories.find((c) => c.id === ref.id)?.name ?? "supercategoría"
+      );
+    case "menu":
+      return d.menus.find((m) => m.id === ref.id)?.name ?? "menú";
+    case "station":
+      return d.stations.find((s) => s.id === ref.id)?.name ?? "sector";
+    case "ingredient":
+      return d.ingredients.find((i) => i.id === ref.id)?.name ?? "insumo";
+  }
+}
+
+/**
+ * Tabs agrupadas por familia (spec 205 · D6): Carta · Cocina · Costos e
+ * inventario. El badge rojo marca lo que pide atención (platos que pierden
+ * plata, stock bajo mínimo).
+ */
+const TAB_GROUPS: {
+  label: string;
+  tabs: {
+    id: Tab;
+    label: string;
+    count: keyof Counts;
+    alert?: keyof Attention;
+  }[];
+}[] = [
+  {
+    label: "Carta",
+    tabs: [
+      { id: "productos", label: "Productos", count: "productos" },
+      { id: "categorias", label: "Categorías", count: "categorias" },
+      { id: "menu-del-dia", label: "Menú del día", count: "menuDelDia" },
+    ],
+  },
+  {
+    label: "Cocina",
+    tabs: [{ id: "sectores", label: "Sectores", count: "sectores" }],
+  },
+  {
+    label: "Costos e inventario",
+    tabs: [
+      { id: "insumos", label: "Insumos", count: "insumos", alert: "insumos" },
+      { id: "costeo", label: "Costeo", count: "costeo", alert: "costeo" },
+      { id: "stock", label: "Stock", count: "stock", alert: "stock" },
+    ],
+  },
+];
+
+type Counts = Record<
+  | "productos"
+  | "categorias"
+  | "sectores"
+  | "menuDelDia"
+  | "insumos"
+  | "costeo"
+  | "stock",
+  number
+>;
+type Attention = ReturnType<typeof catalogAttention>;
+
+const ALERT_TITLE: Record<keyof Attention, string> = {
+  costeo: "platos que pierden plata",
+  insumos: "insumos bajo mínimo",
+  stock: "productos o insumos bajo mínimo",
+};
+
+function CatalogTabs({
   active,
-  onClick,
-  count,
-  children,
+  onChange,
+  counts,
+  attention,
 }: {
-  active: boolean;
-  onClick: () => void;
-  count: number;
-  children: React.ReactNode;
+  active: Tab;
+  onChange: (t: Tab) => void;
+  counts: Counts;
+  attention: Attention;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "relative inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition",
-        active
-          ? "bg-zinc-100 text-zinc-900"
-          : "text-zinc-500 hover:text-zinc-900",
-      )}
+    <nav
+      aria-label="Secciones del catálogo"
+      className="relative flex items-end overflow-x-auto border-b border-zinc-200 [scrollbar-width:none]"
     >
-      {children}
-      <span
-        className={cn(
-          "rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums",
-          active ? "bg-white text-zinc-900 ring-1 ring-zinc-200" : "bg-zinc-100 text-zinc-500",
-        )}
-      >
-        {count}
-      </span>
-    </button>
+      {TAB_GROUPS.map((g, gi) => (
+        <div key={g.label} className="flex items-end">
+          {gi > 0 && (
+            <span
+              aria-hidden
+              className="mx-2 mb-2.5 h-[22px] w-px bg-zinc-200"
+            />
+          )}
+          <div role="group" aria-label={g.label} className="flex flex-col">
+            <span
+              aria-hidden
+              className="px-3 text-[10px] font-semibold tracking-[0.12em] whitespace-nowrap text-zinc-400 uppercase max-md:hidden"
+            >
+              {g.label}
+            </span>
+            <div className="flex">
+              {g.tabs.map((t) => {
+                const on = active === t.id;
+                const alert = t.alert ? attention[t.alert] : 0;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onChange(t.id)}
+                    aria-current={on ? "page" : undefined}
+                    className={cn(
+                      "-mb-px flex items-center gap-1.5 border-b-2 px-3 pt-2 pb-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+                      on
+                        ? "border-zinc-900 text-zinc-900"
+                        : "border-transparent text-zinc-500 hover:text-zinc-900",
+                    )}
+                  >
+                    {t.label}
+                    <span className="text-[11px] text-zinc-400 tabular-nums">
+                      {counts[t.count]}
+                    </span>
+                    {alert > 0 && t.alert && (
+                      <span
+                        title={`${alert} ${ALERT_TITLE[t.alert]}`}
+                        className="rounded-full bg-rose-50 px-1.5 text-[11px] font-semibold text-rose-700 tabular-nums"
+                      >
+                        {alert}
+                        <span className="sr-only"> {ALERT_TITLE[t.alert]}</span>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </nav>
   );
 }
 

@@ -1,376 +1,356 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  DollarSign,
-  Filter,
-  Search,
-  TrendingDown,
-  TrendingUp,
-} from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
+import {
+  CatalogTable,
+  type CatalogColumn,
+  type CatalogTableHandle,
+} from "@/components/admin/catalog/ui/catalog-table";
+import {
+  CatalogSearch,
+  CatalogToolbar,
+} from "@/components/admin/catalog/ui/catalog-toolbar";
+import { useCatalogData } from "@/components/admin/catalog/ui/catalog-data";
+import { useCatalogEditor } from "@/components/admin/catalog/ui/editor-host";
 import type { ProductCosteo } from "@/lib/ingredients/types";
+import {
+  FOOD_COST_BAR,
+  FOOD_COST_TEXT,
+  foodCostPercent,
+  foodCostTone,
+} from "@/lib/catalog/food-cost";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
-type SortKey = "margin" | "name" | "cost" | "price";
-type SortDir = "asc" | "desc";
+/** Fila con el food cost ya calculado (spec 205 · D11). */
+type Row = ProductCosteo & { pct: number | null };
 
-function marginColor(pct: number, hasRecipe: boolean): string {
-  if (!hasRecipe) return "text-zinc-400";
-  if (pct >= 65) return "text-emerald-700";
-  if (pct >= 50) return "text-emerald-600";
-  if (pct >= 30) return "text-amber-600";
-  return "text-red-600";
-}
+type KpiId = "todos" | "loss" | "high" | "sin";
 
-function marginBg(pct: number, hasRecipe: boolean): string {
-  if (!hasRecipe) return "bg-zinc-50";
-  if (pct >= 65) return "bg-emerald-50";
-  if (pct >= 50) return "bg-emerald-50/50";
-  if (pct >= 30) return "bg-amber-50/50";
-  return "bg-red-50/50";
-}
-
-export function CosteoTab({ items }: { items: ProductCosteo[] }) {
+/**
+ * Tab Costeo (spec 205 · D11): los KPIs son filtros — tocarlos filtra la
+ * tabla en vez de sólo informar. La tabla queda ordenada de peor a mejor food
+ * cost, y cada fila abre el `ProductEditor` directo en «Precio y costo»
+ * (D6 · editores enlazados) recorriendo la lista filtrada con ‹ ›.
+ */
+export function CosteoTab() {
+  const { costeo } = useCatalogData();
+  const editor = useCatalogEditor();
+  const tableRef = useRef<CatalogTableHandle>(null);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [recipeFilter, setRecipeFilter] = useState<"all" | "with" | "without">(
-    "all",
-  );
-  const [sortKey, setSortKey] = useState<SortKey>("margin");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [kpi, setKpi] = useState<KpiId>("todos");
 
-  // Unique categories for filter
+  const rows: Row[] = useMemo(
+    () =>
+      costeo.map((c) => ({
+        ...c,
+        pct: c.hasRecipe
+          ? foodCostPercent(c.priceCents, c.foodCostCents)
+          : null,
+      })),
+    [costeo],
+  );
+
   const categories = useMemo(() => {
     const set = new Set<string>();
-    items.forEach((i) => {
-      if (i.categoryName) set.add(i.categoryName);
-    });
-    return Array.from(set).sort();
-  }, [items]);
+    for (const c of costeo) if (c.categoryName) set.add(c.categoryName);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [costeo]);
 
-  // Filter + sort
+  const withRecipe = rows.filter((r) => r.hasRecipe);
+  const avgMargin =
+    withRecipe.length > 0
+      ? withRecipe.reduce((s, r) => s + r.marginPercent, 0) / withRecipe.length
+      : 0;
+  const pierdenPlata = withRecipe.filter((r) => r.marginCents < 0);
+  // Mismo corte que `foodCostTone === "bad"` (>50%): un plato ahí ya pide
+  // revisar precio o receta, aunque todavía deje margen positivo.
+  const foodCostAlto = withRecipe.filter(
+    (r) => r.pct != null && foodCostTone(r.pct) === "bad",
+  );
+  const sinReceta = rows.filter((r) => !r.hasRecipe);
+
+  const kpiBase =
+    kpi === "loss"
+      ? pierdenPlata
+      : kpi === "high"
+        ? foodCostAlto
+        : kpi === "sin"
+          ? sinReceta
+          : rows;
+
   const filtered = useMemo(() => {
-    let result = items;
-
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((i) => i.productName.toLowerCase().includes(q));
-    }
-    if (categoryFilter !== "all") {
-      result = result.filter((i) => i.categoryName === categoryFilter);
-    }
-    if (recipeFilter === "with") {
-      result = result.filter((i) => i.hasRecipe);
-    } else if (recipeFilter === "without") {
-      result = result.filter((i) => !i.hasRecipe);
-    }
-
-    result = [...result].sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "margin":
-          cmp = a.marginPercent - b.marginPercent;
-          break;
-        case "name":
-          cmp = a.productName.localeCompare(b.productName);
-          break;
-        case "cost":
-          cmp = a.foodCostCents - b.foodCostCents;
-          break;
-        case "price":
-          cmp = a.priceCents - b.priceCents;
-          break;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-
-    return result;
-  }, [items, search, categoryFilter, recipeFilter, sortKey, sortDir]);
-
-  // Summary stats — only from items with recipes
-  const stats = useMemo(() => {
-    const withRecipe = items.filter((i) => i.hasRecipe && i.priceCents > 0);
-    if (withRecipe.length === 0) {
-      return { avgMargin: 0, totalCost: 0, totalRevenue: 0, count: 0 };
-    }
-    const totalCost = withRecipe.reduce((s, i) => s + i.foodCostCents, 0);
-    const totalRevenue = withRecipe.reduce((s, i) => s + i.priceCents, 0);
-    const avgMargin =
-      totalRevenue > 0
-        ? ((totalRevenue - totalCost) / totalRevenue) * 100
-        : 0;
-    return {
-      avgMargin: Math.round(avgMargin * 100) / 100,
-      totalCost,
-      totalRevenue,
-      count: withRecipe.length,
-    };
-  }, [items]);
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir(key === "name" ? "asc" : "asc");
-    }
-  };
-
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col)
-      return <ArrowDown className="size-3 opacity-0 group-hover:opacity-30" />;
-    return sortDir === "asc" ? (
-      <ArrowUp className="size-3" />
-    ) : (
-      <ArrowDown className="size-3" />
+    const q = search.trim().toLowerCase();
+    return (
+      kpiBase
+        .filter((r) => {
+          if (categoryFilter !== "all" && r.categoryName !== categoryFilter)
+            return false;
+          return !q || r.productName.toLowerCase().includes(q);
+        })
+        // De peor a mejor: primero lo que no tiene receta ni forma de calcularse
+        // no entra acá salvo que el filtro sea justamente «Sin receta» (donde no
+        // hay % que ordenar); el resto, food cost más alto primero.
+        .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1))
     );
-  };
+  }, [kpiBase, search, categoryFilter]);
 
-  const withRecipeCount = items.filter((i) => i.hasRecipe).length;
-  const withoutRecipeCount = items.length - withRecipeCount;
+  const ids = filtered.map((r) => r.productId);
+  const open = (r: Row) =>
+    editor.open({ kind: "product", id: r.productId, section: "precio" }, ids);
 
-  return (
-    <div className="space-y-5">
-      {/* Summary cards */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard
-          label="Margen promedio"
-          value={`${stats.avgMargin.toFixed(1)}%`}
-          detail={`${stats.count} productos con receta`}
-          icon={
-            stats.avgMargin >= 50 ? (
-              <TrendingUp className="size-5 text-emerald-600" />
-            ) : (
-              <TrendingDown className="size-5 text-amber-600" />
-            )
-          }
-          accent={stats.avgMargin >= 50 ? "emerald" : "amber"}
-        />
-        <SummaryCard
-          label="Con receta"
-          value={String(withRecipeCount)}
-          detail={`de ${items.length} productos`}
-          icon={<DollarSign className="size-5 text-sky-600" />}
-          accent="sky"
-        />
-        <SummaryCard
-          label="Sin receta"
-          value={String(withoutRecipeCount)}
-          detail="sin food cost calculable"
-          icon={<Filter className="size-5 text-zinc-500" />}
-          accent="zinc"
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Buscar producto..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-9 w-56 rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200"
-          />
+  const columns: CatalogColumn<Row>[] = [
+    {
+      key: "producto",
+      header: "Producto",
+      width: "minmax(0,1fr)",
+      cell: (r) => (
+        <div className="min-w-0">
+          <span className="block truncate font-semibold text-zinc-900">
+            {r.productName}
+          </span>
+          {r.categoryName && (
+            <span className="block truncate text-xs text-zinc-500">
+              {r.categoryName}
+            </span>
+          )}
         </div>
-
-        {/* Category filter */}
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200"
-        >
-          <option value="all">Todas las categorías</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        {/* Recipe filter */}
-        <div className="inline-flex rounded-lg bg-white p-0.5 ring-1 ring-zinc-200">
-          {(
-            [
-              { key: "all", label: "Todos" },
-              { key: "with", label: "Con receta" },
-              { key: "without", label: "Sin receta" },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setRecipeFilter(opt.key)}
+      ),
+    },
+    {
+      key: "precio",
+      header: "Precio",
+      width: "88px",
+      align: "end",
+      cell: (r) => (
+        <span className="font-semibold text-zinc-900 tabular-nums">
+          {formatCurrency(r.priceCents)}
+        </span>
+      ),
+    },
+    {
+      key: "costo",
+      header: "Costo",
+      width: "88px",
+      align: "end",
+      hideOnMobile: true,
+      cell: (r) => (
+        <span className="text-[12.5px] text-zinc-600 tabular-nums">
+          {r.hasRecipe ? formatCurrency(r.foodCostCents) : "—"}
+        </span>
+      ),
+    },
+    {
+      key: "fc",
+      header: "Food cost",
+      width: "150px",
+      hideOnMobile: true,
+      cell: (r) => {
+        if (r.pct == null)
+          return <span className="text-xs text-zinc-400">sin receta</span>;
+        const tone = foodCostTone(r.pct);
+        return (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-100">
+              <div
+                className={cn("h-full rounded-full", FOOD_COST_BAR[tone])}
+                style={{ width: `${Math.min(100, r.pct)}%` }}
+              />
+            </div>
+            <span
               className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition",
-                recipeFilter === opt.key
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-900",
+                "text-[12.5px] font-semibold tabular-nums",
+                FOOD_COST_TEXT[tone],
               )}
             >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+              {Math.round(r.pct)}%
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "margen",
+      header: "Margen $",
+      width: "96px",
+      align: "end",
+      cell: (r) =>
+        r.hasRecipe ? (
+          <span
+            className={cn(
+              "font-semibold tabular-nums",
+              r.marginCents < 0 ? "text-rose-700" : "text-zinc-900",
+            )}
+          >
+            {formatCurrency(r.marginCents)}
+          </span>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
+    },
+  ];
+
+  const hayFiltro = kpi !== "todos" || categoryFilter !== "all" || !!search;
+  const limpiar = () => {
+    setKpi("todos");
+    setCategoryFilter("all");
+    setSearch("");
+  };
+
+  return (
+    <>
+      <div className="mb-3 grid gap-2.5 sm:grid-cols-4">
+        <Kpi
+          on={kpi === "todos"}
+          onClick={() => setKpi("todos")}
+          label="Margen promedio"
+          value={`${avgMargin.toFixed(1)}%`}
+          detail={`${withRecipe.length} con receta`}
+        />
+        <Kpi
+          on={kpi === "loss"}
+          onClick={() => setKpi("loss")}
+          label="Pierden plata"
+          value={String(pierdenPlata.length)}
+          detail="el costo supera el precio"
+          alert={pierdenPlata.length > 0}
+        />
+        <Kpi
+          on={kpi === "high"}
+          onClick={() => setKpi("high")}
+          label="Food cost > 50%"
+          value={String(foodCostAlto.length)}
+          detail="revisar precio o receta"
+          alert={foodCostAlto.length > 0}
+        />
+        <Kpi
+          on={kpi === "sin"}
+          onClick={() => setKpi("sin")}
+          label="Sin receta"
+          value={String(sinReceta.length)}
+          detail="no se puede calcular"
+        />
       </div>
 
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl bg-white p-10 text-center text-sm text-zinc-500 ring-1 ring-zinc-200/70">
-          {search || categoryFilter !== "all" || recipeFilter !== "all"
-            ? "No hay productos que coincidan con los filtros."
-            : "No hay productos activos."}
-        </div>
-      ) : (
-        <div className="overflow-auto rounded-xl bg-white ring-1 ring-zinc-200/60">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                <th
-                  className="group cursor-pointer py-3 pl-4 pr-2"
-                  onClick={() => toggleSort("name")}
+      <CatalogToolbar>
+        <CatalogSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar producto…"
+          onArrowDown={() => tableRef.current?.focusFirst()}
+        />
+        {categories.length > 1 && (
+          <select
+            aria-label="Categoría"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-[38px] rounded-xl border border-zinc-200 bg-white px-2.5 text-sm"
+          >
+            <option value="all">Todas las categorías</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+      </CatalogToolbar>
+
+      <div className="flex justify-between gap-3 px-0.5 pb-2 text-xs text-zinc-500">
+        <span className="tabular-nums">
+          {filtered.length} de {rows.length} productos
+        </span>
+        <span className="max-sm:hidden">
+          Ordenado de peor a mejor food cost
+        </span>
+      </div>
+
+      <CatalogTable<Row>
+        ref={tableRef}
+        aria-label="Costeo"
+        rows={filtered}
+        columns={columns}
+        getKey={(r) => r.productId}
+        rowLabel={(r) => r.productName}
+        onOpen={open}
+        empty={
+          rows.length === 0 ? (
+            "Todavía no hay productos activos."
+          ) : (
+            <>
+              {search
+                ? `Sin resultados para «${search}».`
+                : "Ningún producto entra en los filtros."}{" "}
+              {hayFiltro && (
+                <button
+                  type="button"
+                  onClick={limpiar}
+                  className="font-medium text-zinc-900 underline underline-offset-4"
                 >
-                  <span className="inline-flex items-center gap-1">
-                    Producto <SortIcon col="name" />
-                  </span>
-                </th>
-                <th className="px-2 py-3">Categoría</th>
-                <th
-                  className="group cursor-pointer px-2 py-3 text-right"
-                  onClick={() => toggleSort("price")}
-                >
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Precio <SortIcon col="price" />
-                  </span>
-                </th>
-                <th
-                  className="group cursor-pointer px-2 py-3 text-right"
-                  onClick={() => toggleSort("cost")}
-                >
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Food cost <SortIcon col="cost" />
-                  </span>
-                </th>
-                <th
-                  className="group cursor-pointer px-2 py-3 text-right"
-                  onClick={() => toggleSort("margin")}
-                >
-                  <span className="inline-flex items-center justify-end gap-1">
-                    Margen <SortIcon col="margin" />
-                  </span>
-                </th>
-                <th className="py-3 pl-2 pr-4 text-right">Margen $</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {filtered.map((item) => (
-                <tr
-                  key={item.productId}
-                  className={cn("transition hover:bg-zinc-50", marginBg(item.marginPercent, item.hasRecipe))}
-                >
-                  <td className="py-3 pl-4 pr-2 font-medium text-zinc-900">
-                    {item.productName}
-                  </td>
-                  <td className="px-2 py-3 text-zinc-500">
-                    {item.categoryName ?? "—"}
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums text-zinc-900">
-                    {formatCurrency(item.priceCents)}
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums">
-                    {item.hasRecipe ? (
-                      <span className="text-zinc-900">
-                        {formatCurrency(item.foodCostCents)}
-                      </span>
-                    ) : (
-                      <span className="italic text-zinc-400">sin receta</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-3 text-right tabular-nums">
-                    {item.hasRecipe ? (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 font-semibold",
-                          marginColor(item.marginPercent, item.hasRecipe),
-                        )}
-                      >
-                        {item.marginPercent.toFixed(1)}%
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </td>
-                  <td className="py-3 pl-2 pr-4 text-right tabular-nums">
-                    {item.hasRecipe ? (
-                      <span
-                        className={marginColor(
-                          item.marginPercent,
-                          item.hasRecipe,
-                        )}
-                      >
-                        {formatCurrency(item.marginCents)}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+                  Limpiar filtros
+                </button>
+              )}
+            </>
+          )
+        }
+      />
+    </>
   );
 }
 
-// ── Summary card ─────────────────────────────────────────────────
-
-function SummaryCard({
+function Kpi({
+  on,
+  onClick,
   label,
   value,
   detail,
-  icon,
-  accent,
+  alert = false,
 }: {
+  on: boolean;
+  onClick: () => void;
   label: string;
   value: string;
   detail: string;
-  icon: React.ReactNode;
-  accent: "emerald" | "amber" | "sky" | "zinc";
+  alert?: boolean;
 }) {
-  const borderMap = {
-    emerald: "ring-emerald-100",
-    amber: "ring-amber-100",
-    sky: "ring-sky-100",
-    zinc: "ring-zinc-200",
-  };
-
   return (
-    <div
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
       className={cn(
-        "flex items-center gap-4 rounded-xl bg-white p-4 ring-1",
-        borderMap[accent],
+        "rounded-2xl border px-3.5 py-2.5 text-left transition-colors",
+        on
+          ? "border-zinc-900 bg-zinc-900 text-white"
+          : "border-zinc-200/80 bg-white hover:bg-zinc-50",
       )}
     >
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-zinc-50">
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          {label}
-        </p>
-        <p className="text-xl font-bold tabular-nums text-zinc-900">
-          {value}
-        </p>
-        <p className="text-xs text-zinc-500">{detail}</p>
-      </div>
-    </div>
+      <span
+        className={cn(
+          "block text-[11px] font-semibold tracking-[0.06em] uppercase",
+          on ? "text-white/70" : "text-zinc-500",
+        )}
+      >
+        {label}
+      </span>
+      <span
+        className={cn(
+          "block text-xl font-bold tabular-nums",
+          on ? "text-white" : alert ? "text-rose-700" : "text-zinc-900",
+        )}
+      >
+        {value}
+      </span>
+      <span
+        className={cn(
+          "block text-[12px]",
+          on ? "text-white/70" : "text-zinc-500",
+        )}
+      >
+        {detail}
+      </span>
+    </button>
   );
 }

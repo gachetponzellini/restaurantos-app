@@ -802,6 +802,36 @@ export async function fetchPresentations(ingredientId: string) {
  * es el pedazo caro (resuelve costos de insumos compuestos recursivamente) y
  * sólo la mira quien costea: se trae recién al abrir el modal.
  */
+/**
+ * Spec 205 · D10 — los productos cuya receta usa este insumo, para la sección
+ * «Usado en» del editor: si cambia el costo del insumo, cambia el food cost de
+ * estos. Sólo lectura. Devuelve ids; los nombres y precios ya están en el
+ * catálogo que tiene la página.
+ */
+export async function fetchIngredientUsage(
+  businessSlug: string,
+  ingredientId: string,
+): Promise<string[] | null> {
+  const auth = await requireCatalogAdmin(businessSlug);
+  if (!auth.ok) return null;
+
+  const service = db();
+  const { data: ingredient } = await service
+    .from("ingredients")
+    .select("id, business_id")
+    .eq("id", ingredientId)
+    .maybeSingle();
+  // Scope de tenant: el id viaja desde el browser.
+  if (!ingredient || ingredient.business_id !== auth.data.businessId)
+    return null;
+
+  const { data } = await service
+    .from("recipes")
+    .select("product_id")
+    .eq("ingredient_id", ingredientId);
+  return [...new Set((data ?? []).map((r) => r.product_id as string))];
+}
+
 export async function fetchProductRecipe(
   businessSlug: string,
   productId: string,
