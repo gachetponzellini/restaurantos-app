@@ -267,26 +267,11 @@ export async function closeOrderIfFullyPaid(
     return acc + row.amount_cents - (row.adjustment_cents ?? 0);
   }, 0);
 
-  // Splits no cancelados.
-  const { data: splits } = await service
-    .from("order_splits")
-    .select("id, expected_amount_cents, paid_amount_cents, status")
-    .eq("order_id", orderId);
-  const splitsActivos = (splits ?? []).filter(
-    (s) => (s as { status: string }).status !== "cancelled",
-  );
-
-  let fullyPaid: boolean;
-  if (splitsActivos.length === 0) {
-    // Sin splits: total_paid debe cubrir total_cents.
-    fullyPaid = total_paid >= order.total_cents && order.total_cents > 0;
-  } else {
-    fullyPaid = splitsActivos.every(
-      (s) =>
-        (s as { paid_amount_cents: number }).paid_amount_cents >=
-        (s as { expected_amount_cents: number }).expected_amount_cents,
-    );
-  }
+  // #352 — saldada ⇔ lo pagado en base cubre el total, con o sin sub-cuentas.
+  // Es la regla de `recalcular_pagado_orden` (0117): las sub-cuentas guían el
+  // cobro pero no definen «pagado». Mirándolas a ellas, unas sub-cuentas que no
+  // cubrían el total cerraban una cuenta con plata de menos.
+  const fullyPaid = order.total_cents > 0 && total_paid >= order.total_cents;
 
   if (!fullyPaid) return { orderClosed: false };
 
