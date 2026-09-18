@@ -78,6 +78,7 @@ export function DividirModal({
   orderId,
   slug,
   totalCents,
+  cobradoCents = 0,
   parentStartTransition,
   isPending,
   onDone,
@@ -91,12 +92,19 @@ export function DividirModal({
    *  la tab «Por monto». Es el total que ve el usuario; el server recalcula el
    *  suyo al dividir, así que acá sólo se usa para mostrar. */
   totalCents: number;
+  /**
+   * #354 — lo que ya entró. Con cobros, se divide lo que falta (el server
+   * hace la misma cuenta) y por ítems o comensal no se puede.
+   */
+  cobradoCents?: number;
   parentStartTransition: (cb: () => void | Promise<void>) => void;
   /** Hay una división (u otro refresh) en vuelo: bloquea re-envíos. */
   isPending: boolean;
   onDone: () => void;
 }) {
   const startTransition = parentStartTransition;
+  const hayCobros = cobradoCents > 0;
+  const aDividirCents = Math.max(0, totalCents - cobradoCents);
   const [tab, setTab] = useState<
     "personas" | "items" | "comensal" | "monto"
   >("personas");
@@ -137,10 +145,10 @@ export function DividirModal({
     [montos],
   );
   const previewMontos = useMemo(
-    () => expectedByAmounts(totalCents, montosCargados),
-    [totalCents, montosCargados],
+    () => expectedByAmounts(aDividirCents, montosCargados),
+    [aDividirCents, montosCargados],
   );
-  const restoMontos = totalCents - montosCargados.reduce((a, b) => a + b, 0);
+  const restoMontos = aDividirCents - montosCargados.reduce((a, b) => a + b, 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,11 +169,16 @@ export function DividirModal({
             <TabsTrigger value="monto">
               <Banknote className="mr-2 size-4" /> Monto
             </TabsTrigger>
-            <TabsTrigger value="items">
+            {/* #354 — con cobros, los ítems ya pagados no se reasignan. */}
+            <TabsTrigger
+              value="items"
+              disabled={hayCobros}
+              title={hayCobros ? "Ya se cobró parte de la cuenta" : undefined}
+            >
               <Scissors className="mr-2 size-4" /> Por items
             </TabsTrigger>
             {hasSeatNumbers && (
-              <TabsTrigger value="comensal">
+              <TabsTrigger value="comensal" disabled={hayCobros}>
                 <Users className="mr-2 size-4" /> Comensal
               </TabsTrigger>
             )}
@@ -238,9 +251,11 @@ export function DividirModal({
                 sub-cuenta y es lo que más se mira. */}
             <div className="rounded-xl bg-muted/50 px-4 py-3 text-sm">
               <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Total de la cuenta</span>
+                <span className="text-muted-foreground">
+                  {hayCobros ? "Falta cobrar" : "Total de la cuenta"}
+                </span>
                 <span className="font-semibold tabular-nums text-foreground">
-                  {formatCurrency(totalCents)}
+                  {formatCurrency(aDividirCents)}
                 </span>
               </div>
               <div className="mt-1.5 flex items-baseline justify-between">

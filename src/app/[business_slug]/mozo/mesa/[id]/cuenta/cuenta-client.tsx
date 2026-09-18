@@ -676,6 +676,7 @@ export function CuentaClient({
         orderId={cuenta.order.id}
         slug={slug}
         totalCents={total}
+        cobradoCents={cuenta.order.total_paid_cents ?? 0}
         parentStartTransition={startTransition}
         isPending={isPending}
         onDone={() => {

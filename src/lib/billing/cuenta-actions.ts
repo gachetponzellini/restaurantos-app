@@ -66,6 +66,39 @@ async function loadActiveItems(
   return (data ?? []) as CuentaItem[];
 }
 
+/**
+ * Lo que ya entró en esta cuenta (#354): en base —la misma regla que
+ * `recalcular_pagado_orden`, 0117— y la propina que ya viajó en esos pagos.
+ *
+ * Dividir tiene que repartir lo que FALTA. `persistSplits` repartía el total
+ * entero aunque una sub-cuenta vieja (o un pago sin dividir) ya se hubiera
+ * cobrado: las nuevas volvían a pedir esa plata y la propina se prorrateaba
+ * otra vez completa.
+ */
+async function cobradoDeLaOrden(
+  service: GenericClient,
+  orderId: string,
+): Promise<{ base_cents: number; propina_cents: number; pagos: number }> {
+  const { data } = await service
+    .from("payments")
+    .select("amount_cents, adjustment_cents, tip_cents")
+    .eq("order_id", orderId)
+    .eq("payment_status", "paid");
+  const rows = (data ?? []) as Array<{
+    amount_cents: number;
+    adjustment_cents: number | null;
+    tip_cents: number;
+  }>;
+  return {
+    base_cents: rows.reduce((n, p) => n + p.amount_cents - (p.adjustment_cents ?? 0), 0),
+    propina_cents: rows.reduce((n, p) => n + p.tip_cents, 0),
+    pagos: rows.length,
+  };
+}
+
+const YA_COBRADO_POR_ITEMS =
+  "Ya se cobró parte de esta cuenta: dividí lo que falta por monto o por personas.";
+
 async function recalcOrderTotals(
   service: GenericClient,
   orderId: string,
@@ -392,7 +425,12 @@ export async function dividirPorPersonas(
     discount_cents: order.discount_cents,
   });
 
-  const portions = prorrateEqualSplits(totals.total_cents, count);
+  // #354 — se reparte lo que falta, no el total.
+  const cobrado = await cobradoDeLaOrden(service, orderId);
+  const saldo = totals.total_cents - cobrado.base_cents;
+  if (saldo <= 0) return actionError("La cuenta ya está cobrada.");
+
+  const portions = prorrateEqualSplits(saldo, count);
   const expecteds = portions.map((amt, i) => ({
     split_index: i + 1,
     expected_amount_cents: amt,
@@ -406,7 +444,7 @@ export async function dividirPorPersonas(
       "por_personas",
       expecteds,
       null,
-      order.tip_cents,
+      Math.max(0, order.tip_cents - cobrado.propina_cents),
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });
@@ -436,6 +474,11 @@ export async function dividirPorItems(
   if (!order) return actionError("Orden no encontrada.");
   if (order.lifecycle_status !== "open") {
     return actionError("La orden ya está cerrada.");
+  }
+
+  // #354 — los ítems de lo ya cobrado no se pueden volver a asignar.
+  if ((await cobradoDeLaOrden(service, orderId)).pagos > 0) {
+    return actionError(YA_COBRADO_POR_ITEMS);
   }
 
   const items = await loadActiveItems(service, orderId);
@@ -509,6 +552,11 @@ export async function dividirPorComensal(
   const items = await loadActiveItems(service, orderId);
   if (items.length === 0 || sumActiveItems(items) === 0) {
     return actionError("No hay items para dividir.");
+  }
+
+  // #354 — igual que por ítems: lo de cada comensal ya puede estar pagado.
+  if ((await cobradoDeLaOrden(service, orderId)).pagos > 0) {
+    return actionError(YA_COBRADO_POR_ITEMS);
   }
 
   const bySeat = groupItemsBySeat(items);
@@ -612,7 +660,12 @@ export async function dividirPorMonto(
     discount_cents: order.discount_cents,
   });
 
-  const result = expectedByAmounts(totals.total_cents, amounts);
+  // #354 — los montos se reparten sobre lo que falta.
+  const cobrado = await cobradoDeLaOrden(service, orderId);
+  const saldo = totals.total_cents - cobrado.base_cents;
+  if (saldo <= 0) return actionError("La cuenta ya está cobrada.");
+
+  const result = expectedByAmounts(saldo, amounts);
   if (!result.ok) return actionError(result.error);
 
   const expecteds = result.expecteds.map((amt, i) => ({
@@ -628,7 +681,7 @@ export async function dividirPorMonto(
       "por_monto",
       expecteds,
       null,
-      order.tip_cents,
+      Math.max(0, order.tip_cents - cobrado.propina_cents),
     );
     revalidatePath(`/${businessSlug}/mozo`);
     return actionOk({ splits });
