@@ -18,14 +18,11 @@ export function DailyMenuSection({
   disabled?: boolean;
   onSelect: (menu: MenuDailyMenu) => void;
 }) {
-  const regularMenus = menus.filter((m) => !m.is_suggestion);
-  const suggestions = menus.filter((m) => m.is_suggestion);
-
   if (menus.length === 0) return null;
 
   return (
     <>
-      {regularMenus.length > 0 && (
+      {menus.length > 0 && (
         <section
           style={{
             background: "linear-gradient(180deg, #FFF7E5 0%, #FDF4E1 100%)",
@@ -73,61 +70,12 @@ export function DailyMenuSection({
           </header>
 
           <div style={{ padding: "4px 16px 14px" }}>
-            {regularMenus.map((menu) => (
+            {menus.map((menu) => (
               <DailyMenuCard
                 key={menu.id}
                 menu={menu}
                 disabled={disabled}
                 onSelect={onSelect}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {suggestions.length > 0 && (
-        <section
-          style={{
-            background: "linear-gradient(180deg, #FFF7E5 0%, #FDF4E1 100%)",
-            borderBottom: "1px solid var(--hairline)",
-          }}
-        >
-          <header style={{ padding: "14px 16px 6px" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "3px 8px",
-                borderRadius: 99,
-                background: "rgba(197, 135, 43, 0.15)",
-                fontSize: 10.5,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-                color: "#9A6B1E",
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 99,
-                  background: "#C5872B",
-                }}
-              />
-              Sugerencia del día
-            </div>
-          </header>
-
-          <div style={{ padding: "4px 16px 14px" }}>
-            {suggestions.map((menu) => (
-              <DailyMenuCard
-                key={menu.id}
-                menu={menu}
-                disabled={disabled}
-                onSelect={onSelect}
-                isSuggestion
               />
             ))}
           </div>
@@ -141,12 +89,10 @@ function DailyMenuCard({
   menu,
   disabled,
   onSelect,
-  isSuggestion,
 }: {
   menu: MenuDailyMenu;
   disabled?: boolean;
   onSelect: (menu: MenuDailyMenu) => void;
-  isSuggestion?: boolean;
 }) {
   const preview = menu.components.slice(0, 3);
   const more = menu.components.length - preview.length;
@@ -198,23 +144,6 @@ function DailyMenuCard({
           >
             {menu.name}
           </span>
-          {isSuggestion && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                color: "#9A6B1E",
-                background: "rgba(197, 135, 43, 0.12)",
-                padding: "2px 6px",
-                borderRadius: 4,
-                flexShrink: 0,
-              }}
-            >
-              Sugerencia
-            </span>
-          )}
         </div>
         <ul
           style={{

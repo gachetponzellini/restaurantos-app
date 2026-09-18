@@ -226,10 +226,8 @@ function SectionTitle({
 // componentes (spec 112). Qué milanesa hay se pregunta en la mesa.
 function DailyMenuCard({
   menu,
-  isSuggestion,
 }: {
   menu: MenuDailyMenu;
-  isSuggestion?: boolean;
 }) {
   const pasos = pasosDelMenu(menu);
   const disponibilidad = disponibilidadTexto(menu.available_days);
@@ -245,21 +243,6 @@ function DailyMenuCard({
         borderRadius: 3,
       }}
     >
-      {isSuggestion && (
-        <div
-          style={{
-            fontSize: 9.5,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: 1.6,
-            color: "var(--carta-gold)",
-            marginBottom: 5,
-          }}
-        >
-          Sugerencia
-        </div>
-      )}
-
       <div
         style={{
           fontSize: 14,
@@ -336,10 +319,7 @@ function DailyMenu({
   theme: CartaTheme;
   menus: MenuDailyMenu[];
 }) {
-  const regular = menus.filter((m) => !m.is_suggestion);
-  const suggestions = menus.filter((m) => m.is_suggestion);
-  const ordenados = [...regular, ...suggestions];
-  if (ordenados.length === 0) return null;
+  if (menus.length === 0) return null;
 
   return (
     <section>
@@ -353,8 +333,8 @@ function DailyMenu({
           padding: 0,
         }}
       >
-        {ordenados.map((m) => (
-          <DailyMenuCard key={m.id} menu={m} isSuggestion={m.is_suggestion} />
+        {menus.map((m) => (
+          <DailyMenuCard key={m.id} menu={m} />
         ))}
       </ul>
     </section>
