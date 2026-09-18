@@ -44,6 +44,7 @@ import {
   registrarPago,
   type IniciarCobroResult,
 } from "@/lib/billing/cobro-actions";
+import { implicitSplit } from "@/lib/billing/implicit-split";
 import type { CuentaState, OrderSplit } from "@/lib/billing/types";
 import { CobroForm } from "@/components/billing/cobro-form";
 import { actionError } from "@/lib/actions";
@@ -134,14 +135,7 @@ export function CobrarDesktopClient({
     else router.refresh();
   };
   const splits = init.hasImplicitSplit
-    ? [
-        implicitSplit(
-          cuenta.order.id,
-          cuenta.order.business_id,
-          cuenta.totals.total_cents,
-          cuenta.order.tip_cents,
-        ),
-      ]
+    ? [implicitSplit(cuenta)]
     : init.splits;
 
   const [activeSplitId, setActiveSplitId] = useState<string | null>(
@@ -422,27 +416,6 @@ export function CobrarDesktopClient({
   );
 }
 
-function implicitSplit(
-  orderId: string,
-  businessId: string,
-  totalCents: number,
-  tipCents: number,
-): OrderSplit {
-  return {
-    id: "__implicit__",
-    order_id: orderId,
-    business_id: businessId,
-    split_mode: "por_personas",
-    split_index: 0,
-    expected_amount_cents: totalCents,
-    // Sin división, la sub-cuenta implícita ES la orden: se lleva toda la
-    // propina (spec 177 · Parte 0).
-    tip_cents: tipCents,
-    paid_amount_cents: 0,
-    status: "pending",
-    label: null,
-  };
-}
 
 // ── SplitRow ──────────────────────────────────────────────────────────────
 
@@ -653,6 +626,7 @@ function CobrarSplitPanel({
             // default del método y «se lo dejan de propina» no hace nada: la
             // propina se pierde y la caja registra sólo la cuenta.
             destino_excedente: input.destinoExcedente,
+            confirmar_excedente: input.confirmarExcedente,
             caja_id: input.cajaId,
             last_four: input.lastFour,
             card_brand: input.cardBrand,

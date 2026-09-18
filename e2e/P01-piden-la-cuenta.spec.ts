@@ -417,6 +417,10 @@ test.describe("P01 · lo que se muestra antes de confirmar", () => {
     );
     const conRecargo =
       mesa.total_cents + Math.round((mesa.total_cents * pct) / 100);
+    // Una propina normal (~10 %, en pesos redondos): por encima del 30 % de lo
+    // que falta la pantalla pide confirmarla (`excedenteRequiereConfirmacion`),
+    // y eso lo cubre el test de abajo.
+    const extra = Math.max(100, Math.round(mesa.total_cents / 10 / 100) * 100);
 
     const pasar = await abrirCobro(page, mesa.label);
     await pasar.click();
@@ -427,18 +431,43 @@ test.describe("P01 · lo que se muestra antes de confirmar", () => {
     await expect(monto).toHaveValue(String(conRecargo / 100), {
       timeout: 20_000,
     });
-    await monto.fill(String(conRecargo / 100 + 5_000));
+    await monto.fill(String((conRecargo + extra) / 100));
 
     await expect(page.getByText(/^Propina:/)).toBeVisible();
     await expect(page.getByText(/^Vuelto:/)).toHaveCount(0);
     await expect(page.getByText(/^Propina:/)).toContainText(
       /para el mozo de la mesa/i,
     );
-    await expect(page.getByText(/^Propina:/)).toContainText(montoAR(500_000));
+    await expect(page.getByText(/^Propina:/)).toContainText(montoAR(extra));
     // Entra TODO: el excedente no se acota, se etiqueta.
     await expect(
       page.getByRole("button", { name: /^Confirmar/ }),
-    ).toContainText(montoAR(conRecargo + 500_000));
+    ).toContainText(montoAR(conRecargo + extra));
+  });
+
+  test("un excedente grande en tarjeta pide confirmar la propina", async ({
+    page,
+  }) => {
+    // Caso real (2026-09-18): la pantalla no veía un pago parcial y el cajero
+    // cargó de nuevo el pago entero; el server asentó la diferencia como
+    // propina sin que nadie viera un cartel. Una propina grande se confirma.
+    const mesa = await mesaViva();
+    const pasar = await abrirCobro(page, mesa.label);
+    await pasar.click();
+    await page.getByRole("button", { name: /Tarjeta/ }).first().click();
+
+    const monto = page.locator("#cobro-monto");
+    await monto.fill(String((mesa.total_cents * 2) / 100));
+
+    await expect(page.getByRole("alert")).toContainText(/de propina/);
+    await expect(
+      page.getByRole("button", { name: /^Confirmar/ }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: /Sí, es propina/ }).click();
+    await expect(
+      page.getByRole("button", { name: /^Confirmar/ }),
+    ).toBeEnabled();
+    // No se confirma: la mesa viva la usan los demás tests.
   });
 });
 

@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { CobrarDesktopClient } from "./cobrar-desktop-client";
 import type { IniciarCobroResult } from "@/lib/billing/cobro-actions";
 import type { CuentaState } from "@/lib/billing/types";
+import { formatCurrency } from "@/lib/currency";
 
 // #137 — el cobro de mesa del ENCARGADO era el único de los cuatro puntos de
 // cobro sin UI de facturación. Como el encargado tampoco llega a la sección
@@ -79,7 +80,10 @@ function cuentaCobrada(
   } as CuentaState;
 }
 
-function init(cuenta: CuentaState): IniciarCobroResult {
+function init(
+  cuenta: CuentaState,
+  hasImplicitSplit = false,
+): IniciarCobroResult {
   return {
     order: {
       id: cuenta.order.id,
@@ -93,8 +97,8 @@ function init(cuenta: CuentaState): IniciarCobroResult {
       tip_cents: cuenta.order.tip_cents,
       discount_cents: cuenta.order.discount_cents,
     },
-    splits: cuenta.splits,
-    hasImplicitSplit: false,
+    splits: hasImplicitSplit ? [] : cuenta.splits,
+    hasImplicitSplit,
     cajas: [
       {
         id: "caja-1",
@@ -181,5 +185,51 @@ describe("CobrarDesktopClient · facturación del encargado (#137)", () => {
     setup(true);
     // Los splits de `init` quedaron viejos (no hay refetch): no se listan.
     expect(screen.queryByText("Pago único")).not.toBeInTheDocument();
+  });
+});
+
+// Sin división de cuenta la pantalla arma una sub-cuenta implícita. Tenía lo
+// pagado hardcodeado en 0: tras un pago parcial seguía diciendo «Falta cobrar»
+// el total, el cajero volvía a cargar el pago y el server —que sí veía el saldo
+// real— tomaba la diferencia como propina. Caso real: cuenta de $18.500, una
+// transferencia de $18.000 registrada dos veces → $17.500 de propina fantasma.
+describe("CobrarDesktopClient · pago parcial sin dividir la cuenta", () => {
+  function setupParcial(total: number, paid: number) {
+    const cuenta = cuentaCobrada({
+      lifecycle_status: "open",
+      closed_at: null,
+      total_cents: total,
+      total_paid_cents: paid,
+    });
+    cuenta.totals = { ...cuenta.totals, subtotal_cents: total, total_cents: total };
+    return render(
+      <CobrarDesktopClient
+        slug="demo"
+        tableId="tbl-1"
+        tableLabel="Mesa 4"
+        role="encargado"
+        cuenta={cuenta}
+        init={init(cuenta, true)}
+      />,
+    );
+  }
+
+  it("muestra lo que falta de verdad, no el total", () => {
+    setupParcial(1_850_000, 1_800_000);
+    expect(screen.getByText("Falta cobrar")).toBeInTheDocument();
+    const monto = screen.getByText("Falta cobrar").nextElementSibling!;
+    expect(monto.textContent).toBe(formatCurrency(50_000));
+    expect(screen.getByText("Falta cobrar").parentElement!.textContent).toContain(
+      `ya cobrado ${formatCurrency(1_800_000)}`,
+    );
+  });
+
+  it("sin pagos, la sub-cuenta implícita pide el total", () => {
+    setupParcial(1_850_000, 0);
+    const monto = screen.getByText("Falta cobrar").nextElementSibling!;
+    expect(monto.textContent).toBe(formatCurrency(1_850_000));
+    expect(screen.getByText("Falta cobrar").parentElement!).not.toHaveTextContent(
+      /ya cobrado/,
+    );
   });
 });

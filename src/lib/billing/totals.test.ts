@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateTotals,
   destinoPorDefecto,
+  excedenteRequiereConfirmacion,
   importeDePreferenciaMp,
   repartoDelCobro,
   expectedByAmounts,
@@ -399,5 +400,45 @@ describe("importeDePreferenciaMp", () => {
 
   it("no redondea los centavos: MP los acepta", () => {
     expect(importeDePreferenciaMp(3_333_33)).toBeCloseTo(3_333.33, 2);
+  });
+});
+
+describe("excedenteRequiereConfirmacion · una propina grande no se asume", () => {
+  it("sin excedente no hay nada que confirmar", () => {
+    expect(
+      excedenteRequiereConfirmacion({ extraTipCents: 0, remainingCents: 10_000 }),
+    ).toBe(false);
+  });
+
+  it("la propina normal del posnet pasa derecho", () => {
+    // $10.000 de cuenta, $11.000 en el posnet.
+    expect(
+      excedenteRequiereConfirmacion({ extraTipCents: 1_000, remainingCents: 10_000 }),
+    ).toBe(false);
+    // Justo en el borde (30 %) todavía no pregunta.
+    expect(
+      excedenteRequiereConfirmacion({ extraTipCents: 3_000, remainingCents: 10_000 }),
+    ).toBe(false);
+  });
+
+  it("por encima del 30 % de lo que falta, pide confirmación", () => {
+    expect(
+      excedenteRequiereConfirmacion({ extraTipCents: 3_001, remainingCents: 10_000 }),
+    ).toBe(true);
+  });
+
+  it("el caso real: $18.000 sobre un saldo de $500", () => {
+    expect(
+      excedenteRequiereConfirmacion({
+        extraTipCents: 1_750_000,
+        remainingCents: 50_000,
+      }),
+    ).toBe(true);
+  });
+
+  it("sin saldo, cualquier excedente se confirma", () => {
+    expect(
+      excedenteRequiereConfirmacion({ extraTipCents: 100, remainingCents: 0 }),
+    ).toBe(true);
   });
 });

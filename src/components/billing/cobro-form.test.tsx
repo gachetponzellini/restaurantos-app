@@ -146,16 +146,65 @@ describe("<CobroForm /> — las reglas de dinero, una sola vez", () => {
 
   it("en tarjeta el excedente es propina sin preguntar: no hay vuelto que dar", async () => {
     // Lo que estaba mal hasta la 177: esos $50 entraban como VENTA del negocio.
+    // $10 sobre $100: la propina normal del posnet no se pregunta.
     const { onSubmit } = setup();
     pick(/tarjeta/i);
     fireEvent.change(screen.getByLabelText(/monto/i), {
-      target: { value: "150" },
+      target: { value: "110" },
     });
     expect(screen.getByText(/^Propina:/)).toBeInTheDocument();
     expect(screen.queryByText(/^Vuelto:/)).not.toBeInTheDocument();
     confirm();
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("propina");
+    expect(onSubmit.mock.calls[0][0].confirmarExcedente).toBe(false);
+  });
+
+  // Caso real (2026-09-18): la pantalla creía que faltaba menos de lo que
+  // el cajero tipeó — $18.000 sobre $500 — y el server asentó $17.500 de
+  // propina sin que nadie la viera. Una propina grande se confirma.
+  it("un excedente grande en transferencia no se toma como propina sin confirmar", async () => {
+    const { onSubmit } = setup({ amountDueCents: 50_000 });
+    pick(/transferencia/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "18000" },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(/de propina/);
+    expect(screen.getByRole("button", { name: /confirmar/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /sí, es propina/i }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].amountCents).toBe(1_800_000);
+    expect(onSubmit.mock.calls[0][0].confirmarExcedente).toBe(true);
+  });
+
+  it("en efectivo, un billete grande es vuelto: no hay nada que confirmar", async () => {
+    const { onSubmit } = setup();
+    pick(/efectivo/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "1000" },
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].destinoExcedente).toBe("vuelto");
+  });
+
+  it("«se lo dejan de propina» ya es la confirmación", async () => {
+    const { onSubmit } = setup();
+    pick(/efectivo/i);
+    fireEvent.change(screen.getByLabelText(/monto/i), {
+      target: { value: "150" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /se lo dejan de propina/i }),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    confirm();
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].confirmarExcedente).toBe(true);
   });
 
   it("cambiar de método vuelve el excedente a su default", async () => {

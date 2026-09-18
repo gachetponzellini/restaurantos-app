@@ -34,6 +34,7 @@ import type { TipoComprobante } from "@/lib/afip/types";
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
 import {
   destinoPorDefecto,
+  excedenteRequiereConfirmacion,
   importeDePreferenciaMp,
   isCashShortPayment,
   repartoDelCobro,
@@ -515,6 +516,12 @@ export type RegistrarPagoInput = {
    * del método: vuelto en efectivo, propina en el resto.
    */
   destino_excedente?: DestinoDelExcedente;
+  /**
+   * El cajero confirmó explícitamente que un excedente grande es propina
+   * (`excedenteRequiereConfirmacion`). Sin esto el server lo rechaza: es la
+   * red para cuando la pantalla y el server no ven el mismo saldo.
+   */
+  confirmar_excedente?: boolean;
 };
 
 /**
@@ -703,6 +710,19 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
   // pantalla ya lo muestra, pero es plata y el reparto lo decide un solo lado —
   // el mismo criterio con el que el tope del vuelto vive en el server.
   const tipCents = input.tip_cents + extraTipCents;
+
+  // Un excedente grande no se toma como propina en silencio. Si la pantalla
+  // creía que faltaba más de lo que falta —un pago parcial que no veía—, el
+  // cajero no vio ningún cartel de propina y no tiene nada que confirmar: este
+  // rechazo es lo que le avisa que ya hay plata registrada.
+  if (
+    excedenteRequiereConfirmacion({ extraTipCents, remainingCents }) &&
+    !input.confirmar_excedente
+  ) {
+    return actionError(
+      `Falta cobrar ${formatCurrency(remainingCents)} y se están cobrando ${formatCurrency(input.amount_cents)}: ${formatCurrency(extraTipCents)} quedarían como propina. Recargá la cuenta — puede que ya haya un pago registrado. Si de verdad es propina, confirmalo en el cobro.`,
+    );
+  }
 
   // issue #263 — la forma del comprobante se valida ANTES de tocar la plata.
   //

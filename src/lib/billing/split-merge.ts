@@ -1,3 +1,4 @@
+import { IMPLICIT_SPLIT_ID } from "./implicit-split";
 import type { OrderSplit } from "./types";
 
 /**
@@ -9,8 +10,6 @@ import type { OrderSplit } from "./types";
  * — nunca una estimación local. Todo es por `id` (dedup del pago + replace del
  * split), jamás push/increment ciego.
  */
-
-const IMPLICIT_SPLIT_ID = "__implicit__";
 
 /** Subconjunto de `Payment` que el merge necesita (lo devuelve `registrarPago`). */
 export type PaymentMergeInput = {

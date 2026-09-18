@@ -9,6 +9,7 @@ import { calculateAdjustment } from "@/lib/billing/adjustment";
 import {
   admiteVuelto,
   destinoPorDefecto,
+  excedenteRequiereConfirmacion,
   isCashShortPayment,
   repartoDelCobro,
   type DestinoDelExcedente,
@@ -62,6 +63,12 @@ export type CobroSubmit = {
   tipCents: number;
   /** Qué hacer con lo que se cobró de más (spec 177 · D2). */
   destinoExcedente: DestinoDelExcedente;
+  /**
+   * El cajero dijo explícitamente que el excedente es propina (tocó «se lo
+   * dejan de propina» o «Sí, es propina»). El server lo exige cuando el
+   * excedente es grande — `excedenteRequiereConfirmacion`.
+   */
+  confirmarExcedente: boolean;
   cajaId: string;
   lastFour?: string;
   cardBrand?: "visa" | "mastercard" | "amex" | "otro";
@@ -253,6 +260,15 @@ export function CobroForm<T = unknown>({
     destino,
   });
 
+  // Una propina grande no se asume: se confirma (misma regla que el server).
+  // Tocar «propina» a mano ya es la confirmación.
+  const excedenteConfirmado = destinoElegido === "propina";
+  const excedenteSinConfirmar =
+    excedenteRequiereConfirmacion({
+      extraTipCents,
+      remainingCents: amountDueCents,
+    }) && !excedenteConfirmado;
+
   // Selector de método navegable con flechas (grilla de 2 columnas) — spec 075.
   const metodoZona = useRovingList<HTMLButtonElement>({
     length: methods.length,
@@ -342,6 +358,7 @@ export function CobroForm<T = unknown>({
     isRegistering ||
     amount <= 0 ||
     cashShort ||
+    excedenteSinConfirmar ||
     (notesRequired && notes.trim() === "") ||
     (method === "card_manual" && lastFour !== "" && lastFour.length !== 4) ||
     // spec 141 · US2 — sin cliente no hay botón: un fiado sin dueño es plata
@@ -384,6 +401,7 @@ export function CobroForm<T = unknown>({
         amountCents: amount,
         tipCents: effectiveTip,
         destinoExcedente: destino,
+        confirmarExcedente: excedenteConfirmado,
         cajaId,
         lastFour:
           method === "card_manual" && lastFour.length === 4
@@ -641,7 +659,29 @@ export function CobroForm<T = unknown>({
             </button>
           </p>
         )}
-        {extraTipCents > 0 && (
+        {excedenteSinConfirmar && (
+          <div
+            role="alert"
+            className="space-y-1.5 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900"
+          >
+            <p className="font-semibold">
+              Quedarían {formatCurrency(extraTipCents)} de propina — falta
+              cobrar {formatCurrency(amountDueCents)}.
+            </p>
+            <p>
+              Si el cliente pagó una sola vez, revisá que el pago no esté ya
+              registrado.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDestinoElegido("propina")}
+              className="font-semibold underline underline-offset-2 hover:text-amber-700"
+            >
+              Sí, es propina
+            </button>
+          </div>
+        )}
+        {extraTipCents > 0 && !excedenteSinConfirmar && (
           <p className="text-xs font-semibold text-emerald-700">
             Propina: {formatCurrency(extraTipCents)}
             <span className="ml-1 font-medium text-muted-foreground">

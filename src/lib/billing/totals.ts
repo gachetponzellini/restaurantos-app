@@ -166,6 +166,37 @@ export function repartoDelCobro(input: {
 }
 
 /**
+ * Por encima de este porcentaje de lo que falta cobrar, un excedente tomado
+ * como propina no se asume: se confirma.
+ */
+export const EXCEDENTE_A_CONFIRMAR_PCT = 30;
+
+/**
+ * ¿Este excedente es demasiado grande para tomarlo como propina sin preguntar?
+ *
+ * En los métodos que no son efectivo el excedente es propina **por default**
+ * (spec 177 · D2). Eso está bien para el 10 % que el cliente deja en el posnet,
+ * pero convierte en propina cualquier desfase entre lo que la pantalla cree que
+ * falta y lo que falta de verdad. Caso real (2026-09-18): la pantalla no veía un
+ * pago parcial, el cajero cargó de nuevo una transferencia de $18.000 sobre un
+ * saldo de $500 y el server asentó $17.500 de propina que nadie dejó.
+ *
+ * La regla vive acá para que pantalla y server la apliquen igual: el server la
+ * exige (`confirmar_excedente`), la pantalla la pide antes de dejar confirmar.
+ */
+export function excedenteRequiereConfirmacion(input: {
+  extraTipCents: number;
+  remainingCents: number;
+}): boolean {
+  if (input.extraTipCents <= 0) return false;
+  if (input.remainingCents <= 0) return true;
+  return (
+    input.extraTipCents * 100 >
+    input.remainingCents * EXCEDENTE_A_CONFIRMAR_PCT
+  );
+}
+
+/**
  * Cuánta propina le toca a cada sub-cuenta — spec 177 · Parte 0.
  *
  * El bug que cierra: las dos pantallas de cobro le pasaban `orders.tip_cents`

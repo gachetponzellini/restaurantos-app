@@ -182,6 +182,7 @@ export function CobrarPedidoSheet({
                     // con el default del método y «se lo dejan de propina» no hace
                     // nada: la propina se pierde y la caja registra sólo la cuenta.
                     destino_excedente: input.destinoExcedente,
+                    confirmar_excedente: input.confirmarExcedente,
                     caja_id: input.cajaId,
                     last_four: input.lastFour,
                     card_brand: input.cardBrand,

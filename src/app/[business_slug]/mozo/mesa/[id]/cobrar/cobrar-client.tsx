@@ -19,6 +19,7 @@ import {
   type CobroMergeState,
   type RegistrarPagoResult,
 } from "@/lib/billing/split-merge";
+import { implicitSplit } from "@/lib/billing/implicit-split";
 import type { CuentaState, OrderSplit } from "@/lib/billing/types";
 import { CobroForm } from "@/components/billing/cobro-form";
 import { FacturacionSection } from "@/components/billing/facturacion-section";
@@ -90,26 +91,14 @@ export function CobrarClient({
   const buildInitial = useCallback(
     (): CobroMergeState => ({
       splits: init.hasImplicitSplit
-        ? [
-            implicitSplit(
-              cuenta.order.id,
-              cuenta.order.business_id,
-              cuenta.totals.total_cents,
-              cuenta.order.tip_cents,
-            ),
-          ]
+        ? [implicitSplit(cuenta)]
         : init.splits,
       appliedPaymentIds: [],
       closed: cuenta.order.lifecycle_status !== "open",
     }),
-    [
-      init,
-      cuenta.order.id,
-      cuenta.order.business_id,
-      cuenta.order.lifecycle_status,
-      cuenta.totals.total_cents,
-      cuenta.order.tip_cents,
-    ],
+    // `cuenta` entera: la sub-cuenta implícita lee lo ya pagado de la orden,
+    // y una prop nueva del server es justo cuando hay que re-sincronizar.
+    [init, cuenta],
   );
 
   const [merge, setMerge] = useState<CobroMergeState>(buildInitial);
@@ -344,27 +333,6 @@ export function CobrarClient({
   );
 }
 
-function implicitSplit(
-  orderId: string,
-  businessId: string,
-  totalCents: number,
-  tipCents: number,
-): OrderSplit {
-  return {
-    id: "__implicit__",
-    order_id: orderId,
-    business_id: businessId,
-    split_mode: "por_personas",
-    split_index: 0,
-    expected_amount_cents: totalCents,
-    // Sin división, la sub-cuenta implícita ES la orden: se lleva toda la
-    // propina (spec 177 · Parte 0).
-    tip_cents: tipCents,
-    paid_amount_cents: 0,
-    status: "pending",
-    label: null,
-  };
-}
 
 // ── SplitRow: card grande con progreso por split ──────────────
 
@@ -578,6 +546,7 @@ function CobrarSplitSheet({
                 // con el default del método y «se lo dejan de propina» no hace
                 // nada: la propina se pierde y la caja registra sólo la cuenta.
                 destino_excedente: input.destinoExcedente,
+                confirmar_excedente: input.confirmarExcedente,
                 caja_id: input.cajaId,
                 last_four: input.lastFour,
                 card_brand: input.cardBrand,
