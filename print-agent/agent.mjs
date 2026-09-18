@@ -54,7 +54,7 @@ const cfg = JSON.parse(fs.readFileSync(path.join(cfgDir, "config.json"), "utf8")
  * SUBIRLA al empaquetar un .exe nuevo. Si no se sube, el panel va a decir que
  * el local corre una versión que no corre — peor que no mostrar nada.
  */
-const AGENT_VERSION = "2026-09-18";
+const AGENT_VERSION = "2026-09-18.2";
 
 const args = process.argv.slice(2);
 const ONCE = args.includes("--once");
@@ -517,18 +517,140 @@ function printNetwork(payload, ip, port) {
   });
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// Spec 206 — el agente habla con SUPABASE, no con Vercel.
+//
+//   aviso:   Realtime (websocket) en el canal privado `print-agent:<negocio>`.
+//            La base avisa al toque cuando aparece algo para imprimir.
+//   pedir:   POST <supabase>/functions/v1/print-agent/pull   (Edge Function)
+//   confirmar: POST …/print-agent/ack
+//   sesión:  POST …/print-agent/session  → credenciales de Realtime
+//
+// La Edge Function corre en `us-east-1` (header `x-region`), pegada a la base:
+// sin eso Supabase la corre en São Paulo y cada query cruza el continente.
+//
+// Red de seguridad, en este orden (D4):
+//   con canal     → un pull por aviso + uno cada 30 s (latido)
+//   sin canal     → pull a la Edge Function cada 5 s
+//   sin función   → el loop de la 183 contra Vercel (`serverUrl`), igual que
+//                   siempre. Se vuelve a probar la función cada tanto, así que
+//                   cuando se publique el server el agente se pasa SOLO, sin
+//                   tocar la PC del local.
+// ═════════════════════════════════════════════════════════════════════════
+
+/** Proyecto de producción. La publishable key es pública por diseño (va en el
+ *  navegador de cualquier cliente); lo que autentica al agente es su key. */
+const SUPABASE_PROD_URL = "https://tjfufswzsxfujcpoxapx.supabase.co";
+const SUPABASE_PROD_PUBLISHABLE_KEY = "sb_publishable_jIllwnCCBgFoYXlO3lsZ7g_B_21nUmM";
+
+const esLocalhost = /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(base);
+// `supabaseUrl: null` en el config apaga el modo Supabase a propósito.
+const supabaseUrl =
+  cfg.supabaseUrl === null
+    ? null
+    : String(cfg.supabaseUrl ?? (esLocalhost ? "" : SUPABASE_PROD_URL)).replace(/\/$/, "") || null;
+const publishableKey =
+  cfg.publishableKey ?? (esLocalhost ? null : SUPABASE_PROD_PUBLISHABLE_KEY);
+const fnBase = supabaseUrl ? `${supabaseUrl}/functions/v1/print-agent` : null;
+const fnHeaders = {
+  ...authHeaders,
+  "x-agent-version": AGENT_VERSION,
+  "x-region": "us-east-1",
+  ...(publishableKey ? { apikey: publishableKey } : {}),
+};
+
+const LATIDO_CON_CANAL_MS = 30_000;
+const POLL_SIN_CANAL_MS = 5_000;
+/** Tras un 404 (función no publicada) no se insiste: se reprueba cada 10 min. */
+const REPROBAR_SIN_FUNCION_MS = 10 * 60_000;
+/** Tras un error de red o 5xx de la función, se reprueba al minuto. */
+const REPROBAR_FUNCION_CAIDA_MS = 60_000;
+
 /**
- * Pull de trabajos. Es TAMBIÉN el latido de salud (spec 183 · D1): el server lo
- * registra como efecto de esta misma llamada, con la versión que va en
- * `x-agent-version`. Antes eran dos requests por vuelta —el `POST /heartbeat` y
- * este GET— y la mitad de las invocaciones del proyecto eran eso.
+ * ¿Hay que usar la Edge Function en esta vuelta? Pura, para testearla.
+ * `hasta` es el instante hasta el cual la función se da por no disponible.
+ */
+function usarFuncion({ hayFuncion, hasta, ahora }) {
+  if (!hayFuncion) return false;
+  return !(hasta && ahora < hasta);
+}
+
+/** Cuánto no reprobar la función según cómo falló. */
+function penalidadFuncion(status) {
+  return status === 404 ? REPROBAR_SIN_FUNCION_MS : REPROBAR_FUNCION_CAIDA_MS;
+}
+
+/** Backoff de reconexión del websocket: 1 s, 2 s, 4 s … techo 30 s. */
+function backoffMs(intento) {
+  return Math.min(1000 * 2 ** Math.max(0, intento), 30_000);
+}
+
+/** Cuándo refrescar el token: 5 min antes de que venza, nunca en menos de 30 s. */
+function refrescarEnMs(expiresAtSeg, ahoraMs) {
+  return Math.max(expiresAtSeg * 1000 - ahoraMs - 5 * 60_000, 30_000);
+}
+
+class FuncionNoDisponible extends Error {
+  constructor(status, msg) {
+    super(msg);
+    this.status = status;
+  }
+}
+
+let funcionHasta = 0; // hasta cuándo la Edge Function se da por caída
+
+function funcionDisponible() {
+  return usarFuncion({
+    hayFuncion: Boolean(fnBase) && !DRY_SIN_FUNCION,
+    hasta: funcionHasta,
+    ahora: Date.now(),
+  });
+}
+// `--vercel` fuerza el camino viejo (para comparar o para salir del paso).
+const DRY_SIN_FUNCION = args.includes("--vercel");
+
+async function llamarFuncion(ruta, body) {
+  let res;
+  try {
+    res = await fetch(`${fnBase}/${ruta}`, {
+      method: "POST",
+      headers: { ...fnHeaders, "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch (e) {
+    throw new FuncionNoDisponible(0, `función ${ruta}: ${e.message}`);
+  }
+  if (res.status === 401) {
+    // Key mala: no es la función la que está caída, pero tampoco hay nada
+    // que hacer contra ella. Se cae a Vercel, que va a contestar lo mismo y
+    // el panel lo va a mostrar.
+    throw new FuncionNoDisponible(401, `función ${ruta}: 401`);
+  }
+  if (res.status === 404 || res.status >= 500) {
+    throw new FuncionNoDisponible(res.status, `función ${ruta}: ${res.status}`);
+  }
+  if (!res.ok) throw new Error(`función ${ruta}: ${res.status}`);
+  return res.json();
+}
+
+function marcarFuncionCaida(e) {
+  funcionHasta = Date.now() + penalidadFuncion(e.status);
+  const min = Math.round(penalidadFuncion(e.status) / 60_000);
+  console.error(`⚠ ${e.message} → sigo por Vercel; reintento en ${min} min`);
+  canal.cerrar();
+}
+
+/**
+ * Pull de trabajos contra Vercel (el camino de la 183). Es TAMBIÉN el latido
+ * de salud (spec 183 · D1): el server lo registra como efecto de esta misma
+ * llamada, con la versión que va en `x-agent-version`.
  *
  * `--once` pide `wait_ms=0`: sin eso el server retiene la respuesta hasta 25 s
  * cuando no hay nada (D5) y una corrida manual parecería colgada. `--dry-run`
  * pide `beat=0`: probar desde una máquina de desarrollo no tiene que hacer que
  * el panel del local diga «conectado».
  */
-async function fetchComandas() {
+async function fetchComandasVercel() {
   const q = new URLSearchParams({ business_id: String(cfg.businessId) });
   if (ONCE) q.set("wait_ms", "0");
   if (DRY) q.set("beat", "0");
@@ -540,18 +662,24 @@ async function fetchComandas() {
   return {
     comandas: data.comandas ?? [],
     // La cadencia la decide el server (spec 183 · D2). Si no viene —server
-    // viejo, rollback— se usa el `pollMs` del config, que es el comportamiento
-    // de siempre.
+    // viejo, rollback— se usa el `pollMs` del config.
     nextPollMs: sanearPollMs(data.next_poll_ms),
   };
+}
+
+/** Pull contra la Edge Function (spec 206). Sin retención: contesta al toque. */
+async function fetchComandasFuncion() {
+  const data = await llamarFuncion("pull", {
+    business_id: cfg.businessId,
+    beat: !DRY,
+  });
+  return { comandas: data.comandas ?? [], nextPollMs: null };
 }
 
 /**
  * Acota lo que manda el server antes de dormirlo. No es desconfianza del
  * server: es que este `.exe` se actualiza a mano y va a seguir corriendo
- * contra deploys que todavía no existen. Un `next_poll_ms` en 0 por un bug
- * dejaría al local martillando la API, y uno gigante dejaría la cocina sin
- * comandas hasta que alguien reinicie el agente.
+ * contra deploys que todavía no existen.
  */
 function sanearPollMs(v) {
   const n = Number(v);
@@ -560,29 +688,46 @@ function sanearPollMs(v) {
 }
 
 /**
- * Reporta al server: `result:"ok"` confirma (→ en_preparacion) o
- * `result:"failed"` avisa el fallo de impresión (spec 33).
+ * Reporta: `result:"ok"` confirma (→ en_preparacion / impreso) o
+ * `result:"failed"` avisa el fallo de impresión (spec 33). Por la función si
+ * está disponible; si no, por Vercel.
  */
 async function report(comandaId, result, error) {
+  const body = {
+    comanda_id: comandaId,
+    business_id: cfg.businessId,
+    result,
+    error,
+  };
+  // Un `failed` va siempre por Vercel: ahí vive el aviso al encargado (y su
+  // WhatsApp), que no se portó a la función (spec 206 · D2). Es raro: sólo
+  // cuando una impresión falla pasada la gracia.
+  if (result === "ok" && funcionDisponible()) {
+    try {
+      await llamarFuncion("ack", body);
+      return true;
+    } catch (e) {
+      if (e instanceof FuncionNoDisponible) marcarFuncionCaida(e);
+      else return false;
+    }
+  }
   const res = await fetch(`${base}/api/print-agent`, {
     method: "POST",
     headers: { ...authHeaders, "content-type": "application/json" },
-    body: JSON.stringify({
-      comanda_id: comandaId,
-      business_id: cfg.businessId,
-      result,
-      error,
-    }),
+    body: JSON.stringify(body),
   });
   return res.ok;
 }
 
+/**
+ * Imprime un papel. Devuelve la promesa de su confirmación SIN esperarla
+ * (spec 206 · D5): el próximo papel no espera el viaje del acuse. El orden de
+ * impresión se respeta igual — se imprime de a uno.
+ */
 async function printOne(c) {
   // Spec 051: el server pre-renderiza el ticket (`content_escpos_b64` +
   // `content_plain`). El agente es un relay: imprime lo que recibe. Si NO viene
-  // contenido (server viejo, rollback o error de render), cae al render local
-  // (`ticketLines`/`renderEscPos`/`renderPlain`) para no cortar la impresión ni
-  // escupir basura. `ticketLines` solo se calcula en ese fallback.
+  // contenido (server viejo, rollback o error de render), cae al render local.
   const escpos = c.content_escpos_b64
     ? Buffer.from(c.content_escpos_b64, "base64").toString("latin1")
     : renderEscPos(ticketLines(c));
@@ -590,25 +735,24 @@ async function printOne(c) {
 
   if (DRY) {
     console.log("\n" + plain);
-    return;
+    return null;
   }
   if (c.printer_enabled === false) {
     console.log(`  ⏭  ${c.station_name}: comandera desactivada`);
-    return;
+    return null;
   }
 
-  // Intento de impresión. Si falla, NO se confirma → la comanda queda
-  // `pendiente` y se reintenta; tras el umbral, se avisa al local (spec 33).
+  // Si falla, NO se confirma → queda `pendiente` y se reintenta; tras el
+  // umbral, se avisa al local (spec 33).
   try {
     const destino = String(c.printer_ip ?? "");
     if (destino.toLowerCase().startsWith(LOCAL_PREFIX)) {
-      // Spec 181 — la USB de esta compu, por nombre. Los mismos bytes que
-      // irían por el socket; sólo cambia el caño.
+      // Spec 181 — la USB de esta compu, por nombre.
       await printWindowsRaw(escpos, destino.slice(LOCAL_PREFIX.length).trim());
     } else if (cfg.transport === "network") {
       if (!c.printer_ip) {
         console.log(`  ⏭  ${c.station_name}: sin printer_ip, se saltea`);
-        return;
+        return null;
       }
       await printNetwork(escpos, c.printer_ip, c.printer_port);
     } else {
@@ -637,57 +781,248 @@ async function printOne(c) {
         `     ${ok ? "⚠ avisado al local (notificación de fallo)" : "✗ no se pudo avisar"}`,
       );
     }
-    return;
+    return null;
   }
 
-  // Imprimió OK: limpia el estado de fallos y confirma.
   failState.delete(c.comanda_id);
   console.log(
     `  🖨  impresa #${String(c.comanda_id).slice(0, 8)} · ${c.station_name} · ${c.table_label}`,
   );
-  if (!NO_CONFIRM) {
-    const ok = await report(c.comanda_id, "ok");
-    console.log(
-      `     ${ok ? "✓ confirmada (→ en_preparacion)" : "✗ no se pudo confirmar"}`,
-    );
-  }
+  if (NO_CONFIRM) return null;
+  return report(c.comanda_id, "ok")
+    .then((ok) => {
+      if (!ok) console.log(`     ✗ no se pudo confirmar #${String(c.comanda_id).slice(0, 8)}`);
+    })
+    .catch((e) => console.error(`     ✗ confirmación: ${e.message}`));
 }
 
-/**
- * Una vuelta del loop. Devuelve el sleep que pidió el server (`next_poll_ms`,
- * spec 183 · D2) o `null` si no vino.
- */
-async function tick() {
-  // Un solo request por vuelta (spec 183 · D1): el pull ES el latido. El
-  // `POST /api/print-agent/heartbeat` de la spec 35 sigue existiendo en el
-  // server para los `.exe` viejos, pero este agente no lo llama.
-  //
-  // Y si no hay nada para imprimir, este `await` puede tardar ~25 s: el server
-  // retiene la respuesta y contesta apenas aparece algo (D5). No es un cuelgue.
-  const { comandas, nextPollMs } = await fetchComandas();
+/** Imprime un lote en orden; las confirmaciones corren detrás (D5). */
+async function imprimirLote(comandas) {
   const pend = comandas.length;
-  if (pend === 0) {
-    console.log("· sin comandas pendientes");
-    return nextPollMs;
-  }
+  if (pend === 0) return;
   const toPrint = comandas.slice(0, LIMIT);
   console.log(
     `· ${pend} pendiente(s)${LIMIT < Infinity ? `, imprimo ${toPrint.length}` : ""}`,
   );
+  const acuses = [];
   for (const c of toPrint) {
     try {
-      await printOne(c);
+      const a = await printOne(c);
+      if (a) acuses.push(a);
     } catch (e) {
       console.error(
         `  ✗ error imprimiendo ${String(c.comanda_id).slice(0, 8)}: ${e.message}`,
       );
     }
   }
+  // Antes del próximo pull: si no, el mismo papel volvería a venir pendiente.
+  await Promise.allSettled(acuses);
+}
+
+/**
+ * Una vuelta. Por la función si está disponible; si no, por Vercel. Devuelve
+ * el sleep que pidió Vercel (`next_poll_ms`) o `null`.
+ */
+async function tick() {
+  if (funcionDisponible()) {
+    try {
+      const { comandas } = await fetchComandasFuncion();
+      if (comandas.length === 0) console.log("· sin comandas pendientes");
+      await imprimirLote(comandas);
+      return null;
+    } catch (e) {
+      if (!(e instanceof FuncionNoDisponible)) throw e;
+      marcarFuncionCaida(e);
+    }
+  }
+  const { comandas, nextPollMs } = await fetchComandasVercel();
+  if (comandas.length === 0) console.log("· sin comandas pendientes (Vercel)");
+  await imprimirLote(comandas);
   return nextPollMs;
 }
 
+// ── Realtime: cliente mínimo sobre el WebSocket nativo de Node 22 ─────────
+// Protocolo Phoenix (vsn 1.0.0) de Supabase Realtime: phx_join al canal
+// privado con el access_token, heartbeat cada 25 s y `access_token` cuando se
+// refresca. Sin dependencias: el .exe sigue siendo un solo archivo.
+
+let despertar = () => {};
+let sucio = false;
+function avisoDeTrabajo() {
+  sucio = true;
+  despertar();
+}
+
+const canal = {
+  ws: null,
+  vivo: false,
+  intento: 0,
+  sesion: null, // { access_token, refresh_token, expires_at, topic, realtime_url }
+  hb: null,
+  refresco: null,
+  reconexion: null,
+  ref: 0,
+
+  disponible() {
+    return typeof globalThis.WebSocket === "function";
+  },
+
+  async abrir() {
+    if (this.ws || this.reconexion || !this.disponible() || !funcionDisponible()) return;
+    try {
+      if (!this.sesion) this.sesion = await llamarFuncion("session", { business_id: cfg.businessId });
+    } catch (e) {
+      if (e instanceof FuncionNoDisponible && e.status !== 401) marcarFuncionCaida(e);
+      else console.error(`⚠ sin sesión de Realtime: ${e.message}`);
+      this.programarReconexion();
+      return;
+    }
+    const s = this.sesion;
+    // La URL sale de NUESTRA `supabaseUrl`, no de la que diga la función: adentro
+    // de Supabase la función se ve a sí misma por una red interna.
+    const url = `${supabaseUrl.replace(/^http/, "ws")}/realtime/v1/websocket?apikey=${encodeURIComponent(publishableKey ?? "")}&vsn=1.0.0`;
+    const topic = `realtime:${s.topic}`;
+    let ws;
+    try {
+      ws = new globalThis.WebSocket(url);
+    } catch (e) {
+      console.error(`⚠ websocket: ${e.message}`);
+      this.programarReconexion();
+      return;
+    }
+    this.ws = ws;
+    const send = (m) => {
+      try {
+        ws.send(JSON.stringify(m));
+      } catch {
+        /* se va a cerrar y reconectar */
+      }
+    };
+    this.enviar = send;
+    ws.onopen = () => {
+      const ref = String(++this.ref);
+      send({
+        topic,
+        event: "phx_join",
+        payload: {
+          config: { broadcast: { ack: false, self: false }, presence: { key: "" }, private: true },
+          access_token: s.access_token,
+        },
+        ref,
+        join_ref: ref,
+      });
+      this.hb = setInterval(
+        () => send({ topic: "phoenix", event: "heartbeat", payload: {}, ref: String(++this.ref) }),
+        25_000,
+      );
+    };
+    ws.onmessage = (ev) => {
+      let m;
+      try {
+        m = JSON.parse(typeof ev.data === "string" ? ev.data : String(ev.data));
+      } catch {
+        return;
+      }
+      if (m.topic !== topic) return;
+      if (m.event === "phx_reply" && m.payload?.status === "ok" && !this.vivo) {
+        this.vivo = true;
+        this.intento = 0;
+        console.log("⚡ escuchando avisos (Realtime)");
+        this.programarRefresco();
+        avisoDeTrabajo(); // al (re)conectar: lo que se emitió mientras tanto
+      } else if (m.event === "phx_reply" && m.payload?.status === "error") {
+        console.error(`⚠ Realtime rechazó el canal: ${JSON.stringify(m.payload?.response ?? {})}`);
+        this.sesion = null; // token vencido o revocado: pedir otra sesión
+        ws.close();
+      } else if (m.event === "broadcast") {
+        avisoDeTrabajo();
+      } else if (m.event === "phx_error" || m.event === "phx_close") {
+        ws.close();
+      }
+    };
+    ws.onclose = () => this.alCerrar();
+    ws.onerror = () => {
+      /* onclose viene detrás */
+    };
+  },
+
+  alCerrar() {
+    const estabaVivo = this.vivo;
+    clearInterval(this.hb);
+    clearTimeout(this.refresco);
+    this.ws = null;
+    this.vivo = false;
+    if (estabaVivo) console.error("⚠ se cortó Realtime → pull cada 5 s mientras reconecto");
+    else if (this.intento % 5 === 0)
+      console.error(`⚠ no pude conectar a Realtime (intento ${this.intento + 1}) → pull cada 5 s`);
+    this.programarReconexion();
+    despertar();
+  },
+
+  programarReconexion() {
+    if (this.reconexion) return;
+    const ms = backoffMs(this.intento++);
+    this.reconexion = setTimeout(() => {
+      this.reconexion = null;
+      this.abrir();
+    }, ms);
+  },
+
+  programarRefresco() {
+    clearTimeout(this.refresco);
+    const s = this.sesion;
+    if (!s?.expires_at) return;
+    this.refresco = setTimeout(() => this.refrescar(), refrescarEnMs(s.expires_at, Date.now()));
+  },
+
+  async refrescar() {
+    const s = this.sesion;
+    try {
+      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: publishableKey ?? "", "content-type": "application/json" },
+        body: JSON.stringify({ refresh_token: s.refresh_token }),
+      });
+      if (!res.ok) throw new Error(`refresh ${res.status}`);
+      const t = await res.json();
+      s.access_token = t.access_token;
+      s.refresh_token = t.refresh_token;
+      s.expires_at = t.expires_at ?? Math.floor(Date.now() / 1000) + (t.expires_in ?? 3600);
+      this.enviar?.({
+        topic: `realtime:${s.topic}`,
+        event: "access_token",
+        payload: { access_token: s.access_token },
+        ref: String(++this.ref),
+      });
+      this.programarRefresco();
+    } catch (e) {
+      console.error(`⚠ no pude refrescar la sesión (${e.message}) → pido otra`);
+      this.sesion = null;
+      this.ws?.close();
+    }
+  },
+
+  cerrar() {
+    clearTimeout(this.reconexion);
+    this.reconexion = null;
+    this.ws?.close();
+  },
+};
+
+function dormirODespertar(ms) {
+  return new Promise((r) => {
+    const t = setTimeout(done, ms);
+    function done() {
+      clearTimeout(t);
+      despertar = () => {};
+      r();
+    }
+    despertar = done;
+  });
+}
+
 console.log(
-  `print-agent → ${base} · negocio ${String(cfg.businessId).slice(0, 8)} · transporte ${cfg.transport}` +
+  `print-agent ${AGENT_VERSION} → ${fnBase ? `Supabase (${supabaseUrl}), ` : ""}Vercel (${base}) · negocio ${String(cfg.businessId).slice(0, 8)} · transporte ${cfg.transport}` +
     (cfg.transport === "windows" ? ` (${cfg.printerName})` : ""),
 );
 if (DRY) console.log("modo DRY-RUN: no imprime ni confirma\n");
@@ -701,23 +1036,25 @@ if (ONCE) {
   }
   // Salida natural: NO usar process.exit(). Forzar el exit con los sockets del
   // fetch todavía cerrándose crashea libuv en Windows (Assertion async.c:94).
-  // Al terminar el top-level, el loop de eventos drena solo y el proceso cierra.
 } else {
-  console.log(
-    `loop cada ${cfg.pollMs}ms (o lo que diga el server) — Ctrl+C para cortar\n`,
-  );
-  let dormir = cfg.pollMs;
+  console.log("loop — Ctrl+C para cortar\n");
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    let dormir;
+    sucio = false;
     try {
-      // El server manda la cadencia (spec 183 · D2). Si no la manda, vale el
-      // `pollMs` del config de siempre.
-      dormir = (await tick()) ?? cfg.pollMs;
+      const pidioVercel = await tick();
+      if (funcionDisponible()) {
+        canal.abrir();
+        // Un aviso que llegó con el pull en vuelo: otra vuelta ya.
+        dormir = sucio ? 0 : canal.vivo ? LATIDO_CON_CANAL_MS : POLL_SIN_CANAL_MS;
+      } else {
+        dormir = pidioVercel ?? cfg.pollMs;
+      }
     } catch (e) {
       console.error(`✗ ${e.message}`);
-      // Un error no dice nada sobre la cadencia buena: se vuelve al config.
       dormir = cfg.pollMs;
     }
-    await new Promise((r) => setTimeout(r, dormir));
+    if (dormir > 0) await dormirODespertar(dormir);
   }
 }
