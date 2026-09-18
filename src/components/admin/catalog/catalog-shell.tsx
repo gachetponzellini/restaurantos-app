@@ -360,7 +360,7 @@ function CatalogTabs({
   return (
     <nav
       aria-label="Secciones del catálogo"
-      className="flex items-end overflow-x-auto border-b border-zinc-200 [scrollbar-width:none]"
+      className="relative flex items-end overflow-x-auto border-b border-zinc-200 [scrollbar-width:none]"
     >
       {TAB_GROUPS.map((g, gi) => (
         <div key={g.label} className="flex items-end">
