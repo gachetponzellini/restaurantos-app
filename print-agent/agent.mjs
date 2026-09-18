@@ -54,7 +54,7 @@ const cfg = JSON.parse(fs.readFileSync(path.join(cfgDir, "config.json"), "utf8")
  * SUBIRLA al empaquetar un .exe nuevo. Si no se sube, el panel va a decir que
  * el local corre una versión que no corre — peor que no mostrar nada.
  */
-const AGENT_VERSION = "2026-09-15";
+const AGENT_VERSION = "2026-09-18";
 
 const args = process.argv.slice(2);
 const ONCE = args.includes("--once");

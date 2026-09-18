@@ -24,7 +24,7 @@ mkdir -p "$HERE/dist"
 
 npx --yes @yao-pkg/pkg@latest "$AGENT" \
   --targets "$TARGET" \
-  --public --public-packages "*" \
+  --public --public-packages "*" --no-bytecode \
   --output "$OUT"
 
 echo "✓ $OUT ($(du -h "$OUT" | cut -f1)) — target $TARGET"
