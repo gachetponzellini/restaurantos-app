@@ -45,8 +45,8 @@ export async function getCuentaForTable(
   if (!orderRow) return null;
   const order = orderRow as CuentaState["order"];
 
-  // 3. Items + splits en paralelo.
-  const [itemsRes, splitsRes] = await Promise.all([
+  // 3. Items + splits + propina ya cobrada, en paralelo.
+  const [itemsRes, splitsRes, pagosRes] = await Promise.all([
     service
       .from("order_items")
       // `seat_number` es necesario para la tab "dividir por comensal" y el badge
@@ -64,7 +64,19 @@ export async function getCuentaForTable(
       )
       .eq("order_id", order.id)
       .order("split_index", { ascending: true }),
+    service
+      .from("payments")
+      .select("tip_cents")
+      .eq("order_id", order.id)
+      .eq("payment_status", "paid"),
   ]);
+
+  // #353 — la propina que falta cobrar: la de la orden menos la que ya viajó.
+  const propinaCobrada = ((pagosRes.data ?? []) as { tip_cents: number }[]).reduce(
+    (n, p) => n + Number(p.tip_cents),
+    0,
+  );
+  order.tip_pendiente_cents = Math.max(0, order.tip_cents - propinaCobrada);
 
   const items = (itemsRes.data ?? []) as CuentaItem[];
   const splits = (splitsRes.data ?? []) as OrderSplit[];

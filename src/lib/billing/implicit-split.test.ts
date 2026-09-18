@@ -62,3 +62,19 @@ describe("implicitSplit · la sub-cuenta de una orden sin dividir", () => {
     expect(implicitSplit(cuenta(0, 0)).status).toBe("pending");
   });
 });
+
+describe("implicitSplit · propina pendiente (#353)", () => {
+  it("tras un pago parcial lleva la propina que falta, no la entera", () => {
+    const base = implicitSplit({
+      order: {
+        id: "o", business_id: "b", order_number: 1, table_id: "t",
+        tip_cents: 1_000, discount_cents: 0, discount_reason: null,
+        lifecycle_status: "open", status: "pending", total_cents: 11_000,
+        closed_at: null, total_paid_cents: 5_000, tip_pendiente_cents: 0,
+      },
+      items: [], splits: [], last_mozo_id: null,
+      totals: { subtotal_cents: 10_000, tip_cents: 1_000, discount_cents: 0, total_cents: 11_000 },
+    } as unknown as Parameters<typeof implicitSplit>[0]);
+    expect(base.tip_cents).toBe(0);
+  });
+});

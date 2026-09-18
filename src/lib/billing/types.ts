@@ -95,6 +95,14 @@ export type CuentaState = {
     total_cents: number;
     closed_at: string | null;
     total_paid_cents: number;
+    /**
+     * #353 — la propina que todavía no viajó en ningún pago
+     * (`tip_cents − Σ payments.tip_cents`). La base asigna la propina de cada
+     * pago con esta misma cuenta; la pantalla la usa para no mostrar la
+     * propina entera en el segundo pago de una cuenta pagada en partes.
+     * Opcional: sólo la trae `getCuentaForTable`.
+     */
+    tip_pendiente_cents?: number;
   };
   items: CuentaItem[];
   splits: OrderSplit[];

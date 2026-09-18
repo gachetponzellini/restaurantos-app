@@ -24,9 +24,10 @@ export function implicitSplit(cuenta: CuentaState): OrderSplit {
     split_mode: "por_personas",
     split_index: 0,
     expected_amount_cents: expected,
-    // Sin división, la sub-cuenta implícita ES la orden: se lleva toda la
-    // propina (spec 177 · Parte 0).
-    tip_cents: cuenta.order.tip_cents,
+    // Sin división, la sub-cuenta implícita ES la orden: se lleva la propina
+    // (spec 177 · Parte 0) — la que falta, no la entera (#353): tras un pago
+    // parcial, la que ya viajó no se vuelve a mostrar ni a mandar.
+    tip_cents: cuenta.order.tip_pendiente_cents ?? cuenta.order.tip_cents,
     paid_amount_cents: paid,
     status: expected > 0 && paid >= expected ? "paid" : "pending",
     label: null,

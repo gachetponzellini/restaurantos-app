@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateAdjustment } from "./adjustment";
+import { ajusteDelCobro, calculateAdjustment } from "./adjustment";
 
 describe("calculateAdjustment", () => {
   it("sin ajuste devuelve la base intacta", () => {
@@ -55,5 +55,33 @@ describe("calculateAdjustment", () => {
       const r = calculateAdjustment(base, pct);
       expect(r.finalCents).toBe(base + r.adjustmentCents);
     }
+  });
+});
+
+describe("ajusteDelCobro (#353 — el server no confía en el ajuste de la pantalla)", () => {
+  it("sin porcentaje no hay ajuste", () => {
+    expect(ajusteDelCobro({ amountCents: 5_000, remainingCents: 10_000, percent: 0 })).toBe(0);
+  });
+
+  it("el pago completo con recargo lleva el ajuste sobre lo que falta", () => {
+    expect(ajusteDelCobro({ amountCents: 11_000, remainingCents: 10_000, percent: 10 })).toBe(1_000);
+  });
+
+  it("de más (vuelto o propina) no infla el ajuste", () => {
+    expect(ajusteDelCobro({ amountCents: 20_000, remainingCents: 10_000, percent: 10 })).toBe(1_000);
+  });
+
+  it("un pago parcial lleva la parte proporcional del recargo, no la del total", () => {
+    // $5.500 con +10 % son $5.000 de base y $500 de recargo.
+    expect(ajusteDelCobro({ amountCents: 5_500, remainingCents: 10_000, percent: 10 })).toBe(500);
+  });
+
+  it("con descuento el pago completo es lo que falta menos el descuento", () => {
+    expect(ajusteDelCobro({ amountCents: 9_000, remainingCents: 10_000, percent: -10 })).toBe(-1_000);
+  });
+
+  it("con descuento, un parcial descuenta su proporción", () => {
+    // $4.500 con −10 % saldan $5.000.
+    expect(ajusteDelCobro({ amountCents: 4_500, remainingCents: 10_000, percent: -10 })).toBe(-500);
   });
 });

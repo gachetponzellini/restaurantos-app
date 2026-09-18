@@ -33,6 +33,7 @@ import type { TipoComprobante } from "@/lib/afip/types";
 
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
 import { admiteCobro } from "./saldo-pendiente";
+import { ajusteDelCobro } from "./adjustment";
 import {
   destinoPorDefecto,
   excedenteRequiereConfirmacion,
@@ -526,6 +527,11 @@ function mapRegistrarPagoError(message: string): string {
     return "El split no corresponde a esta orden.";
   if (message.includes("ORDER_NOT_FOUND")) return "Orden no encontrada.";
   if (message.includes("SPLIT_NOT_FOUND")) return "Split no encontrado.";
+  // #353 — otro cobro entró mientras esta pantalla estaba abierta.
+  if (message.includes("AMOUNT_EXCEEDS_REMAINING"))
+    return "Ese monto es más de lo que falta cobrar: puede que ya haya un pago registrado. Recargá la cuenta.";
+  if (message.includes("AMOUNT_NOT_POSITIVE"))
+    return "El monto tiene que ser mayor a cero.";
   if (message.includes("payments_business_request_uidx"))
     return "El pago ya se estaba registrando. Refrescá para ver el estado.";
   return `No se pudo registrar el pago: ${message}`;
@@ -667,11 +673,25 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
   const remainingCents = split
     ? split.expected_amount_cents - split.paid_amount_cents
     : order.total_cents - order.total_paid_cents;
+
+  // #353 — el ajuste por método lo resuelve el server, con la config del
+  // negocio. La pantalla lo mandaba calculado sobre lo que falta, así que un
+  // pago parcial con recargo cargaba el recargo del total entero.
+  const adjustmentPercent =
+    (await getPaymentMethodConfigs(business.id)).find(
+      (c) => c.method === input.method,
+    )?.adjustment_percent ?? 0;
+  const adjustmentCents = ajusteDelCobro({
+    amountCents: input.amount_cents,
+    remainingCents,
+    percent: adjustmentPercent,
+  });
+
   if (
     isCashShortPayment({
       method: input.method,
       amount_cents: input.amount_cents,
-      adjustment_cents: input.adjustment_cents ?? 0,
+      adjustment_cents: adjustmentCents,
       remaining_cents: remainingCents,
     })
   ) {
@@ -688,7 +708,7 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
   const { chargeCents, extraTipCents } = repartoDelCobro({
     method: input.method,
     amount_cents: input.amount_cents,
-    adjustment_cents: input.adjustment_cents ?? 0,
+    adjustment_cents: adjustmentCents,
     remaining_cents: remainingCents,
     destino: input.destino_excedente ?? destinoPorDefecto(input.method),
   });
@@ -753,8 +773,8 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
     p_last_four: input.last_four ?? null,
     p_card_brand: input.card_brand ?? null,
     p_notes: input.notes?.trim() || null,
-    p_adjustment_percent: input.adjustment_percent ?? 0,
-    p_adjustment_cents: input.adjustment_cents ?? 0,
+    p_adjustment_percent: adjustmentPercent,
+    p_adjustment_cents: adjustmentCents,
     p_request_id: input.requestId ?? null,
     // spec 141 — a quién se le fía. La RPC lo exige por check cuando el método
     // es `cuenta_corriente`, y lo rechaza cuando no lo es: el saldo no puede
