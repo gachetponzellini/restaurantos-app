@@ -12,7 +12,13 @@ import {
   type ComprobanteState,
 } from "@/components/billing/comprobante-fields";
 import { CobroForm } from "@/components/billing/cobro-form";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  Modal,
+  ModalBody,
+  ModalHeader,
+  PanelContent,
+} from "@/components/ui/modal";
+import { AmountCard } from "@/components/ui/amount-card";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import { actionError } from "@/lib/actions";
 import {
@@ -105,17 +111,11 @@ export function CobrarPedidoSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
-      >
-        <SheetTitle className="border-border/60 border-b px-5 py-4 text-lg font-bold">
-          Cobrar pedido #{order.daily_number}
-        </SheetTitle>
+    <Modal open={open} onOpenChange={(o) => !o && onClose()}>
+      <PanelContent size="md">
+        <ModalHeader title={`Cobrar pedido #${order.daily_number}`} />
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <ModalBody className="pt-1">
           {loading ? (
             <div className="text-muted-foreground flex h-32 items-center justify-center">
               <Loader2 className="size-6 animate-spin" />
@@ -126,14 +126,10 @@ export function CobrarPedidoSheet({
             </div>
           ) : init ? (
             <div className="space-y-5">
-              <div className="bg-muted/50 flex items-baseline justify-between rounded-xl px-4 py-3">
-                <span className="text-muted-foreground text-sm font-medium">
-                  Total a cobrar
-                </span>
-                <span className="text-2xl font-extrabold tabular-nums">
-                  {formatCurrency(amountDueCents)}
-                </span>
-              </div>
+              <AmountCard
+                label="Total a cobrar"
+                value={formatCurrency(amountDueCents)}
+              />
 
               {/* spec 156 · D1 · 157 · D3 — el comprobante se elige ANTES de
                   cobrar, y en el mismo lugar que en la mesa y en el mostrador:
@@ -205,8 +201,8 @@ export function CobrarPedidoSheet({
               />
             </div>
           ) : null}
-        </div>
-      </SheetContent>
-    </Sheet>
+        </ModalBody>
+      </PanelContent>
+    </Modal>
   );
 }

@@ -31,6 +31,7 @@ import {
   type ClienteMatch,
 } from "@/lib/admin/customers-actions";
 import { TimeField24 } from "@/components/ui/time-field-24";
+import { SectionLabel } from "@/components/ui/section-label";
 import { enviarComanda } from "@/lib/comandas/actions";
 import { formatCurrency } from "@/lib/currency";
 import type { CatalogForMozo, CatalogProduct } from "@/lib/mozo/catalog-query";
@@ -756,11 +757,11 @@ export function CargarPedidoSheet({
         // `@container`: el layout de adentro se adapta al ancho **de la hoja**
         // (spec 115), igual que el panel del salón. El `xl:` de acá es otra
         // cosa: cuánto se le permite ensancharse a la hoja en pantalla grande.
-        className="@container relative flex h-full w-full max-w-md flex-col overflow-hidden bg-zinc-50 shadow-2xl xl:max-w-[900px]"
+        className="@container relative flex h-full w-full max-w-md flex-col overflow-hidden bg-popover shadow-2xl xl:max-w-[900px]"
       >
         {/* ─── Header ─── */}
-        <header className="shrink-0 border-b border-zinc-200 bg-white px-3 py-2.5">
-          <div className="flex items-center gap-2">
+        <header className="shrink-0 border-b border-zinc-200 bg-white px-5 pt-5 pb-4">
+          <div className="flex items-start gap-3">
             {view === "datos" ? (
               <button
                 onClick={() => setView("carga")}
@@ -770,15 +771,15 @@ export function CargarPedidoSheet({
                 <ArrowLeft className="h-5 w-5" />
               </button>
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                <ShoppingBag className="h-4 w-4" />
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+                <ShoppingBag className="size-[18px]" />
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+              <SectionLabel>
                 {agregarA ? `Pedido #${agregarA.dailyNumber}` : "Cargar pedido"}
-              </p>
-              <h2 className="font-heading text-base leading-tight font-bold text-zinc-900">
+              </SectionLabel>
+              <h2 className="font-heading text-lg leading-tight font-semibold tracking-tight text-foreground">
                 {agregarA
                   ? "Agregá los productos"
                   : view === "carga"
@@ -788,7 +789,7 @@ export function CargarPedidoSheet({
             </div>
             <button
               onClick={onClose}
-              className="rounded-full p-2 text-zinc-500 active:bg-zinc-100"
+              className="-mt-1 -mr-2 rounded-full p-2 text-zinc-500 active:bg-zinc-100"
               aria-label="Cerrar"
             >
               <X className="h-5 w-5" />

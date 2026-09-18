@@ -31,12 +31,12 @@ import { PageShell } from "@/components/admin/shell/page-shell";
 import { Button } from "@/components/ui/button";
 import { imprimirCuenta } from "@/lib/print/cuenta-print-actions";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -662,14 +662,12 @@ export function CuentaClient({
         }}
       />
 
-      <Dialog
+      <Modal
         open={cancelarItemId !== null}
         onOpenChange={(o) => !o && setCancelarItemId(null)}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancelar item</DialogTitle>
-          </DialogHeader>
+        <ModalContent size="sm">
+          <ModalHeader title="Cancelar item" />
           <CancelarItemForm
             onSubmit={(motivo) => {
               if (!cancelarItemId) return;
@@ -690,8 +688,8 @@ export function CuentaClient({
             }}
             onCancel={() => setCancelarItemId(null)}
           />
-        </DialogContent>
-      </Dialog>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
@@ -730,27 +728,30 @@ function CancelarItemForm({
   const [motivo, setMotivo] = useState("");
   return (
     <>
-      <div className="grid gap-1.5">
-        <Label>Motivo</Label>
-        <Textarea
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          rows={2}
-          placeholder="Ej: cliente cambió de opinión, plato salió mal…"
-          autoFocus
-        />
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={onCancel}>
+      <ModalBody>
+        <div className="grid gap-1.5">
+          <Label>Motivo</Label>
+          <Textarea
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={2}
+            placeholder="Ej: cliente cambió de opinión, plato salió mal…"
+            autoFocus
+          />
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" size="xl" onClick={onCancel}>
           Cancelar
         </Button>
         <Button
+          size="xl"
           disabled={motivo.trim() === ""}
           onClick={() => onSubmit(motivo)}
         >
           Confirmar
         </Button>
-      </DialogFooter>
+      </ModalFooter>
     </>
   );
 }

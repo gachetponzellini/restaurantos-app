@@ -11,7 +11,6 @@ import {
   Printer,
   Receipt,
   ShoppingBag,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,10 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  PanelContent,
+} from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import { Textarea } from "@/components/ui/textarea";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import { formatCurrency } from "@/lib/currency";
@@ -397,50 +399,22 @@ export function OrderDetailSheet({
         }}
       />
     )}
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
-      >
-        <header className="border-border/60 flex items-center justify-between border-b px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider`}
-            >
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <PanelContent size="md">
+        <ModalHeader
+          title={`#${order.daily_number} · ${order.customer_name}`}
+          description={`${formatInTimeZone(order.created_at, timezone, "HH:mm")} · hace ${formatRelativeTime(elapsedMin)}`}
+          actions={
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider">
               <span className={`size-1.5 rounded-full ${STATUS_DOT[order.status]}`} />
               {STATUS_LABEL[order.status]}
             </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="hover:bg-muted -mr-2 inline-flex size-8 items-center justify-center rounded-md transition-colors"
-            aria-label="Cerrar"
-          >
-            <X className="size-4" />
-          </button>
-        </header>
+          }
+        />
 
-        <div className="flex-1 overflow-y-auto">
-          <SheetTitle className="sr-only">
-            Pedido #{order.daily_number}
-          </SheetTitle>
-
-          <section className="px-5 pt-5 pb-4">
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-foreground text-3xl font-extrabold tracking-tight tabular-nums">
-                #{order.daily_number}
-              </h2>
-              <span className="text-muted-foreground text-sm tabular-nums">
-                · {formatInTimeZone(order.created_at, timezone, "HH:mm")} ·{" "}
-                hace {formatRelativeTime(elapsedMin)}
-              </span>
-            </div>
-            <p className="text-foreground mt-1 text-base font-semibold">
-              {order.customer_name}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ModalBody className="p-0">
+          <section className="px-5 pb-4">
+            <div className="flex flex-wrap items-center gap-2">
               {entrega && (
                 <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800">
                   <Clock className="size-3.5 shrink-0" aria-hidden />
@@ -467,9 +441,7 @@ export function OrderDetailSheet({
 
           {detail?.delivery_address && order.delivery_type === "delivery" && (
             <section className="border-border/60 border-t px-5 py-4">
-              <p className="text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider">
-                {copyDeEntrega(slug).label}
-              </p>
+              <SectionLabel>{copyDeEntrega(slug).label}</SectionLabel>
               <p className="text-foreground mt-1.5 text-sm">
                 {lugarDeEntrega(slug, detail.delivery_address)}
               </p>
@@ -483,14 +455,14 @@ export function OrderDetailSheet({
 
           <section className="border-border/60 border-t px-5 py-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider">
+              <SectionLabel>
                 {detail
                   ? (() => {
                       const parentCount = detail.items.filter((i) => !i.is_combo_component).length;
                       return `${parentCount} ${parentCount === 1 ? "ítem" : "ítems"}`;
                     })()
                   : "Ítems"}
-              </p>
+              </SectionLabel>
               {puedeEditarItems && (
                 <div className="flex items-center gap-3">
                   {itemsEditables.length > 0 && (
@@ -607,9 +579,7 @@ export function OrderDetailSheet({
 
           {detail && detail.history.length > 0 && (
             <section className="border-border/60 border-t px-5 py-4">
-              <p className="text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider">
-                Historial
-              </p>
+              <SectionLabel>Historial</SectionLabel>
               <ol className="mt-3 flex flex-col gap-2.5">
                 {detail.history.map((h, idx) => (
                   <li key={idx} className="flex items-baseline gap-2.5 text-sm">
@@ -634,10 +604,10 @@ export function OrderDetailSheet({
               <p className="mt-0.5">{order.cancelled_reason}</p>
             </section>
           )}
-        </div>
+        </ModalBody>
 
         {!isCancelled && !showCancel && (
-          <footer className="border-border/60 flex flex-col gap-2 border-t px-5 py-4">
+          <ModalFooter className="flex-col sm:items-stretch sm:justify-start">
             {/* Un pedido ya saldado no se vuelve a cobrar: hasta ahora el botón
                 miraba sólo el estado operativo (`isTerminal` = entregado /
                 cancelado), así que un delivery pagado online ofrecía cobrarse
@@ -670,12 +640,9 @@ export function OrderDetailSheet({
             </Button>
             {isPendingOnline && onConfirm && (
               <div className="w-full">
-                <Label
-                  htmlFor="kitchen-notes"
-                  className="text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider"
-                >
+                <SectionLabel as="label" htmlFor="kitchen-notes">
                   Nota para cocina (sale en la comanda)
-                </Label>
+                </SectionLabel>
                 <Input
                   id="kitchen-notes"
                   value={kitchenNotes}
@@ -723,11 +690,11 @@ export function OrderDetailSheet({
                 Cancelar pedido
               </Button>
             )}
-          </footer>
+          </ModalFooter>
         )}
 
         {!isTerminal && showCancel && (
-          <footer className="border-border/60 flex flex-col gap-3 border-t px-5 py-4">
+          <ModalFooter className="flex-col sm:items-stretch sm:justify-start">
             <div className="grid gap-1.5">
               <Label htmlFor={`sheet-cancel-reason-${order.id}`}>
                 Motivo de cancelación
@@ -765,10 +732,10 @@ export function OrderDetailSheet({
                 {cancelling ? "Cancelando…" : "Confirmar"}
               </Button>
             </div>
-          </footer>
+          </ModalFooter>
         )}
-      </SheetContent>
-    </Sheet>
+      </PanelContent>
+    </Modal>
 
     <CobrarPedidoSheet
       order={order}

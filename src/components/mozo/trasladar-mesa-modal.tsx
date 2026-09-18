@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Armchair, Check, MoveRight, Wine, X } from "lucide-react";
+import { Armchair, Check, MoveRight, Wine } from "lucide-react";
 import { toast } from "sonner";
 
 import { trasladarMesa } from "@/lib/mozo/actions";
+import { Button } from "@/components/ui/button";
+import { InlineModal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 
 export type DestTable = {
   id: string;
@@ -51,33 +54,11 @@ export function TrasladarMesaModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden" />
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-heading text-lg font-bold leading-tight">
-            Trasladar mesa {fromLabel}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="-mr-1 -mt-1 rounded-full p-2 text-zinc-500 transition active:scale-95 active:bg-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
-            Mover a
-          </label>
+    <InlineModal overlay="fixed" zIndexClassName="z-[60]" onClose={onClose}>
+      <ModalHeader title={`Trasladar mesa ${fromLabel}`} />
+      <ModalBody>
+        <div>
+          <SectionLabel>Mover a</SectionLabel>
           {tables.length === 0 ? (
             <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
               No hay mesas libres para mover. Cobrá o liberá una primero.
@@ -122,17 +103,13 @@ export function TrasladarMesaModal({
             </div>
           )}
         </div>
-
-        <button
-          type="button"
-          disabled={submitting || !toTableId}
-          onClick={onSubmit}
-          className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
-        >
+      </ModalBody>
+      <ModalFooter>
+        <Button size="xl" disabled={submitting || !toTableId} onClick={onSubmit}>
           <MoveRight className="h-5 w-5" />
           {submitting ? "Trasladando…" : "Trasladar mesa"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </ModalFooter>
+    </InlineModal>
   );
 }

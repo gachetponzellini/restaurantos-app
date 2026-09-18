@@ -32,11 +32,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Modal,
+  ModalBody,
+  ModalHeader,
+  PanelContent,
+} from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
+import { AmountCard } from "@/components/ui/amount-card";
 import { Textarea } from "@/components/ui/textarea";
 import {
   anularLineaDeCobro,
@@ -628,31 +630,27 @@ function DetalleSheet({
   }
 
   return (
-    <Sheet open onOpenChange={(o) => (pending ? null : !o && onClose())}>
-      <SheetContent
-        side="right"
-        className="w-full overflow-y-auto sm:max-w-md"
-      >
-        <SheetHeader>
-          <SheetTitle className="text-lg">{entry.descripcion}</SheetTitle>
-        </SheetHeader>
+    <Modal open onOpenChange={(o) => (pending ? null : !o && onClose())}>
+      <PanelContent size="md">
+        <ModalHeader title={entry.descripcion} />
 
-        <div className="space-y-4 px-4 pb-8">
-          <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70">
-            <p className="text-3xl font-bold tabular-nums text-zinc-900">
-              {formatCurrency(entry.amount_cents)}
-            </p>
-            <p className="mt-1 text-sm text-zinc-600">
-              {esCobro && entry.method
+        <ModalBody className="space-y-4">
+          <AmountCard
+            label={
+              esCobro && entry.method
                 ? METHOD_LABEL[entry.method]
                 : entry.tipo === "sangria"
                   ? "Sangría"
                   : entry.tipo === "propina"
                     ? "Propina pagada"
-                    : "Ingreso"}
-              <span className="mx-1 text-zinc-300">·</span>
+                    : "Ingreso"
+            }
+            value={formatCurrency(entry.amount_cents)}
+            size="lg"
+          >
+            <p className="mt-1 text-sm text-muted-foreground">
               {entry.caja_name}
-              <span className="mx-1 text-zinc-300">·</span>
+              <span className="mx-1 text-muted-foreground/50">·</span>
               {fecha(entry.created_at)} {hora(entry.created_at)}
             </p>
             {entry.tip_cents > 0 && (
@@ -661,11 +659,11 @@ function DetalleSheet({
               </p>
             )}
             {entry.attributed_mozo_name && (
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Atribuido a {entry.attributed_mozo_name}
               </p>
             )}
-          </div>
+          </AmountCard>
 
           {/* El comprobante no limita nada de acá: se emite sobre la CUENTA
               (total sin propina), no sobre el pago. Está para poder ir a
@@ -733,9 +731,7 @@ function DetalleSheet({
 
           {editable && (
             <div className="space-y-4 rounded-xl bg-white p-4 ring-1 ring-zinc-200/70">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                Corregir
-              </p>
+              <SectionLabel>Corregir</SectionLabel>
 
               {esCobro && (
                 <div className="grid gap-1.5">
@@ -989,9 +985,7 @@ function DetalleSheet({
 
           {entry.corregido && (
             <div>
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                <History className="size-3.5" /> Historial
-              </p>
+              <SectionLabel icon={<History />}>Historial</SectionLabel>
               {cargando ? (
                 <p className="mt-2 text-sm text-zinc-500">Cargando…</p>
               ) : (
@@ -1017,8 +1011,8 @@ function DetalleSheet({
               )}
             </div>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+        </ModalBody>
+      </PanelContent>
+    </Modal>
   );
 }

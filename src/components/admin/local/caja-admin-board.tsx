@@ -525,6 +525,7 @@ function CajaCard({
         open={sangriaOpen}
         onOpenChange={setSangriaOpen}
         title="Registrar sangría"
+        icon={<ArrowDownToLine />}
         description="Sacar efectivo de la caja (depósito en banco, cambio que se lleva alguien, etc.). Los pagos a proveedor no van acá: salen de la Caja Mayor, desde Proveedores."
         requiereMotivo
         ctaLabel="Registrar sangría"
@@ -545,6 +546,7 @@ function CajaCard({
         open={ingresoOpen}
         onOpenChange={setIngresoOpen}
         title="Registrar ingreso"
+        icon={<ArrowUpFromLine />}
         description="Sumar efectivo extra a la caja."
         requiereMotivo={false}
         ctaLabel="Registrar ingreso"

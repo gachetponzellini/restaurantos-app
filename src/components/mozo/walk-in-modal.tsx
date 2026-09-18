@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Minus, Plus, X } from "lucide-react";
+import { ArrowLeft, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -14,6 +14,7 @@ import {
 } from "@/lib/mozo/party-size-keys";
 import { CustomerFields } from "@/components/shared/customer-fields";
 import { sentarWalkIn } from "@/lib/mozo/walk-in";
+import { InlineModal, ModalBody, ModalHeader } from "@/components/ui/modal";
 import { useArrowFocus } from "@/lib/ui/use-arrow-focus";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
 
@@ -258,42 +259,28 @@ function WalkInForm({
   );
 }
 
-/** Walk-in como overlay: app del mozo (mobile), donde no hay sidebar. */
+/**
+ * Walk-in como overlay: app del mozo (mobile), donde no hay sidebar.
+ *
+ * `WalkInForm` es compartido con [`WalkInPanel`] (fuera de alcance de la spec
+ * 204) y arma su propio `<form>` con el submit adentro (el foco keyboard-first
+ * de la spec 066 depende de que sea un `type="submit"` real). Sacarlo a un
+ * `ModalFooter` afuera del form rompería el Enter-para-abrir y le cambiaría el
+ * pie a `WalkInPanel` de paso — se queda dentro de `ModalBody`, tal cual venía.
+ */
 export function WalkInModal(props: Props) {
   useEscapeToClose(props.onClose);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
-      onClick={props.onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="font-heading text-lg font-bold leading-tight">
-              Walk-in · {props.tableLabel}
-            </h3>
-            <p className="mt-0.5 text-sm text-zinc-500">
-              Solo la cantidad es obligatoria. Si dejás teléfono, entra al CRM.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={props.onClose}
-            aria-label="Cerrar"
-            className="-mr-1 -mt-1 rounded-full p-2 text-zinc-500 transition active:scale-95 active:bg-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
+    <InlineModal overlay="fixed" zIndexClassName="z-[60]" onClose={props.onClose}>
+      <ModalHeader
+        title={`Walk-in · ${props.tableLabel}`}
+        description="Solo la cantidad es obligatoria. Si dejás teléfono, entra al CRM."
+      />
+      <ModalBody>
         <WalkInForm {...props} variant="modal" />
-      </div>
-    </div>
+      </ModalBody>
+    </InlineModal>
   );
 }
 

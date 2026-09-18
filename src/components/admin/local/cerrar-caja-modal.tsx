@@ -16,12 +16,13 @@ import { VentasPorMetodo } from "@/components/admin/local/caja-metricas";
 import { CobrosPorOrigen } from "@/components/admin/local/cobros-por-origen";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -168,17 +169,10 @@ export function CerrarCajaModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            Cerrar caja
-            <span className="ml-2 text-sm font-normal text-zinc-500">
-              · {cajaName}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <ModalContent size="xl">
+        <ModalHeader title="Cerrar caja" eyebrow={cajaName} icon={<Lock />} />
+        <ModalBody>
         {cargando && !data && (
           <div className="space-y-3 py-6">
             <div className="h-24 animate-pulse rounded-2xl bg-zinc-100" />
@@ -196,9 +190,7 @@ export function CerrarCajaModal({
           <div className="space-y-5">
             {/* ── 1 · La plata del período ───────────────────────── */}
             <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                La plata del período
-              </p>
+              <SectionLabel>La plata del período</SectionLabel>
               <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-zinc-900">
                 {formatCurrency(stats.total_ventas_cents)}
               </p>
@@ -215,9 +207,7 @@ export function CerrarCajaModal({
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                   <VentasPorMetodo porMetodo={stats.ventas_por_metodo} />
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                      Por origen
-                    </p>
+                    <SectionLabel>Por origen</SectionLabel>
                     <CobrosPorOrigen
                       porOrigen={stats.ventas_por_origen}
                       porOrigenYMetodo={stats.ventas_por_origen_y_metodo}
@@ -230,9 +220,7 @@ export function CerrarCajaModal({
             {/* ── 2 · Quién la tiene ─────────────────────────────── */}
             <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                  Quién tiene el efectivo
-                </p>
+                <SectionLabel>Quién tiene el efectivo</SectionLabel>
                 <p className="text-sm font-semibold tabular-nums text-zinc-900">
                   {formatCurrency(expected)}
                 </p>
@@ -353,9 +341,7 @@ export function CerrarCajaModal({
 
             {/* ── 3 · Contar y cerrar ────────────────────────────── */}
             <section className="rounded-2xl bg-zinc-50 p-5 ring-1 ring-zinc-200/70">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-                Contar y cerrar
-              </p>
+              <SectionLabel>Contar y cerrar</SectionLabel>
 
               <div className="mt-3 grid gap-1.5">
                 <Label htmlFor="cierre-contado" className="text-sm font-medium">
@@ -519,20 +505,21 @@ export function CerrarCajaModal({
             </section>
           </div>
         )}
+        </ModalBody>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <ModalFooter>
+          <Button variant="outline" size="xl" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button disabled={!puedeCerrar} onClick={submit}>
+          <Button size="xl" disabled={!puedeCerrar} onClick={submit}>
             <Lock className="mr-2 size-4" />
             {retirar && cents !== null && cents > 0
               ? `Cerrar caja y retirar ${formatCurrency(cents)}`
               : "Cerrar caja sin retirar"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }
 

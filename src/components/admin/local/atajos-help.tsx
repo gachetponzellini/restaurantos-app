@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import { Keyboard, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { InlineModal, ModalBody, ModalHeader } from "@/components/ui/modal";
+
 /**
  * Los atajos del panel de la operación, a la vista — spec 075, FR-022.
  *
@@ -114,46 +117,47 @@ export function AtajosHelp({
   }, []);
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-end bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        // Focus-trap: sin esto se puede tabular al panel de atrás y operarlo
-        // sin verlo (mismo patrón que `ProductModal` y el asistente del menú).
-        if (e.key !== "Tab") return;
-        e.preventDefault();
-        cerrarRef.current?.focus({ preventScroll: true });
+    <InlineModal
+      overlay="absolute"
+      placement="bottom"
+      zIndexClassName="z-50"
+      aria-label="Atajos de teclado"
+      onClose={onClose}
+      // Focus-trap: sin esto se puede tabular al panel de atrás y operarlo sin
+      // verlo (mismo patrón que `ProductModal` y el asistente del menú). Va en
+      // el fondo (`backdropProps`), no en el diálogo: es el fondo el que
+      // recibe el Tab cuando el foco intenta salir del diálogo hacia el resto
+      // de la página.
+      backdropProps={{
+        onKeyDown: (e) => {
+          if (e.key !== "Tab") return;
+          e.preventDefault();
+          cerrarRef.current?.focus({ preventScroll: true });
+        },
       }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Atajos de teclado"
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-full w-full overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-              <Keyboard className="size-3.5" />
-              Atajos
-            </p>
-            <h3 className="font-heading text-base font-bold text-zinc-900">
-              {TITULO[modo]}
-            </h3>
-          </div>
-          <button
+      <ModalHeader
+        eyebrow={
+          <span className="flex items-center gap-1.5">
+            <Keyboard className="size-3.5" />
+            Atajos
+          </span>
+        }
+        title={TITULO[modo]}
+        closeButton={
+          <Button
             ref={cerrarRef}
-            type="button"
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label="Cerrar atajos"
-            className="rounded-full p-1.5 text-zinc-500 outline-none transition hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-900/20"
           >
             <X className="size-4" />
-          </button>
-        </div>
-
-        <ul className="mt-3 space-y-1.5">
+          </Button>
+        }
+      />
+      <ModalBody>
+        <ul className="space-y-1.5">
           {atajos.map((a) => (
             <li
               key={a.teclas.join("+") + a.que}
@@ -177,7 +181,7 @@ export function AtajosHelp({
         <p className="mt-3 text-[11px] text-zinc-400">
           Tab y Shift+Tab siguen funcionando como siempre.
         </p>
-      </div>
-    </div>
+      </ModalBody>
+    </InlineModal>
   );
 }

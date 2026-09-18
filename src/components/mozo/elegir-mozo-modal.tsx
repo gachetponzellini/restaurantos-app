@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { assignMozoToTable, transferTable } from "@/lib/mozo/actions";
 import { filterMozos, shouldShowMozoSearch } from "@/lib/mozo/mozo-search";
 import type { MozoMember } from "@/lib/mozo/queries";
+import { Button } from "@/components/ui/button";
+import { InlineModal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
 import { useRovingList } from "@/lib/ui/use-roving-list";
 
@@ -182,46 +185,25 @@ export function ElegirMozoModal({
   const titulo = modo === "asignar" ? "Asignar mozo" : "Transferir mozo";
 
   return (
-    <div
-      className={`${overlay} inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-4`}
-      onClick={onClose}
+    // `role="dialog"` (que pone `InlineModal`) no es decoración: es el
+    // contrato con el que las otras superficies deciden que las teclas son de
+    // acá. El panel del salón ignora Esc/Backspace/`?` cuando el evento sale
+    // de un diálogo, y el ⌘Enter de «enviar la comanda» (spec 143 · D5) se
+    // corta cuando hay un diálogo de afuera abierto. Sin el rol, el modal
+    // abierto encima dejaba pasar el atajo y se iba una comanda a cocina
+    // desde abajo.
+    <InlineModal
+      overlay={overlay}
+      zIndexClassName="z-[60]"
+      titleId="elegir-mozo-titulo"
+      onClose={onClose}
     >
-      <div
-        // `role="dialog"` no es decoración: es el contrato con el que las otras
-        // superficies deciden que las teclas son de acá. El panel del salón
-        // ignora Esc/Backspace/`?` cuando el evento sale de un diálogo, y el
-        // ⌘Enter de «enviar la comanda» (spec 143 · D5) se corta cuando hay un
-        // diálogo de afuera abierto. Sin el rol, el modal abierto encima dejaba
-        // pasar el atajo y se iba una comanda a cocina desde abajo.
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="elegir-mozo-titulo"
-        className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden" />
-        <div className="flex items-start justify-between gap-3">
-          <h3
-            id="elegir-mozo-titulo"
-            className="font-heading text-lg leading-tight font-bold"
-          >
-            {titulo} · Mesa {tableLabel}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="-mt-1 -mr-1 rounded-full p-2 text-zinc-500 transition active:scale-95 active:bg-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-4 space-y-4">
-          <div>
-            <label className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-              {modo === "asignar" ? "Quién la atiende" : "Pasar a"}
-            </label>
+      <ModalHeader title={`${titulo} · Mesa ${tableLabel}`} />
+      <ModalBody className="space-y-4">
+        <div>
+          <SectionLabel>
+            {modo === "asignar" ? "Quién la atiende" : "Pasar a"}
+          </SectionLabel>
             {showSearch && (
               <div className="relative mt-2">
                 <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -341,12 +323,9 @@ export function ElegirMozoModal({
 
           {modo === "transferir" && (
             <div>
-              <label
-                htmlFor="elegir-mozo-motivo"
-                className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase"
-              >
+              <SectionLabel as="label" htmlFor="elegir-mozo-motivo">
                 Motivo (opcional)
-              </label>
+              </SectionLabel>
               <textarea
                 id="elegir-mozo-motivo"
                 ref={reasonRef}
@@ -358,21 +337,21 @@ export function ElegirMozoModal({
               />
             </div>
           )}
-        </div>
+      </ModalBody>
 
-        {/* En `asignar` no hay CTA: la fila es la acción. Un botón de confirmar
-            sería el paso de más que el pedido vino a sacar. */}
-        {modo === "transferir" && (
-          <button
-            type="button"
+      {/* En `asignar` no hay CTA: la fila es la acción. Un botón de confirmar
+          sería el paso de más que el pedido vino a sacar. */}
+      {modo === "transferir" && (
+        <ModalFooter>
+          <Button
+            size="xl"
             disabled={submitting || !effectiveToMozoId}
             onClick={() => void transferir()}
-            className="mt-5 flex h-14 w-full items-center justify-center rounded-2xl bg-sky-600 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "Transfiriendo…" : "Transferir mozo"}
-          </button>
-        )}
-      </div>
-    </div>
+          </Button>
+        </ModalFooter>
+      )}
+    </InlineModal>
   );
 }

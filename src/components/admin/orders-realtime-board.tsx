@@ -6,6 +6,13 @@ import { toast } from "sonner";
 
 import { getPedidosTabOrders } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { Button } from "@/components/ui/button";
+import {
+  InlineModal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import {
   aceptarPedidoProgramado,
@@ -580,69 +587,77 @@ export function OrdersRealtimeBoard({
       {/* Spec 139 — el motivo del rechazo es lo que el cliente va a leer, así
           que se pide siempre. */}
       {rechazando && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !rechazoEnCurso && setRechazando(null)}
+        <InlineModal
+          overlay="fixed"
+          zIndexClassName="z-[60]"
+          size="sm"
+          onClose={() => setRechazando(null)}
+          onBackdropClick={rechazoEnCurso ? false : () => setRechazando(null)}
         >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-base font-bold text-zinc-900">
-              ¿Rechazar el pedido #{rechazando.daily_number}?
-            </h3>
-            <p className="mt-1.5 text-sm text-zinc-600">
-              Le avisamos a{" "}
-              <span className="font-semibold">{rechazando.customer_name}</span>{" "}
-              que no pudimos tomarlo.
-              {rechazando.payment_status === "paid" && (
-                <>
-                  {" "}
-                  Como ya pagó, se le devuelve la plata por Mercado Pago.
-                </>
-              )}
-            </p>
-            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-              Motivo
-            </label>
-            <input
-              type="text"
-              value={motivoRechazo}
-              onChange={(e) => setMotivoRechazo(e.target.value)}
-              maxLength={200}
-              autoFocus
-              placeholder="Ej: ya estamos cerrando la cocina"
-              className="mt-1.5 h-10 w-full rounded-xl border-0 bg-zinc-100 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-rose-300"
-            />
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setRechazando(null)}
-                disabled={rechazoEnCurso}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60"
-              >
-                Volver
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!motivoRechazo.trim()) {
-                    toast.error("Decile al cliente por qué.");
-                    return;
-                  }
-                  setRechazoEnCurso(true);
-                  await handleReject(rechazando, motivoRechazo);
-                  setRechazoEnCurso(false);
-                  setRechazando(null);
-                }}
-                disabled={rechazoEnCurso}
-                className="flex-1 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
-              >
-                Rechazar
-              </button>
+          <ModalHeader
+            tone="danger"
+            showClose={!rechazoEnCurso}
+            title={`¿Rechazar el pedido #${rechazando.daily_number}?`}
+            description={
+              <>
+                Le avisamos a{" "}
+                <span className="font-semibold">
+                  {rechazando.customer_name}
+                </span>{" "}
+                que no pudimos tomarlo.
+                {rechazando.payment_status === "paid" && (
+                  <> Como ya pagó, se le devuelve la plata por Mercado Pago.</>
+                )}
+              </>
+            }
+          />
+          <ModalBody>
+            <div className="grid gap-1.5">
+              <SectionLabel as="label" htmlFor="motivo-rechazo">
+                Motivo
+              </SectionLabel>
+              <input
+                id="motivo-rechazo"
+                type="text"
+                value={motivoRechazo}
+                onChange={(e) => setMotivoRechazo(e.target.value)}
+                maxLength={200}
+                autoFocus
+                placeholder="Ej: ya estamos cerrando la cocina"
+                className="h-10 w-full rounded-xl border-0 bg-zinc-100 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-rose-300 focus:outline-none"
+              />
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter stretch>
+            <Button
+              type="button"
+              variant="outline"
+              size="xl"
+              onClick={() => setRechazando(null)}
+              disabled={rechazoEnCurso}
+            >
+              Volver
+            </Button>
+            <Button
+              type="button"
+              variant="destructive-solid"
+              size="xl"
+              onClick={async () => {
+                if (!motivoRechazo.trim()) {
+                  toast.error("Decile al cliente por qué.");
+                  return;
+                }
+                setRechazoEnCurso(true);
+                await handleReject(rechazando, motivoRechazo);
+                setRechazoEnCurso(false);
+                setRechazando(null);
+              }}
+              disabled={rechazoEnCurso}
+            >
+              Rechazar
+            </Button>
+          </ModalFooter>
+        </InlineModal>
       )}
     </div>
   );

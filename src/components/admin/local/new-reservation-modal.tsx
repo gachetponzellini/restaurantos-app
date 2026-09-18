@@ -11,13 +11,14 @@ import { useRouter } from "next/navigation";
 import { CalendarPlus, Loader2, MapPin, Minus, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Modal,
+  ModalFooter,
+  ModalHeader,
+  PanelContent,
+} from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import {
   fetchAvailability,
   fetchFlexibleAvailability,
@@ -59,7 +60,7 @@ export type TablePickerBridge = {
 };
 
 const INPUT_CLS_BASE =
-  "h-12 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100";
+  "h-12 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30";
 const INPUT_CLS = `mt-1 ${INPUT_CLS_BASE}`;
 const LABEL_CLS = "text-[11px] font-bold uppercase tracking-wider text-zinc-500";
 
@@ -511,7 +512,7 @@ export function ReservaForm({
   const tableField = tablePicker ? (
 
     <div>
-      <label className={LABEL_CLS}>Mesa (opcional)</label>
+      <SectionLabel as="label">Mesa (opcional)</SectionLabel>
       {tablePicker.pickedTableId ? (
         <div className="mt-1 flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2.5 ring-1 ring-indigo-200 @lg:max-w-xs">
           <MapPin className="h-4 w-4 shrink-0 text-indigo-600" />
@@ -557,7 +558,7 @@ export function ReservaForm({
     // acá adentro: el formulario es una hoja modal, y en la tab de Operación no
     // hay plano al lado en el que delegar.
     <div>
-      <label className={LABEL_CLS}>Mesa (opcional)</label>
+      <SectionLabel as="label">Mesa (opcional)</SectionLabel>
       {mesaElegida ? (
         <div className="mt-1 flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2.5 ring-1 ring-indigo-200 @lg:max-w-xs">
           <MapPin className="h-4 w-4 shrink-0 text-indigo-600" />
@@ -649,12 +650,12 @@ export function ReservaForm({
         />
 
         <div>
-          <label className={LABEL_CLS}>
+          <SectionLabel as="label">
             Personas
             <span className="ml-1.5 font-semibold normal-case tracking-normal text-zinc-400">
               · teclas 1-9, + y −
             </span>
-          </label>
+          </SectionLabel>
           <div className="mt-2 flex items-center justify-between rounded-2xl bg-zinc-50 p-2 ring-1 ring-zinc-200 @lg:max-w-xs">
             <button
               type="button"
@@ -681,7 +682,7 @@ export function ReservaForm({
         </div>
 
         <div>
-          <label className={LABEL_CLS}>Fecha</label>
+          <SectionLabel as="label">Fecha</SectionLabel>
           <input
             type="date"
             value={date}
@@ -696,7 +697,7 @@ export function ReservaForm({
             cupo entra la reserva. Con un solo salón no se dibuja. */}
         {!tablePicker && salones.length > 1 && (
           <div>
-            <label className={LABEL_CLS}>Salón *</label>
+            <SectionLabel as="label">Salón *</SectionLabel>
             <div
               onKeyDown={salonesZona.handleKeyDown}
               className="mt-2 flex flex-wrap gap-1.5"
@@ -737,7 +738,7 @@ export function ReservaForm({
         ) : mode === "flexible" ? (
           <>
             <div>
-              <label className={LABEL_CLS}>Servicio</label>
+              <SectionLabel as="label">Servicio</SectionLabel>
               {serviceNames.length === 0 ? (
                 <p className="mt-2 text-center text-sm text-zinc-400">
                   No hay servicios configurados para esta fecha.
@@ -770,7 +771,7 @@ export function ReservaForm({
             </div>
 
             <div>
-              <label className={LABEL_CLS}>Horario</label>
+              <SectionLabel as="label">Horario</SectionLabel>
               {!service ? (
                 <p className="mt-2 text-sm text-zinc-400">Elegí un servicio primero.</p>
               ) : shownArrivalOptions.length === 0 ? (
@@ -837,7 +838,7 @@ export function ReservaForm({
         ) : (
           <>
             <div>
-              <label className={LABEL_CLS}>Horario</label>
+              <SectionLabel as="label">Horario</SectionLabel>
               {loadingSlots ? (
                 <div className="mt-2 flex items-center justify-center py-6 text-zinc-400">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -878,36 +879,37 @@ export function ReservaForm({
         )}
 
         <div>
-          <label className={LABEL_CLS}>Notas (opcional)</label>
+          <SectionLabel as="label">Notas (opcional)</SectionLabel>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             placeholder="Ej: cumpleaños, alérgico a maní…"
           />
         </div>
       </div>
 
-      <div className={footerClassName}>
-        <button
+      <ModalFooter className={footerClassName}>
+        <Button
           type="submit"
+          size="xl"
           disabled={!canSubmit}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60 @2xl:mx-auto @2xl:max-w-md"
+          className="w-full @2xl:mx-auto @2xl:max-w-md"
         >
           {pending ? (
             <>
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
               Creando…
             </>
           ) : (
             <>
-              <CalendarPlus className="h-5 w-5" />
+              <CalendarPlus className="size-4" />
               Crear reserva
             </>
           )}
-        </button>
-      </div>
+        </Button>
+      </ModalFooter>
     </form>
   );
 }
@@ -933,21 +935,20 @@ export function NewReservationModal({
   onChanged?: () => void;
 }) {
   return (
-    <Sheet
+    <Modal
       open
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
     >
-      {/* Spec 144 — un poco más ancha que antes: adentro va el plano del salón. */}
-      <SheetContent side="bottom" className="max-h-[90vh] rounded-t-3xl sm:mx-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle className="font-heading flex items-center gap-2 text-lg font-bold">
-            <CalendarPlus className="h-5 w-5 text-blue-600" />
-            Nueva reserva
-          </SheetTitle>
-          <SheetDescription>Crear una reserva manual desde el admin.</SheetDescription>
-        </SheetHeader>
+      {/* Spec 144 — adentro va el plano del salón: un panel lateral le da más
+          lugar que el diálogo centrado. */}
+      <PanelContent size="lg">
+        <ModalHeader
+          title="Nueva reserva"
+          description="Crear una reserva manual desde el admin."
+          icon={<CalendarPlus />}
+        />
         <ReservaForm
           slug={slug}
           tables={tables}
@@ -956,9 +957,8 @@ export function NewReservationModal({
           defaultFloorPlanId={defaultFloorPlanId}
           onDone={onClose}
           onChanged={onChanged}
-          footerClassName="border-t border-zinc-200 p-4"
         />
-      </SheetContent>
-    </Sheet>
+      </PanelContent>
+    </Modal>
   );
 }

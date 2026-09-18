@@ -8,12 +8,12 @@ import { toast } from "sonner";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import { Label } from "@/components/ui/label";
 import {
   asignarCajaUsuario,
@@ -194,13 +194,10 @@ function AddAssignmentModal({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Asignar caja a usuario</DialogTitle>
-        </DialogHeader>
-
-        <div className="mt-3 grid gap-4">
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <ModalContent size="md">
+        <ModalHeader title="Asignar caja a usuario" icon={<Plus />} />
+        <ModalBody className="grid gap-4">
           <div className="grid gap-1.5">
             <Label>Caja</Label>
             <select
@@ -242,13 +239,14 @@ function AddAssignmentModal({
               Este usuario ya está asignado a esta caja.
             </p>
           )}
-        </div>
+        </ModalBody>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <ModalFooter>
+          <Button variant="outline" size="xl" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button
+            size="xl"
             disabled={!cajaId || !userId || alreadyAssigned}
             onClick={() =>
               startTransition(async () => {
@@ -263,8 +261,8 @@ function AddAssignmentModal({
           >
             Asignar
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

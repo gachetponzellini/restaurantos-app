@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, Users, X } from "lucide-react";
+import { Minus, Plus, Users } from "lucide-react";
 
 import {
   comensalesDesdeTecla,
   MAX_PARTY_SIZE,
   MIN_PARTY_SIZE,
 } from "@/lib/mozo/party-size-keys";
+import { InlineModal, ModalBody, ModalHeader } from "@/components/ui/modal";
+import { SectionLabel } from "@/components/ui/section-label";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
 
 /**
@@ -62,18 +64,14 @@ export function ComensalesModal({
   };
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
-      onClick={onCerrar}
-    >
-      <div
-        ref={cajaRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="comensales-titulo"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
+    <InlineModal
+      overlay="absolute"
+      zIndexClassName="z-50"
+      titleId="comensales-titulo"
+      onClose={onCerrar}
+      ref={cajaRef}
+      tabIndex={-1}
+      onKeyDown={(e) => {
           // Con modificador la tecla no es nuestra: `Ctrl+−` y `Ctrl+=` son el
           // zoom del navegador, y `⌘Enter` es «enviar la comanda» del panel de
           // abajo. Sin esto, achicar la pantalla cambiaba cuántos se sientan.
@@ -119,31 +117,13 @@ export function ComensalesModal({
             e.preventDefault();
             confirmar(valor);
           }
-        }}
-        className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] shadow-2xl outline-none sm:rounded-3xl"
-      >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden" />
-        <div className="flex items-start justify-between gap-3">
-          <h3
-            id="comensales-titulo"
-            className="font-heading text-lg leading-tight font-bold"
-          >
-            Comensales · Mesa {tableLabel}
-          </h3>
-          <button
-            type="button"
-            onClick={onCerrar}
-            aria-label="Cerrar"
-            className="-mt-1 -mr-1 rounded-full p-2 text-zinc-500 transition active:scale-95 active:bg-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-          <Users className="h-3.5 w-3.5" />
+      }}
+    >
+      <ModalHeader title={`Comensales · Mesa ${tableLabel}`} />
+      <ModalBody>
+        <SectionLabel icon={<Users className="h-3.5 w-3.5" />}>
           Cuántos se sientan
-        </p>
+        </SectionLabel>
 
         <div className="mt-3 flex items-center gap-2">
           {QUICK.map((n) => (
@@ -208,7 +188,7 @@ export function ComensalesModal({
           <span className="font-semibold text-zinc-700">−</span> para mesas de
           más de 9.
         </p>
-      </div>
-    </div>
+      </ModalBody>
+    </InlineModal>
   );
 }

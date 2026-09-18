@@ -59,13 +59,12 @@ import { TrasladarMesaModal } from "@/components/mozo/trasladar-mesa-modal";
 import { WalkInPanel } from "@/components/mozo/walk-in-modal";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2332,7 +2331,7 @@ export function SalonDesktop({
 
       {/* ── Anular mesa prompt ── */}
       {anularPrompt && (
-        <Dialog
+        <Modal
           open
           onOpenChange={(o) => {
             if (!o) {
@@ -2341,29 +2340,30 @@ export function SalonDesktop({
             }
           }}
         >
-          <DialogContent className="max-w-md p-5">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold text-zinc-900">
-                Anular {anularPrompt.label}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-500">
-                Cancela la orden activa con motivo. La mesa queda libre.
-              </DialogDescription>
-            </DialogHeader>
-            {/* Acción destructiva: Enter en el textarea inserta salto de línea
-                (no envía); anular requiere click explícito. Esc cancela. */}
-            <textarea
-              value={anularReason}
-              onChange={(e) => setAnularReason(e.target.value.slice(0, 200))}
-              placeholder="ej: cliente se fue, error de carga, ..."
-              className="block w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
-              rows={3}
-              autoFocus
+          <ModalContent size="sm">
+            <ModalHeader
+              icon={<Ban />}
+              tone="danger"
+              title={`Anular ${anularPrompt.label}`}
+              description="Cancela la orden activa con motivo. La mesa queda libre."
             />
-            <DialogFooter>
+            <ModalBody>
+              {/* Acción destructiva: Enter en el textarea inserta salto de línea
+                  (no envía); anular requiere click explícito. Esc cancela. */}
+              <textarea
+                value={anularReason}
+                onChange={(e) => setAnularReason(e.target.value.slice(0, 200))}
+                placeholder="ej: cliente se fue, error de carga, ..."
+                className="block w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
+                rows={3}
+                autoFocus
+              />
+            </ModalBody>
+            <ModalFooter>
               <Button
                 type="button"
                 variant="outline"
+                size="xl"
                 onClick={() => {
                   setAnularPrompt(null);
                   setAnularReason("");
@@ -2374,45 +2374,51 @@ export function SalonDesktop({
               </Button>
               <Button
                 type="button"
-                variant="destructive"
+                variant="destructive-solid"
+                size="xl"
                 onClick={handleAnular}
                 disabled={pending || !anularReason.trim()}
                 className="flex-1"
               >
                 Anular
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
       )}
 
       {/* Aviso: walk-in sobre una mesa reservada (bloqueo blando, spec 059).
           No impide abrirla —el encargado manda—, pero avisa y ofrece el
           camino correcto: sentar la reserva. */}
       {walkInWarning && (
-        <Dialog open onOpenChange={(o) => !o && setWalkInWarning(null)}>
-          <DialogContent className="max-w-md p-5">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold text-zinc-900">
-                {walkInWarning.label} está reservada
-              </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-500">
-                {formatTime(walkInWarning.reservation.starts_at)} ·{" "}
-                {walkInWarning.reservation.customer_name} ·{" "}
-                {walkInWarning.reservation.party_size}p
-                {walkInWarning.reservation.notes
-                  ? ` · ${walkInWarning.reservation.notes}`
-                  : ""}
-              </DialogDescription>
-            </DialogHeader>
-            <p className="text-sm text-zinc-600">
-              Podés abrirla igual para un walk-in, pero después vas a necesitar
-              la mesa para esta reserva.
-            </p>
-            <DialogFooter>
+        <Modal open onOpenChange={(o) => !o && setWalkInWarning(null)}>
+          <ModalContent size="sm">
+            <ModalHeader
+              icon={<Clock />}
+              tone="warning"
+              title={`${walkInWarning.label} está reservada`}
+              description={
+                <>
+                  {formatTime(walkInWarning.reservation.starts_at)} ·{" "}
+                  {walkInWarning.reservation.customer_name} ·{" "}
+                  {walkInWarning.reservation.party_size}p
+                  {walkInWarning.reservation.notes
+                    ? ` · ${walkInWarning.reservation.notes}`
+                    : ""}
+                </>
+              }
+            />
+            <ModalBody>
+              <p className="text-sm text-muted-foreground">
+                Podés abrirla igual para un walk-in, pero después vas a
+                necesitar la mesa para esta reserva.
+              </p>
+            </ModalBody>
+            <ModalFooter>
               <Button
                 type="button"
                 variant="outline"
+                size="xl"
                 onClick={() => setWalkInWarning(null)}
                 disabled={pending}
               >
@@ -2421,6 +2427,7 @@ export function SalonDesktop({
               <Button
                 type="button"
                 variant="outline"
+                size="xl"
                 onClick={() => {
                   setWalkInTableId(walkInWarning.tableId);
                   setWalkInWarning(null);
@@ -2431,6 +2438,7 @@ export function SalonDesktop({
               </Button>
               <Button
                 type="button"
+                size="xl"
                 onClick={() => {
                   handleSentarReserva(
                     walkInWarning.reservation.id,
@@ -2443,9 +2451,9 @@ export function SalonDesktop({
               >
                 Sentar la reserva
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
       )}
 
       {/* El overlay "Distribuir mozos" vive en LocalShell para alinear el

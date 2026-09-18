@@ -7,12 +7,14 @@ import { toast } from "sonner";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import { AmountCard } from "@/components/ui/amount-card";
+import { SectionLabel } from "@/components/ui/section-label";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -521,37 +523,33 @@ function RendirModal({
   const sinEfectivo = pendiente.efectivo_cents === 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Rendición de {pendiente.mozo_name}</DialogTitle>
-        </DialogHeader>
-
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <ModalContent size="lg">
+        <ModalHeader
+          title={`Rendición de ${pendiente.mozo_name}`}
+          icon={<CheckCircle2 />}
+        />
+        <ModalBody>
         {sinEfectivo ? (
           <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70">
-            <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-              No tiene efectivo para entregar
-            </p>
+            <SectionLabel>No tiene efectivo para entregar</SectionLabel>
             <p className="mt-1 text-sm text-zinc-600">
               Cobró todo con tarjeta, QR o transferencia — esa plata ya entró a
               la caja. Sólo queda cerrarle el período del turno.
             </p>
           </div>
         ) : (
-          <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70">
-            <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-              Efectivo que debería entregar
-            </p>
-            <p className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums">
-              {formatCurrency(pendiente.efectivo_cents)}
-            </p>
+          <AmountCard
+            label="Efectivo que debería entregar"
+            value={formatCurrency(pendiente.efectivo_cents)}
+          >
             <EfectivoPorCanal pendiente={pendiente} />
-          </div>
+          </AmountCard>
         )}
 
         <OtrosCobrosInformativo
           porMetodo={pendiente.por_metodo}
-          className="rounded-xl p-4 ring-1 ring-zinc-200/70"
+          className="mt-4 rounded-xl p-4 ring-1 ring-zinc-200/70"
         />
 
         {/* Spec 177 · Parte B — que salga plata del cajón no puede ser una
@@ -681,14 +679,16 @@ function RendirModal({
             />
           </div>
         )}
+        </ModalBody>
 
-        <DialogFooter>
+        <ModalFooter>
           {/* Sin efectivo no hay nada que «no entregar»: la salida de deuda
               declarada (spec 139 · D1) no se ofrece, porque una deuda de $0
               avisada al dueño es ruido y asusta a quien la registra. */}
           {!sinEfectivo && (
             <Button
-              variant="ghost"
+              variant="outline"
+              size="xl"
               onClick={() => setNoEntrego((v) => !v)}
               className={cn(noEntrego && "text-zinc-900")}
             >
@@ -696,7 +696,8 @@ function RendirModal({
             </Button>
           )}
           <Button
-            variant={noEntrego ? "destructive" : "default"}
+            size="xl"
+            variant={noEntrego ? "destructive-solid" : "default"}
             disabled={
               sinEfectivo
                 ? false
@@ -744,8 +745,8 @@ function RendirModal({
                 ? "Marcar como no entregó"
                 : "Registrar rendición"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,7 @@ export function MovimientoModal({
   requiereMotivo,
   ctaLabel,
   disponibleCents,
+  icon,
   onSubmit,
 }: {
   open: boolean;
@@ -47,6 +48,7 @@ export function MovimientoModal({
    * sistema; se hace pisar el freno una vez.
    */
   disponibleCents?: number;
+  icon?: React.ReactNode;
   onSubmit: (amountCents: number, reason: string | null) => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -68,16 +70,15 @@ export function MovimientoModal({
   }, [amount, open]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <p className="-mt-2 text-sm text-zinc-600">{description}</p>
-        <div className="mt-3 grid gap-4">
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <ModalContent size="sm">
+        <ModalHeader title={title} description={description} icon={icon} />
+        <ModalBody className="grid gap-4">
           <div className="grid gap-1.5">
             <Label>Monto</Label>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-zinc-400">$</span>
-              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus inputMode="decimal" className="pl-7 text-base tabular-nums" />
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">$</span>
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" autoFocus inputMode="decimal" className="h-11 pl-7 text-base tabular-nums" />
             </div>
             {excede && (
               <p className="text-xs font-semibold text-amber-700">
@@ -87,13 +88,14 @@ export function MovimientoModal({
             )}
           </div>
           <div className="grid gap-1.5">
-            <Label>Motivo{requiereMotivo && <span className="ml-1 text-rose-600">*</span>}</Label>
+            <Label>Motivo{requiereMotivo && <span className="ml-1 text-destructive">*</span>}</Label>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder={requiereMotivo ? "Ej: depósito en banco / pago proveedor" : "Opcional"} />
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" size="xl" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
+            size="xl"
             disabled={!canSubmit}
             onClick={() => {
               if (excede && !confirmando) {
@@ -107,8 +109,8 @@ export function MovimientoModal({
               ? `Sacar igual ${formatCurrency(cents)}`
               : ctaLabel}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }

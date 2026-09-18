@@ -4,15 +4,17 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { Ban } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import { DialogTrigger } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { isOnlinePendingAdvance, type OrderStatus } from "@/lib/orders/status";
@@ -116,7 +118,7 @@ export function OrderDetailActions({
           {advanceLabel}
         </Button>
       )}
-      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <Modal open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogTrigger
           render={
             <Button variant="outline" disabled={pending}>
@@ -124,38 +126,40 @@ export function OrderDetailActions({
             </Button>
           }
         />
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancelar pedido</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="cancel-reason">Motivo</Label>
-            <Textarea
-              id="cancel-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Sin stock, zona fuera de cobertura, etc."
-              maxLength={500}
-            />
-          </div>
-          <DialogFooter>
+        <ModalContent size="sm">
+          <ModalHeader icon={<Ban />} tone="danger" title="Cancelar pedido" />
+          <ModalBody>
+            <div className="grid gap-2">
+              <Label htmlFor="cancel-reason">Motivo</Label>
+              <Textarea
+                id="cancel-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Sin stock, zona fuera de cobertura, etc."
+                maxLength={500}
+              />
+            </div>
+          </ModalBody>
+          <ModalFooter>
             <Button
               variant="outline"
+              size="xl"
               onClick={() => setCancelOpen(false)}
               disabled={pending}
             >
               Volver
             </Button>
             <Button
-              variant="destructive"
+              variant="destructive-solid"
+              size="xl"
               onClick={handleCancel}
               disabled={pending}
             >
               Cancelar pedido
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

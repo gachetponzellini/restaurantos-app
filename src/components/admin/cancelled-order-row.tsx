@@ -9,12 +9,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
 import { deleteOrder } from "@/lib/admin/order-delete-actions";
 import { formatCurrency } from "@/lib/currency";
 
@@ -91,35 +91,39 @@ export function CancelledOrderRow({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Eliminar pedido #{order.daily_number}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-muted-foreground text-sm">
-            Se borra permanentemente — incluyendo ítems, línea de tiempo y
-            cualquier dato asociado. No se puede deshacer.
-          </p>
-          <DialogFooter>
+      <Modal open={open} onOpenChange={setOpen}>
+        <ModalContent size="sm">
+          <ModalHeader
+            icon={<Trash2 />}
+            tone="danger"
+            title={`Eliminar pedido #${order.daily_number}`}
+          />
+          <ModalBody>
+            <p className="text-muted-foreground text-sm">
+              Se borra permanentemente — incluyendo ítems, línea de tiempo y
+              cualquier dato asociado. No se puede deshacer.
+            </p>
+          </ModalBody>
+          <ModalFooter>
             <Button
               variant="outline"
+              size="xl"
               onClick={() => setOpen(false)}
               disabled={pending}
             >
               Volver
             </Button>
             <Button
-              variant="destructive"
+              variant="destructive-solid"
+              size="xl"
               onClick={handleDelete}
               disabled={pending}
             >
               {pending ? "Eliminando…" : "Eliminar"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </>
   );
 }

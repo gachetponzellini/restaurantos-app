@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Minus, Plus, Users, X } from "lucide-react";
+import { Minus, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { CustomerFields } from "@/components/shared/customer-fields";
 import { guardarDatosMesa } from "@/lib/mozo/datos-mesa";
 import { MAX_PARTY_SIZE, MIN_PARTY_SIZE } from "@/lib/mozo/party-size-keys";
+import { Button } from "@/components/ui/button";
+import { InlineModal, ModalBody, ModalFooter, ModalHeader } from "@/components/ui/modal";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
 
 /** Los taps directos; para más se usa el `+`. */
@@ -196,54 +198,27 @@ export function CargarClienteModal({
   };
 
   return (
-    <div
-      className={`${overlay} inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4`}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="font-heading text-lg leading-tight font-bold">
-              Cliente · {tableLabel}
-            </h3>
-            <p className="mt-0.5 text-sm text-zinc-500">
-              Todo opcional. Si dejás teléfono, entra al CRM.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="-mt-1 -mr-1 rounded-full p-2 text-zinc-500 transition active:scale-95 active:bg-zinc-100"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <CustomerFields
-            slug={slug}
-            idPrefix="datos-mesa"
-            name={name}
-            phone={phone}
-            onNameChange={setName}
-            onPhoneChange={setPhone}
-            autoFocus
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={guardar}
-          disabled={pending}
-          className="mt-4 flex h-12 w-full items-center justify-center rounded-2xl bg-emerald-600 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
-        >
+    <InlineModal overlay={overlay} zIndexClassName="z-50" onClose={onClose}>
+      <ModalHeader
+        title={`Cliente · ${tableLabel}`}
+        description="Todo opcional. Si dejás teléfono, entra al CRM."
+      />
+      <ModalBody>
+        <CustomerFields
+          slug={slug}
+          idPrefix="datos-mesa"
+          name={name}
+          phone={phone}
+          onNameChange={setName}
+          onPhoneChange={setPhone}
+          autoFocus
+        />
+      </ModalBody>
+      <ModalFooter>
+        <Button size="xl" onClick={guardar} disabled={pending}>
           {pending ? "Guardando…" : "Guardar"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </ModalFooter>
+    </InlineModal>
   );
 }

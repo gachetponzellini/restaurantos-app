@@ -4,12 +4,13 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import { AmountCard } from "@/components/ui/amount-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -95,83 +96,76 @@ export function CobrarSaldoModal({
     (metodo === "cash" && !cajaId);
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Pago de {deudor.name ?? deudor.phone}</DialogTitle>
-        </DialogHeader>
+    <Modal open onOpenChange={(o) => !o && onClose()}>
+      <ModalContent size="md">
+        <ModalHeader title={`Pago de ${deudor.name ?? deudor.phone}`} />
+        <ModalBody className="grid gap-4">
+          <AmountCard label="Debe" value={formatCurrency(deudor.saldo_cents)} />
 
-        <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70">
-          <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
-            Debe
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums">
-            {formatCurrency(deudor.saldo_cents)}
-          </p>
-        </div>
-
-        <div className="mt-4 grid gap-1.5">
-          <Label htmlFor="cobranza-monto">Cuánto paga</Label>
-          <Input
-            id="cobranza-monto"
-            inputMode="decimal"
-            value={monto}
-            onChange={(e) => setMonto(e.target.value)}
-            className="text-base tabular-nums"
-            autoFocus
-          />
-        </div>
-
-        <div className="mt-3 grid gap-1.5">
-          <Label>Cómo paga</Label>
-          <SelectorDeMetodo
-            metodos={metodos}
-            // Sin ajuste por método: lo que entra es lo que se debe. Recargarle
-            // un 10 % al que viene a saldar cambiaría la deuda al cobrarla, y el
-            // server rechaza cobrar más que el saldo.
-            methodConfigs={[]}
-            baseCents={deudor.saldo_cents}
-            value={metodo}
-            onChange={(m) => setMetodo(m as MetodoDeCobranza)}
-            zona={zonaMetodos}
-          />
-        </div>
-
-        {/* Sólo el efectivo pide caja: lo demás no toca el cajón, y preguntarlo
-            sugeriría que el arqueo lo va a esperar. */}
-        {metodo === "cash" && cajas.length > 0 && (
-          <div className="mt-3 grid gap-1.5">
-            <Label htmlFor="cobranza-caja">Entra en</Label>
-            <select
-              id="cobranza-caja"
-              value={cajaId}
-              onChange={(e) => setCajaId(e.target.value)}
-              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base"
-            >
-              {cajas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-1.5">
+            <Label htmlFor="cobranza-monto">Cuánto paga</Label>
+            <Input
+              id="cobranza-monto"
+              inputMode="decimal"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              className="text-base tabular-nums"
+              autoFocus
+            />
           </div>
-        )}
 
-        <div className="mt-3 grid gap-1.5">
-          <Label htmlFor="cobranza-notas">Nota (opcional)</Label>
-          <Input
-            id="cobranza-notas"
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            placeholder="Ej: pagó por transferencia el viernes"
-          />
-        </div>
+          <div className="grid gap-1.5">
+            <Label>Cómo paga</Label>
+            <SelectorDeMetodo
+              metodos={metodos}
+              // Sin ajuste por método: lo que entra es lo que se debe. Recargarle
+              // un 10 % al que viene a saldar cambiaría la deuda al cobrarla, y el
+              // server rechaza cobrar más que el saldo.
+              methodConfigs={[]}
+              baseCents={deudor.saldo_cents}
+              value={metodo}
+              onChange={(m) => setMetodo(m as MetodoDeCobranza)}
+              zona={zonaMetodos}
+            />
+          </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+          {/* Sólo el efectivo pide caja: lo demás no toca el cajón, y preguntarlo
+              sugeriría que el arqueo lo va a esperar. */}
+          {metodo === "cash" && cajas.length > 0 && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="cobranza-caja">Entra en</Label>
+              <select
+                id="cobranza-caja"
+                value={cajaId}
+                onChange={(e) => setCajaId(e.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base"
+              >
+                {cajas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="cobranza-notas">Nota (opcional)</Label>
+            <Input
+              id="cobranza-notas"
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              placeholder="Ej: pagó por transferencia el viernes"
+            />
+          </div>
+        </ModalBody>
+
+        <ModalFooter>
+          <Button variant="outline" size="xl" onClick={onClose}>
             Cancelar
           </Button>
           <Button
+            size="xl"
             disabled={invalido || pending}
             onClick={() =>
               startTransition(async () => {
@@ -198,8 +192,8 @@ export function CobrarSaldoModal({
           >
             {pending ? "Registrando…" : "Registrar pago"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 }
