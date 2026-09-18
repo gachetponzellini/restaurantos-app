@@ -118,6 +118,7 @@ export function PlanoDelDia({
   services = [],
   asignando,
   onAsignarFin,
+  onAsignarMesa,
   onChanged,
 }: {
   slug: string;
@@ -138,6 +139,8 @@ export function PlanoDelDia({
   asignando?: { id: string; nombre: string; partySize: number } | null;
   /** Se llama al asignar o al cancelar: la página apaga el modo. */
   onAsignarFin?: () => void;
+  /** Prende el modo «elegir mesa» para una reserva sin mesa de la lista. */
+  onAsignarMesa?: (r: { id: string; nombre: string; partySize: number }) => void;
   onChanged?: () => void;
 }) {
   const router = useRouter();
@@ -404,6 +407,8 @@ export function PlanoDelDia({
           cubiertos={genericas.cubiertos}
           timezone={timezone}
           floorPlans={floorPlans}
+          asignandoId={asignando?.id ?? null}
+          onAsignarMesa={onAsignarMesa}
         />
       )}
 
@@ -806,11 +811,15 @@ function SinMesa({
   cubiertos,
   timezone,
   floorPlans,
+  asignandoId,
+  onAsignarMesa,
 }: {
   reservas: ReservaEnPlano[];
   cubiertos: number;
   timezone: string;
   floorPlans: Array<{ id: string; name: string }>;
+  asignandoId: string | null;
+  onAsignarMesa?: (r: { id: string; nombre: string; partySize: number }) => void;
 }) {
   const [abierto, setAbierto] = useState(true);
   const salonDe = (id?: string | null) =>
@@ -869,6 +878,24 @@ function SinMesa({
                   >
                     {STATUS_LABEL[r.status]}
                   </span>
+                )}
+                {onAsignarMesa && r.status !== "seated" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={asignandoId === r.id ? "default" : "outline"}
+                    className={cn("h-7 px-2.5 text-[11px]", !STATUS_LABEL[r.status] && "ml-auto")}
+                    disabled={asignandoId === r.id}
+                    onClick={() =>
+                      onAsignarMesa({
+                        id: r.id,
+                        nombre: r.customer_name,
+                        partySize: r.party_size,
+                      })
+                    }
+                  >
+                    {asignandoId === r.id ? "Elegí la mesa" : "Asignar mesa"}
+                  </Button>
                 )}
                 {r.notes ? (
                   <span className="w-full truncate text-[11px] italic text-muted-foreground">

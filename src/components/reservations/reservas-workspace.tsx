@@ -127,6 +127,7 @@ export function ReservasWorkspace({
               services={services}
               asignando={asignando}
               onAsignarFin={() => setAsignando(null)}
+              onAsignarMesa={empezarAsignacion}
               onChanged={onChanged ? () => onChanged(date) : undefined}
             />
           }
