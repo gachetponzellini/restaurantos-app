@@ -6,6 +6,7 @@ import {
   ReservaForm,
   type TablePickerBridge,
 } from "@/components/admin/local/new-reservation-modal";
+import { Button } from "@/components/ui/button";
 import type { FloorTable } from "@/lib/reservations/types";
 
 /**
@@ -34,20 +35,23 @@ export function NuevaReservaPanel({
           <CalendarPlus className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Reservas
           </p>
-          <h3 className="font-heading text-base font-bold leading-tight text-zinc-900">
+          <h3 className="font-heading text-base font-bold leading-tight text-foreground">
             Nueva reserva
           </h3>
         </div>
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="rounded-full p-2 text-zinc-500 transition active:bg-zinc-100"
+          className="rounded-full"
           aria-label="Cerrar nueva reserva"
         >
           <X className="h-5 w-5" />
-        </button>
+        </Button>
       </header>
 
       <ReservaForm
@@ -56,7 +60,7 @@ export function NuevaReservaPanel({
         floorPlanId={floorPlanId}
         onDone={onClose}
         tablePicker={tablePicker}
-        footerClassName="border-border/60 shrink-0 border-t bg-white p-3"
+        footerClassName="border-border/60 shrink-0 border-t bg-card p-3"
       />
     </div>
   );

@@ -30,7 +30,7 @@ export function CustomerSearchField({
   id = "cliente",
   autoFocus = false,
   placeholder = "Buscar cliente o escribir un nombre…",
-  inputClassName = "h-12 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-base",
+  inputClassName = "h-12 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base",
 }: {
   slug: string;
   value: string;
@@ -129,7 +129,7 @@ export function CustomerSearchField({
 
   return (
     <div ref={boxRef} className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70" />
       <input
         ref={inputRef}
         id={id}
@@ -142,13 +142,13 @@ export function CustomerSearchField({
         autoComplete="off"
       />
       {loading && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-zinc-400">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground/70">
           Buscando…
         </span>
       )}
 
       {open && results.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white p-1 shadow-lg ring-1 ring-zinc-200">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-card p-1 shadow-lg ring-1 ring-border">
           {results.map((c, i) => (
             <li key={c.id}>
               <button
@@ -156,15 +156,15 @@ export function CustomerSearchField({
                 onClick={() => pick(c)}
                 onMouseEnter={() => setCursor(i)}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
-                  i === cursor ? "bg-zinc-100" : "hover:bg-zinc-50"
+                  i === cursor ? "bg-muted" : "hover:bg-muted/50"
                 }`}
               >
-                <User className="size-4 shrink-0 text-zinc-400" />
+                <User className="size-4 shrink-0 text-muted-foreground/70" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-zinc-900">
+                  <span className="block truncate text-sm font-semibold text-foreground">
                     {c.name?.trim() || "Sin nombre"}
                   </span>
-                  <span className="block truncate text-xs text-zinc-500">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {c.phone}
                   </span>
                 </span>

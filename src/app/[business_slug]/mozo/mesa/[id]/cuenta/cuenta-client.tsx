@@ -244,7 +244,7 @@ export function CuentaClient({
       className={cn(
         embedded
           ? "flex h-full min-h-0 flex-col"
-          : "min-h-dvh bg-zinc-100/60 pb-32",
+          : "min-h-dvh bg-muted/60 pb-32",
       )}
     >
       {embedded ? (
@@ -257,39 +257,42 @@ export function CuentaClient({
               Cuenta
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="hover:bg-muted/60 flex-shrink-0 rounded-full p-1.5 text-zinc-500"
+            className="flex-shrink-0"
             aria-label="Cerrar cuenta"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </header>
       ) : (
-        <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-border bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-screen-md items-center gap-3 px-4 py-3">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-lg"
               onClick={() => router.push(backHref)}
-              className="inline-flex size-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
               aria-label="Volver al salón"
             >
               <ArrowRight className="size-4 rotate-180" />
-            </button>
+            </Button>
             <div className="min-w-0 flex-1">
-              <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+              <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 {tableLabel}
               </p>
-              <h1 className="text-base font-semibold tracking-tight text-zinc-900">
+              <h1 className="text-base font-semibold tracking-tight text-foreground">
                 Cuenta
               </h1>
             </div>
             <div className="text-right">
-              <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+              <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                 Total
               </p>
-              <p className="text-lg font-bold tracking-tight text-zinc-900 tabular-nums">
+              <p className="text-lg font-bold tracking-tight text-foreground tabular-nums">
                 {formatCurrency(total)}
               </p>
             </div>
@@ -319,21 +322,21 @@ export function CuentaClient({
           )}
 
           {/* Items */}
-          <section className="rounded-2xl bg-white ring-1 ring-zinc-200/70">
+          <section className="rounded-2xl bg-card ring-1 ring-border/70">
             <div className="flex items-center justify-between px-4 py-3">
               <div>
-                <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+                <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                   Detalle
                 </p>
-                <h2 className="text-sm font-semibold tracking-tight text-zinc-900">
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">
                   {items.filter((it) => it.cancelled_at === null).length} items
                 </h2>
               </div>
-              <p className="text-sm font-semibold text-zinc-900 tabular-nums">
+              <p className="text-sm font-semibold text-foreground tabular-nums">
                 {formatCurrency(subtotal)}
               </p>
             </div>
-            <ul className="divide-y divide-zinc-100 border-t border-zinc-100">
+            <ul className="divide-y divide-border/60 border-t border-border/60">
               {items.map((it) => {
                 const cancelled = it.cancelled_at !== null;
                 return (
@@ -345,13 +348,13 @@ export function CuentaClient({
                     )}
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <span className="mt-0.5 inline-flex size-7 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-700 tabular-nums">
+                      <span className="mt-0.5 inline-flex size-7 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground/80 tabular-nums">
                         {it.quantity}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p
                           className={cn(
-                            "text-sm font-medium text-zinc-900",
+                            "text-sm font-medium text-foreground",
                             cancelled && "line-through",
                           )}
                         >
@@ -365,7 +368,7 @@ export function CuentaClient({
                           </span>
                         )}
                         {it.notes && (
-                          <p className="mt-0.5 text-xs text-zinc-500">
+                          <p className="mt-0.5 text-xs text-muted-foreground">
                             {it.notes}
                           </p>
                         )}
@@ -392,21 +395,22 @@ export function CuentaClient({
                     <div className="flex items-center gap-1">
                       <span
                         className={cn(
-                          "text-sm font-medium text-zinc-900 tabular-nums",
+                          "text-sm font-medium text-foreground tabular-nums",
                           cancelled && "line-through",
                         )}
                       >
                         {formatCurrency(it.subtotal_cents)}
                       </span>
                       {!cancelled && canCancelItem(role) && (
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => setCancelarItemId(it.id)}
-                          className="inline-flex size-7 items-center justify-center rounded-full text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600"
                           aria-label="Cancelar item"
                         >
                           <Trash2 className="size-3.5" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </li>
@@ -420,17 +424,17 @@ export function CuentaClient({
             scrollear el panel para llegar a «Pasar a cobro». */}
           <div className="grid items-start gap-3 @2xl:grid-cols-2">
             {/* Propina */}
-            <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70">
+            <section className="rounded-2xl bg-card p-4 ring-1 ring-border/70">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+                  <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                     Propina
                   </p>
-                  <h2 className="text-sm font-semibold tracking-tight text-zinc-900">
+                  <h2 className="text-sm font-semibold tracking-tight text-foreground">
                     Sugerencia para el mozo
                   </h2>
                 </div>
-                <p className="text-sm font-semibold text-zinc-900 tabular-nums">
+                <p className="text-sm font-semibold text-foreground tabular-nums">
                   {tipCents > 0 ? `+ ${formatCurrency(tipCents)}` : "—"}
                 </p>
               </div>
@@ -443,8 +447,8 @@ export function CuentaClient({
                     className={cn(
                       "rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 transition",
                       tipPercent === p
-                        ? "bg-zinc-900 text-white ring-zinc-900"
-                        : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+                        ? "bg-primary text-white ring-primary"
+                        : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
                     )}
                   >
                     {p === 0 ? "Sin propina" : `${p}%`}
@@ -456,8 +460,8 @@ export function CuentaClient({
                   className={cn(
                     "rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 transition",
                     tipPercent === "custom"
-                      ? "bg-zinc-900 text-white ring-zinc-900"
-                      : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+                      ? "bg-primary text-white ring-primary"
+                      : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
                   )}
                 >
                   Custom
@@ -480,13 +484,13 @@ export function CuentaClient({
             </section>
 
             {/* Descuento */}
-            <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70">
+            <section className="rounded-2xl bg-card p-4 ring-1 ring-border/70">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+                  <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                     Descuento
                   </p>
-                  <h2 className="text-sm font-semibold tracking-tight text-zinc-900">
+                  <h2 className="text-sm font-semibold tracking-tight text-foreground">
                     Tu rol permite hasta {tramoDescuento}
                   </h2>
                 </div>
@@ -513,7 +517,7 @@ export function CuentaClient({
                   className="w-24"
                   inputMode="decimal"
                 />
-                <span className="text-sm text-zinc-500">%</span>
+                <span className="text-sm text-muted-foreground">%</span>
               </div>
               {cantApplyDiscount && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[0.65rem] font-semibold text-rose-700">
@@ -523,11 +527,11 @@ export function CuentaClient({
               )}
               {discountCents > 0 && (
                 <div className="mt-3 grid gap-2">
-                  <p className="text-xs font-medium text-zinc-700">
+                  <p className="text-xs font-medium text-foreground/80">
                     Motivo
                     <span className="ml-1 text-rose-600">*</span>
                     {faltaMotivo && (
-                      <span className="ml-2 font-normal text-zinc-500">
+                      <span className="ml-2 font-normal text-muted-foreground">
                         elegí uno para poder cobrar
                       </span>
                     )}
@@ -543,8 +547,8 @@ export function CuentaClient({
                         className={cn(
                           "rounded-lg px-2.5 py-2 text-xs font-medium ring-1 transition",
                           discountReasonValue === r.value
-                            ? "bg-zinc-900 text-white ring-zinc-900"
-                            : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+                            ? "bg-primary text-white ring-primary"
+                            : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
                         )}
                       >
                         {r.label}
@@ -564,7 +568,7 @@ export function CuentaClient({
           </div>
 
           {/* Resumen + dividir */}
-          <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70">
+          <section className="rounded-2xl bg-card p-4 ring-1 ring-border/70">
             <ResumenRow label="Subtotal" value={formatCurrency(subtotal)} />
             {tipCents > 0 && (
               <ResumenRow
@@ -579,35 +583,39 @@ export function CuentaClient({
                 tone="discount"
               />
             )}
-            <div className="mt-2 flex items-baseline justify-between border-t border-zinc-200 pt-2">
-              <span className="text-sm font-semibold text-zinc-900">Total</span>
-              <span className="text-xl font-bold tracking-tight text-zinc-900 tabular-nums">
+            <div className="mt-2 flex items-baseline justify-between border-t border-border pt-2">
+              <span className="text-sm font-semibold text-foreground">Total</span>
+              <span className="text-xl font-bold tracking-tight text-foreground tabular-nums">
                 {formatCurrency(total)}
               </span>
             </div>
             <div className="mt-4 grid gap-2 @lg:grid-cols-2">
               {/* Spec 080: el papel que se le da a la mesa. Se puede tocar las
                 veces que haga falta — agregan un café y la vuelven a pedir. */}
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="lg"
                 onClick={handleImprimir}
                 disabled={total === 0 || imprimiendo}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
+                className="w-full"
               >
                 <Printer className="size-4" />
                 {imprimiendo ? "Imprimiendo…" : "Imprimir cuenta"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="lg"
                 onClick={() => setDividirOpen(true)}
                 disabled={total === 0}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
+                className="w-full"
               >
                 <Scissors className="size-4" />
                 {splitsVivos.length > 0
                   ? `Volver a dividir (${splitsVivos.length})`
                   : "Dividir cuenta"}
-              </button>
+              </Button>
             </div>
           </section>
         </PageShell>
@@ -618,17 +626,18 @@ export function CuentaClient({
         className={cn(
           embedded
             ? "border-border/60 border-t p-3"
-            : "fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur",
+            : "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 backdrop-blur",
         )}
       >
         <div className={cn(!embedded && "mx-auto max-w-screen-md p-4")}>
-          <button
+          <Button
             type="button"
+            size="xl"
             onClick={handleConfirmar}
             disabled={
               cantApplyDiscount || faltaMotivo || total === 0 || isPending
             }
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-base font-semibold transition hover:brightness-95 disabled:opacity-50"
+            className="w-full"
             style={{
               background: "var(--brand, #18181B)",
               color: "var(--brand-foreground, white)",
@@ -637,7 +646,7 @@ export function CuentaClient({
             <Receipt className="size-5" />
             {dirty ? "Guardar y pasar a cobro" : "Pasar a cobro"}
             <span className="ml-1 tabular-nums">{formatCurrency(total)}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -705,11 +714,11 @@ function ResumenRow({
 }) {
   return (
     <div className="flex items-baseline justify-between py-0.5 text-sm">
-      <span className="text-zinc-600">{label}</span>
+      <span className="text-foreground/70">{label}</span>
       <span
         className={cn(
           "tabular-nums",
-          tone === "discount" ? "text-rose-600" : "text-zinc-700",
+          tone === "discount" ? "text-rose-600" : "text-foreground/80",
         )}
       >
         {value}

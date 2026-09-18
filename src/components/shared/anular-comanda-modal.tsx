@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { cancelarComanda } from "@/lib/comandas/actions";
 
 /**
@@ -84,23 +85,25 @@ export function AnularComandaModal({
           className="border-input bg-background focus-visible:ring-ring w-full rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
         />
         <DialogFooter>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             onClick={onClose}
             disabled={pending}
-            className="text-muted-foreground ring-border/70 hover:bg-muted/60 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold ring-1 transition disabled:opacity-50"
           >
             Volver
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive-solid"
+            size="lg"
             onClick={submit}
             disabled={pending}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
           >
             <Ban className="size-4" strokeWidth={2.5} />
             {pending ? "Anulando…" : "Anular comanda"}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

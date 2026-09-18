@@ -202,10 +202,10 @@ export function CajaAdminBoard({
               />
             </div>
             <div>
-              <h3 className="text-xl font-semibold tracking-tight text-zinc-900">
+              <h3 className="text-xl font-semibold tracking-tight text-foreground">
                 Sin cajas configuradas
               </h3>
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-1 text-sm text-foreground/70">
                 Creá una caja desde la configuración para empezar a operar.
               </p>
             </div>
@@ -243,18 +243,20 @@ export function CajaAdminBoard({
             }))}
           />
         ) : (
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Refresco cada 30s
           </p>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
           onClick={resincronizar}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
           aria-label="Refrescar"
         >
           <RefreshCw className="size-3.5" />
-        </button>
+        </Button>
       </div>
 
       <CajaCard
@@ -270,7 +272,7 @@ export function CajaAdminBoard({
       <div className="pt-1 text-center">
         <Link
           href={`/${slug}/admin/caja`}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
         >
           <Settings className="size-3" />
           Configurar cajas
@@ -355,7 +357,7 @@ function CajaCard({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-lg font-semibold tracking-tight text-zinc-900">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">
               {caja.name}
             </h3>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-800">
@@ -363,17 +365,17 @@ function CajaCard({
               Activa
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Período activo {periodoLabel}
             {/* Spec 149 · acá decía «· último corte registrado», que anunciaba
                 un dato sin mostrarlo ni llevar a ningún lado. Ahora es la
                 entrada al cierre archivado. */}
             {caja.ultimo_corte && (
               <>
-                <span className="mx-1 text-zinc-300">·</span>
+                <span className="mx-1 text-muted-foreground/50">·</span>
                 <Link
                   href={`/${slug}/admin/caja/cierres?caja=${caja.id}`}
-                  className="font-medium underline underline-offset-2 transition hover:text-zinc-900"
+                  className="font-medium underline underline-offset-2 transition hover:text-foreground"
                 >
                   ver cierres anteriores
                 </Link>
@@ -382,50 +384,44 @@ function CajaCard({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="lg"
             onClick={() => setSangriaOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200"
           >
             <ArrowDownToLine className="size-3.5" /> Sangría
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="lg"
             onClick={() => setIngresoOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200"
           >
             <ArrowUpFromLine className="size-3.5" /> Ingreso
-          </button>
-          <button
-            type="button"
-            onClick={() => setCorteOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition hover:brightness-95"
-            style={{
-              background: "var(--brand, #18181B)",
-              color: "var(--brand-foreground, white)",
-            }}
-          >
+          </Button>
+          <Button type="button" size="lg" onClick={() => setCorteOpen(true)}>
             <Lock className="size-3.5" /> Cerrar caja
-          </button>
+          </Button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div
-          className="rounded-2xl p-5 ring-1 ring-zinc-200/70"
+          className="rounded-2xl p-5 ring-1 ring-border/70"
           style={{ background: "var(--brand-soft, #F4F4F5)" }}
         >
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground/70">
             En la caja deberías tener
           </p>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums">
+          <p className="mt-1 text-3xl font-bold tracking-tight text-foreground tabular-nums">
             {cargandoStats ? (
-              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-zinc-900/10 align-middle" />
+              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-primary/10 align-middle" />
             ) : (
               formatCurrency(expected)
             )}
           </p>
-          <p className="mt-1 text-xs text-zinc-600">
+          <p className="mt-1 text-xs text-foreground/70">
             {/* Mientras los stats no llegaron no se sabe la apertura: un
                 «Arranca en $0» prematuro es la misma mentira que el «$0» de
                 arriba (issue #189), así que se reserva el alto y no se dice
@@ -437,18 +433,18 @@ function CajaCard({
                 : "Arranca en $0 + movimientos del período"}
           </p>
         </div>
-        <div className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <div className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Cobrado en el período
           </p>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-zinc-900 tabular-nums">
+          <p className="mt-1 text-3xl font-bold tracking-tight text-foreground tabular-nums">
             {cargandoStats ? (
-              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-zinc-900/10 align-middle" />
+              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-primary/10 align-middle" />
             ) : (
               formatCurrency(ventas)
             )}
           </p>
-          <p className="mt-1 text-xs text-zinc-600">
+          <p className="mt-1 text-xs text-foreground/70">
             {cargandoStats ? (
               " "
             ) : (
@@ -466,8 +462,8 @@ function CajaCard({
       {porMetodo && cobros > 0 && <VentasPorMetodo porMetodo={porMetodo} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Cobros por origen
           </p>
           {porOrigen && porOrigenYMetodo && cobros > 0 ? (
@@ -476,13 +472,13 @@ function CajaCard({
               porOrigenYMetodo={porOrigenYMetodo}
             />
           ) : (
-            <p className="mt-3 text-xs text-zinc-500">Todavía no hubo cobros.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Todavía no hubo cobros.</p>
           )}
         </section>
 
-        <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
+        <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Movimientos del período
             </p>
             <div className="flex items-baseline gap-2">
@@ -490,21 +486,21 @@ function CajaCard({
                   histórico con filtros, los anulados y la corrección. */}
               <Link
                 href={`/${slug}/admin/caja/movimientos?caja=${caja.id}`}
-                className="text-xs font-semibold text-zinc-500 underline-offset-2 hover:text-zinc-800 hover:underline"
+                className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground/90 hover:underline"
               >
                 Ver todos
               </Link>
-              <p className="text-xs font-semibold tabular-nums text-zinc-700">
+              <p className="text-xs font-semibold tabular-nums text-foreground/80">
                 {entries.length}
               </p>
             </div>
           </div>
           {entries.length === 0 ? (
-            <p className="mt-3 text-xs text-zinc-500">
+            <p className="mt-3 text-xs text-muted-foreground">
               Todavía no hubo movimientos.
             </p>
           ) : (
-            <ul className="mt-3 max-h-[28rem] divide-y divide-zinc-100 overflow-y-auto rounded-lg ring-1 ring-zinc-200/70">
+            <ul className="mt-3 max-h-[28rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
               {entries.map((e) => {
                 const dia = e.createdAt.slice(0, 10);
                 const href = `/${slug}/admin/caja/movimientos?caja=${caja.id}&gran=dia&fecha=${dia}`;
@@ -592,7 +588,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
       <Link
         href={href}
         className={cn(
-          "flex items-start gap-3 px-3 py-2.5 transition hover:bg-zinc-50",
+          "flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50",
           mov.cancelled_at && "opacity-50",
         )}
       >
@@ -610,16 +606,16 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-zinc-900">
+          <p className="truncate text-sm font-semibold text-foreground">
             {MOVIMIENTO_LABEL[mov.kind]}
-            <span className="ml-1.5 text-[10px] font-normal text-zinc-400 tabular-nums">{time}</span>
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/70 tabular-nums">{time}</span>
           </p>
           <p className={cn("shrink-0 text-sm font-bold tabular-nums", sale ? "text-rose-700" : "text-emerald-700")}>
             {sale ? "−" : "+"}
             {formatCurrency(mov.amount_cents)}
           </p>
         </div>
-        {mov.reason && <p className="mt-0.5 truncate text-xs text-zinc-500">{mov.reason}</p>}
+        {mov.reason && <p className="mt-0.5 truncate text-xs text-muted-foreground">{mov.reason}</p>}
       </div>
       </Link>
     </li>
@@ -644,26 +640,26 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
       {/* La línea es accionable: lleva al libro, que es donde se corrige. */}
       <Link
         href={href}
-        className="flex items-start gap-3 px-3 py-2.5 transition hover:bg-zinc-50"
+        className="flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50"
       >
-      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
+      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
         <Icon className="size-3.5" strokeWidth={2.25} />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-zinc-900">
+          <p className="truncate text-sm font-semibold text-foreground">
             {origen}
-            <span className="ml-1.5 text-[10px] font-normal text-zinc-400 tabular-nums">{time}</span>
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/70 tabular-nums">{time}</span>
           </p>
-          <p className="shrink-0 text-sm font-bold tabular-nums text-zinc-900">
+          <p className="shrink-0 text-sm font-bold tabular-nums text-foreground">
             +{formatCurrency(payment.amount_cents)}
           </p>
         </div>
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-xs text-zinc-500">
+          <p className="truncate text-xs text-muted-foreground">
             {METHOD_LABEL[payment.method]}
             {payment.attributed_mozo_name && (
-              <><span className="mx-1 text-zinc-300">·</span>{payment.attributed_mozo_name}</>
+              <><span className="mx-1 text-muted-foreground/50">·</span>{payment.attributed_mozo_name}</>
             )}
             {/* spec 147 — el cobro está bien; lo que falta es el papel de ARCA.
                 Mismo lenguaje visual que la comanda que no imprimió (spec 33). */}
@@ -720,13 +716,13 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
   const mozos = agruparCobrosPorMozo(payments);
 
   return (
-    <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+    <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Cobrado por empleado
       </p>
 
       {mozos.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">Todavía no hubo cobros.</p>
+        <p className="mt-3 text-sm text-muted-foreground">Todavía no hubo cobros.</p>
       ) : (
         <ul className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
           {mozos.map((m) => {
@@ -734,7 +730,7 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
             return (
               <li
                 key={m.mozo_name}
-                className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70"
+                className="rounded-xl bg-muted/50 p-4 ring-1 ring-border/70"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -742,21 +738,21 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
                       className={cn(
                         "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold",
                         sinMozo
-                          ? "bg-white text-zinc-400 ring-1 ring-zinc-200"
-                          : "bg-zinc-200 text-zinc-700",
+                          ? "bg-card text-muted-foreground/70 ring-1 ring-border"
+                          : "bg-border text-foreground/80",
                       )}
                     >
                       {sinMozo ? "—" : iniciales(m.mozo_name)}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-900">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {m.mozo_name}
                       </p>
-                      <p className="text-xs text-zinc-500 tabular-nums">
+                      <p className="text-xs text-muted-foreground tabular-nums">
                         {m.cobros_count} cobro{m.cobros_count === 1 ? "" : "s"}
                         {m.propinas_cents > 0 && (
                           <>
-                            <span className="mx-1 text-zinc-300">·</span>
+                            <span className="mx-1 text-muted-foreground/50">·</span>
                             <span className="text-emerald-700">
                               {formatCurrency(m.propinas_cents)} de propina
                             </span>
@@ -765,7 +761,7 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
                       </p>
                     </div>
                   </div>
-                  <p className="shrink-0 text-base font-bold tracking-tight text-zinc-900 tabular-nums">
+                  <p className="shrink-0 text-base font-bold tracking-tight text-foreground tabular-nums">
                     {formatCurrency(m.total_cents)}
                   </p>
                 </div>
@@ -776,17 +772,17 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
                       key={f.method}
                       className="flex items-baseline justify-between gap-2 text-xs"
                     >
-                      <span className="inline-flex items-baseline gap-1.5 text-zinc-600">
+                      <span className="inline-flex items-baseline gap-1.5 text-foreground/70">
                         <span
                           className="inline-block size-2 shrink-0 translate-y-px rounded-full"
                           style={{ background: METHOD_COLOR[f.method] }}
                         />
                         {METHOD_LABEL[f.method]}
-                        <span className="text-zinc-400 tabular-nums">
+                        <span className="text-muted-foreground/70 tabular-nums">
                           ×{f.count}
                         </span>
                       </span>
-                      <span className="font-semibold tabular-nums text-zinc-800">
+                      <span className="font-semibold tabular-nums text-foreground/90">
                         {formatCurrency(f.total_cents)}
                       </span>
                     </li>
@@ -796,11 +792,11 @@ function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
                 {/* Sólo el efectivo se rinde (spec 151). Sin mozo no hay a
                     quién pedírselo: esa plata la cobró la caja. */}
                 {!sinMozo && m.a_rendir_cents > 0 && (
-                  <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-zinc-200/70 pt-2.5 text-xs">
-                    <span className="font-medium text-zinc-600">
+                  <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-border/70 pt-2.5 text-xs">
+                    <span className="font-medium text-foreground/70">
                       Efectivo a rendir
                     </span>
-                    <span className="font-semibold tabular-nums text-zinc-900">
+                    <span className="font-semibold tabular-nums text-foreground">
                       {formatCurrency(m.a_rendir_cents)}
                     </span>
                   </p>

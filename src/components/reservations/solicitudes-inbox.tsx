@@ -7,6 +7,7 @@ import { Check, Inbox, MapPin, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { ReservationEditPanel } from "@/components/reservations/reservation-edit-panel";
+import { Button } from "@/components/ui/button";
 import {
   decideReservation,
   updateReservationDetails,
@@ -133,17 +134,17 @@ export function SolicitudesInbox({
     return (
       <div
         className={cn(
-          "rounded-2xl bg-white p-6 text-center ring-1 ring-zinc-200/70",
+          "rounded-2xl bg-card p-6 text-center ring-1 ring-border/70",
           className,
         )}
       >
-        <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-zinc-100 text-zinc-400">
+        <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted text-muted-foreground/70">
           <Inbox className="h-5 w-5" />
         </div>
-        <p className="mt-2.5 text-sm font-medium text-zinc-700">
+        <p className="mt-2.5 text-sm font-medium text-foreground/80">
           No hay solicitudes esperando
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           Las reservas de la web y del chatbot aparecen acá para que las
           confirmes.
         </p>
@@ -155,7 +156,7 @@ export function SolicitudesInbox({
     <div className={cn("space-y-4", className)}>
       {dias.map((dia) => (
         <div key={dia.date}>
-          <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+          <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
             {dia.label}
           </p>
           <ul className="space-y-2">
@@ -182,36 +183,36 @@ export function SolicitudesInbox({
                 <li
                   key={s.reserva.id}
                   className={cn(
-                    "rounded-2xl bg-white p-3.5 ring-1 transition",
-                    urgente ? "ring-amber-300" : "ring-zinc-200/70",
+                    "rounded-2xl bg-card p-3.5 ring-1 transition",
+                    urgente ? "ring-amber-300" : "ring-border/70",
                     pending && "opacity-60",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span className="font-mono text-lg font-semibold tabular-nums text-zinc-900">
+                        <span className="font-mono text-lg font-semibold tabular-nums text-foreground">
                           {hora}
                         </span>
-                        <span className="truncate text-sm font-medium text-zinc-900">
+                        <span className="truncate text-sm font-medium text-foreground">
                           {s.reserva.customer_name}
                         </span>
-                        <span className="text-xs text-zinc-500">
+                        <span className="text-xs text-muted-foreground">
                           · {s.reserva.party_size}p
                         </span>
                       </div>
-                      <p className="mt-1 truncate text-[11px] text-zinc-500">
+                      <p className="mt-1 truncate text-[11px] text-muted-foreground">
                         {contexto}
                       </p>
                       {s.reserva.notes && (
-                        <p className="mt-1 line-clamp-2 text-[11px] italic text-zinc-500">
+                        <p className="mt-1 line-clamp-2 text-[11px] italic text-muted-foreground">
                           «{s.reserva.notes}»
                         </p>
                       )}
                       <p
                         className={cn(
                           "mt-1.5 text-[11px] font-medium",
-                          urgente ? "text-amber-700" : "text-zinc-400",
+                          urgente ? "text-amber-700" : "text-muted-foreground/70",
                         )}
                       >
                         {labelDeVencimiento(s.venceEn, now)}
@@ -220,11 +221,11 @@ export function SolicitudesInbox({
 
                     {s.ocupacion && (
                       <div className="w-24 shrink-0 text-right">
-                        <p className="text-[11px] leading-tight text-zinc-500">
+                        <p className="text-[11px] leading-tight text-muted-foreground">
                           {s.ocupacion.label}
                         </p>
                         {s.ocupacion.ratio != null && (
-                          <div className="ml-auto mt-1.5 h-1 w-16 overflow-hidden rounded-full bg-zinc-100">
+                          <div className="ml-auto mt-1.5 h-1 w-16 overflow-hidden rounded-full bg-muted">
                             <div
                               className={cn(
                                 "h-full rounded-full",
@@ -244,20 +245,20 @@ export function SolicitudesInbox({
 
                   {editando !== s.reserva.id && (
                     <div className="mt-2.5 flex flex-wrap gap-2">
-                      <button
+                      <Button
                         type="button"
                         onClick={() => decidir(s.reserva.id, "confirm")}
                         disabled={pending}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97] disabled:opacity-60"
                       >
                         <Check className="h-3.5 w-3.5" />
                         Confirmar
-                      </button>
+                      </Button>
                       {/* Spec 138 — sólo si le falta mesa y hay un plano al
                           lado donde elegirla. */}
                       {onAsignarMesa && !s.reserva.table_id && (
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
                           onClick={() =>
                             onAsignarMesa({
                               id: s.reserva.id,
@@ -266,23 +267,23 @@ export function SolicitudesInbox({
                             })
                           }
                           disabled={pending}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200 transition hover:bg-indigo-100 active:scale-[0.97] disabled:opacity-60"
                         >
                           <MapPin className="h-3.5 w-3.5" />
                           Asignar mesa
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={() => setEditando(s.reserva.id)}
                         disabled={pending}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-zinc-100 px-2.5 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-200 active:scale-[0.97] disabled:opacity-60"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Editar
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="destructive"
                         onClick={() =>
                           setRechazando({
                             id: s.reserva.id,
@@ -290,11 +291,10 @@ export function SolicitudesInbox({
                           })
                         }
                         disabled={pending}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-rose-50 px-2.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100 active:scale-[0.97] disabled:opacity-60"
                       >
                         <X className="h-3.5 w-3.5" />
                         Rechazar
-                      </button>
+                      </Button>
                     </div>
                   )}
 
@@ -346,18 +346,18 @@ export function SolicitudesInbox({
           onClick={() => setRechazando(null)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-zinc-900">
+            <h3 className="text-base font-bold text-foreground">
               ¿Rechazar la reserva?
             </h3>
-            <p className="mt-1.5 text-sm text-zinc-600">
+            <p className="mt-1.5 text-sm text-foreground/70">
               Le avisamos a{" "}
               <span className="font-semibold">{rechazando.nombre}</span> que no
               pudimos tomarla y el lugar queda libre.
             </p>
-            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Motivo (opcional)
             </label>
             <input
@@ -366,25 +366,29 @@ export function SolicitudesInbox({
               onChange={(e) => setMotivo(e.target.value)}
               maxLength={200}
               placeholder="Ej: esa noche tenemos un evento privado"
-              className="mt-1.5 h-10 w-full rounded-xl border-0 bg-zinc-100 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-rose-300"
+              className="mt-1.5 h-10 w-full rounded-xl border-0 bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
             <div className="mt-4 flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="xl"
+                className="flex-1"
                 onClick={() => setRechazando(null)}
                 disabled={pending}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60"
               >
                 Volver
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive-solid"
+                size="xl"
+                className="flex-1"
                 onClick={() => decidir(rechazando.id, "reject", motivo)}
                 disabled={pending}
-                className="flex-1 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
               >
                 Rechazar
-              </button>
+              </Button>
             </div>
           </div>
         </div>

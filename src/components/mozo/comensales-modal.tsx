@@ -8,6 +8,7 @@ import {
   MAX_PARTY_SIZE,
   MIN_PARTY_SIZE,
 } from "@/lib/mozo/party-size-keys";
+import { Button } from "@/components/ui/button";
 import { InlineModal, ModalBody, ModalHeader } from "@/components/ui/modal";
 import { SectionLabel } from "@/components/ui/section-label";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
@@ -137,8 +138,8 @@ export function ComensalesModal({
               aria-pressed={valor === n}
               className={`flex h-14 flex-1 items-center justify-center rounded-2xl text-lg font-bold tabular-nums transition active:scale-95 ${
                 valor === n
-                  ? "bg-zinc-900 text-white"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                  ? "bg-primary text-white"
+                  : "bg-muted text-foreground/80 hover:bg-border"
               }`}
             >
               {n}
@@ -150,42 +151,47 @@ export function ComensalesModal({
             número grande sólo aparece cuando se salió de los chips — si dice
             «4» arriba y «4» abajo, la fila de abajo no informa nada. */}
         <div className="mt-2 flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon-lg"
+            className="h-11 w-11 rounded-xl"
             onClick={() => setValor((v) => Math.max(MIN_PARTY_SIZE, v - 1))}
             disabled={valor <= MIN_PARTY_SIZE}
             aria-label="Una persona menos"
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-30"
           >
             <Minus className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="icon-lg"
+            className="h-11 w-11 rounded-xl"
             onClick={() => setValor((v) => Math.min(MAX_PARTY_SIZE, v + 1))}
             disabled={valor >= MAX_PARTY_SIZE}
             aria-label="Una persona más"
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-30"
           >
             <Plus className="h-4 w-4" />
-          </button>
+          </Button>
           {valor > QUICK.length && (
-            <span className="ml-1 text-2xl font-extrabold text-zinc-900 tabular-nums">
+            <span className="ml-1 text-2xl font-extrabold text-foreground tabular-nums">
               {valor}
             </span>
           )}
-          <button
+          <Button
             type="button"
+            size="xl"
+            className="ml-auto"
             onClick={() => confirmar(valor)}
-            className="ml-auto flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-bold text-white shadow-sm transition active:scale-[0.98]"
           >
             Listo
-          </button>
+          </Button>
         </div>
 
-        <p className="mt-3 text-[11px] text-zinc-500">
+        <p className="mt-3 text-[11px] text-muted-foreground">
           Tecleá un número y seguís cargando. Con{" "}
-          <span className="font-semibold text-zinc-700">+</span> y{" "}
-          <span className="font-semibold text-zinc-700">−</span> para mesas de
+          <span className="font-semibold text-foreground/80">+</span> y{" "}
+          <span className="font-semibold text-foreground/80">−</span> para mesas de
           más de 9.
         </p>
       </ModalBody>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MessageSquarePlus, X } from "lucide-react";
 
 import { OBSERVACION_MAX } from "@/lib/comandas/observacion";
+import { Button } from "@/components/ui/button";
 
 /**
  * La observación de la tanda (spec 128): lo que el mozo escribe **una vez** al
@@ -35,14 +36,16 @@ export function ObservacionDeLaTanda({
 
   if (!abierta) {
     return (
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="xl"
+        className={`w-full ${className}`}
         onClick={() => setAbiertaManual(true)}
-        className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-zinc-500 ring-1 ring-zinc-200 transition ring-inset active:scale-[0.99] ${className}`}
       >
         <MessageSquarePlus className="h-4 w-4" />
         Observación para cocina
-      </button>
+      </Button>
     );
   }
 
@@ -61,17 +64,19 @@ export function ObservacionDeLaTanda({
           <span className="text-[10px] font-semibold text-amber-700/70 tabular-nums">
             {value.length}/{OBSERVACION_MAX}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-full text-amber-700 hover:bg-amber-100 hover:text-amber-700"
             onClick={() => {
               onChange("");
               setAbiertaManual(false);
             }}
             aria-label="Quitar la observación"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-amber-700 active:bg-amber-100"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
       <textarea
@@ -84,7 +89,7 @@ export function ObservacionDeLaTanda({
         onChange={(e) => onChange(e.target.value.slice(0, OBSERVACION_MAX))}
         rows={2}
         placeholder="va todo junto, la mesa tiene apuro…"
-        className="mt-1 w-full resize-none rounded-lg bg-white px-2 py-1.5 text-sm text-zinc-900 ring-1 ring-amber-200 outline-none placeholder:text-zinc-400 focus:ring-2 focus:ring-amber-400"
+        className="mt-1 w-full resize-none rounded-lg bg-card px-2 py-1.5 text-sm text-foreground ring-1 ring-amber-200 outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-amber-400"
       />
       <p className="mt-1 text-[10px] leading-snug text-amber-800/80">
         Sale arriba de los ítems en todas las comandas de este envío. Para un

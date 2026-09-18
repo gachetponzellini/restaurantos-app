@@ -96,7 +96,7 @@ export function PersonasChips({
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
+      <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         <Users className="h-3.5 w-3.5" />
         Personas
       </span>
@@ -110,34 +110,36 @@ export function PersonasChips({
             aria-label={`${n} personas`}
             className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold tabular-nums transition active:scale-95 ${
               value === n
-                ? "bg-zinc-900 text-white"
-                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                ? "bg-primary text-white"
+                : "bg-muted text-foreground/70 hover:bg-border"
             }`}
           >
             {n}
           </button>
         ))}
         {/* Más de 6 es minoría: no se le dan seis botones más, se ajusta. */}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="icon"
           onClick={() => set(value - 1)}
           disabled={value <= MIN_PARTY_SIZE}
           aria-label="Una persona menos"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-30"
         >
           <Minus className="h-3.5 w-3.5" />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="icon"
           onClick={() => set(value + 1)}
           disabled={value >= MAX_PARTY_SIZE}
           aria-label="Una persona más"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 active:scale-95 disabled:opacity-30"
         >
           <Plus className="h-3.5 w-3.5" />
-        </button>
+        </Button>
         {value > QUICK.length && (
-          <span className="ml-0.5 text-sm font-bold text-zinc-900 tabular-nums">
+          <span className="ml-0.5 text-sm font-bold text-foreground tabular-nums">
             {value}
           </span>
         )}

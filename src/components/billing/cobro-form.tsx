@@ -31,6 +31,7 @@ import {
 } from "@/components/billing/selector-de-metodo";
 import { useRovingList } from "@/lib/ui/use-roving-list";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // ============================================================================
 // El formulario de cobro, una sola vez (spec 062).
@@ -431,10 +432,10 @@ export function CobroForm<T = unknown>({
     return (
       <div className="space-y-3">
         <div>
-          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             {method === "mp_qr" ? "QR Mercado Pago" : "Link Mercado Pago"}
           </p>
-          <h3 className="mt-1 text-base font-semibold text-zinc-900">
+          <h3 className="mt-1 text-base font-semibold text-foreground">
             Esperando confirmación
           </h3>
         </div>
@@ -443,21 +444,23 @@ export function CobroForm<T = unknown>({
             href={mpInitPoint}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
           >
             <QrCode className="size-4" />
             Abrir QR de checkout
           </a>
         ) : (
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-zinc-600">Link de pago</p>
+            <p className="text-xs font-semibold text-foreground/70">Link de pago</p>
             <input
               value={mpInitPoint}
               readOnly
-              className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-xs"
+              className="h-10 w-full rounded-xl border border-border px-3 text-xs"
             />
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(mpInitPoint);
@@ -466,26 +469,27 @@ export function CobroForm<T = unknown>({
                   toast.error("No se pudo copiar");
                 }
               }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200"
             >
               Copiar link
-            </button>
+            </Button>
           </div>
         )}
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted-foreground">
           Auto-refresh cada 4 segundos. Si MP confirma, se cierra solo.
         </p>
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="sm"
+          className="h-auto p-0 text-muted-foreground"
           onClick={() => {
             setMpInitPoint(null);
             setMpPaymentId(null);
             volverAlSelector();
           }}
-          className="text-xs font-semibold text-zinc-500 underline"
         >
           Cancelar y elegir otro método
-        </button>
+        </Button>
       </div>
     );
   }
@@ -561,29 +565,31 @@ export function CobroForm<T = unknown>({
       ) : (
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <MetaIcon className="size-4 text-zinc-500" />
-            <p className="text-sm font-semibold text-zinc-900">{meta.label}</p>
+            <MetaIcon className="size-4 text-muted-foreground" />
+            <p className="text-sm font-semibold text-foreground">{meta.label}</p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-muted-foreground"
             onClick={() => {
               volverAlSelector();
               onCancel?.();
             }}
-            className="text-xs font-semibold text-zinc-500 underline"
           >
             Cambiar
-            <kbd className="ml-1 rounded bg-zinc-100 px-1 text-[10px] font-bold text-zinc-500">
+            <kbd className="ml-1 rounded bg-muted px-1 text-[10px] font-bold text-muted-foreground">
               Esc
             </kbd>
-          </button>
+          </Button>
         </div>
       )}
 
       <div className="grid gap-1.5">
         <label
           htmlFor="cobro-monto"
-          className="text-xs font-semibold text-zinc-600"
+          className="text-xs font-semibold text-foreground/70"
         >
           Monto
         </label>
@@ -597,7 +603,7 @@ export function CobroForm<T = unknown>({
             setHasSetAmount(true);
           }}
           className={cn(
-            "h-11 w-full rounded-xl border border-zinc-200 px-3 text-base font-semibold tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none",
+            "h-11 w-full rounded-xl border border-border px-3 text-base font-semibold tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none",
             touch && "h-14 text-lg",
           )}
         />
@@ -611,7 +617,7 @@ export function CobroForm<T = unknown>({
             {adjustmentPercent < 0 ? "Descuento" : "Recargo"}{" "}
             {adjustmentPercent > 0 ? "+" : ""}
             {adjustmentPercent}%: {formatCurrency(adjustmentCents)}
-            <span className="ml-1 text-zinc-500">
+            <span className="ml-1 text-muted-foreground">
               (base {formatCurrency(amountDueCents)})
             </span>
           </p>
@@ -623,13 +629,13 @@ export function CobroForm<T = unknown>({
         {changeCents > 0 && (
           <p className="text-xs font-semibold text-emerald-700">
             Vuelto: {formatCurrency(changeCents)}
-            <span className="ml-1 font-medium text-zinc-500">
+            <span className="ml-1 font-medium text-muted-foreground">
               — se cobra {formatCurrency(chargeCents)}
             </span>
             <button
               type="button"
               onClick={() => setDestinoElegido("propina")}
-              className="ml-2 font-semibold text-zinc-500 underline underline-offset-2 transition hover:text-emerald-700"
+              className="ml-2 font-semibold text-muted-foreground underline underline-offset-2 transition hover:text-emerald-700"
             >
               se lo dejan de propina
             </button>
@@ -638,14 +644,14 @@ export function CobroForm<T = unknown>({
         {extraTipCents > 0 && (
           <p className="text-xs font-semibold text-emerald-700">
             Propina: {formatCurrency(extraTipCents)}
-            <span className="ml-1 font-medium text-zinc-500">
+            <span className="ml-1 font-medium text-muted-foreground">
               — para el mozo de la mesa, entra {formatCurrency(chargeCents)}
             </span>
             {admiteVuelto(method ?? "") && (
               <button
                 type="button"
                 onClick={() => setDestinoElegido("vuelto")}
-                className="ml-2 font-semibold text-zinc-500 underline underline-offset-2 transition hover:text-emerald-700"
+                className="ml-2 font-semibold text-muted-foreground underline underline-offset-2 transition hover:text-emerald-700"
               >
                 es vuelto
               </button>
@@ -664,7 +670,7 @@ export function CobroForm<T = unknown>({
         <div className="grid gap-1.5">
           <label
             htmlFor="cobro-propina"
-            className="text-xs font-semibold text-zinc-600"
+            className="text-xs font-semibold text-foreground/70"
           >
             Propina (opcional)
           </label>
@@ -677,14 +683,14 @@ export function CobroForm<T = unknown>({
               setTip(Math.max(0, Math.round(Number(e.target.value) * 100)))
             }
             className={cn(
-              "h-11 w-full rounded-xl border border-zinc-200 px-3 text-base tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none",
+              "h-11 w-full rounded-xl border border-border px-3 text-base tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none",
               touch && "h-14 text-lg",
             )}
           />
         </div>
       )}
       {tipConfig.mode === "fixed" && tipConfig.cents > 0 && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted-foreground">
           Incluye propina de {formatCurrency(tipConfig.cents)}.
         </p>
       )}
@@ -706,7 +712,7 @@ export function CobroForm<T = unknown>({
           <div className="grid gap-1.5">
             <label
               htmlFor="cobro-last-four"
-              className="text-xs font-semibold text-zinc-600"
+              className="text-xs font-semibold text-foreground/70"
             >
               Últimos 4 dígitos (opcional)
             </label>
@@ -719,7 +725,7 @@ export function CobroForm<T = unknown>({
               onChange={(e) =>
                 setLastFour(e.target.value.replace(/\D/g, "").slice(0, 4))
               }
-              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-base tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+              className="h-11 w-full rounded-xl border border-border px-3 text-base tabular-nums focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -731,8 +737,8 @@ export function CobroForm<T = unknown>({
                 className={cn(
                   "rounded-full px-3 py-1.5 text-xs font-semibold transition",
                   cardBrand === b.value
-                    ? "bg-zinc-900 text-white"
-                    : "bg-white text-zinc-700 ring-1 ring-zinc-200",
+                    ? "bg-primary text-white"
+                    : "bg-card text-foreground/80 ring-1 ring-border",
                 )}
               >
                 {b.label}
@@ -746,7 +752,7 @@ export function CobroForm<T = unknown>({
         <div className="grid gap-1.5">
           <label
             htmlFor="cobro-notas"
-            className="text-xs font-semibold text-zinc-600"
+            className="text-xs font-semibold text-foreground/70"
           >
             Notas{notesRequired && <span className="text-rose-600"> *</span>}
           </label>
@@ -762,20 +768,18 @@ export function CobroForm<T = unknown>({
                   ? "Cheque #1234, cortesía…"
                   : "Opcional"
             }
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+            className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
           />
         </div>
       )}
 
-      <button
+      <Button
         ref={confirmRef}
         type="button"
+        size="xl"
+        className="w-full"
         disabled={confirmDisabled}
         onClick={handleConfirm}
-        className={cn(
-          "flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98] disabled:opacity-50",
-          touch && "h-16 text-lg font-bold",
-        )}
       >
         {isRegistering ? (
           "Registrando…"
@@ -785,7 +789,7 @@ export function CobroForm<T = unknown>({
             Confirmar {formatCurrency(chargeCents)}
           </>
         )}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -802,7 +806,7 @@ function CajaPicker({
   if (cajas.length <= 1 || !onChange) return null;
   return (
     <div>
-      <p className="mb-1.5 text-xs font-semibold text-zinc-600">Caja</p>
+      <p className="mb-1.5 text-xs font-semibold text-foreground/70">Caja</p>
       <div className="flex flex-wrap gap-2">
         {cajas.map((c) => (
           <button
@@ -812,8 +816,8 @@ function CajaPicker({
             className={cn(
               "rounded-full px-3 py-1.5 text-sm font-semibold transition",
               cajaId === c.id
-                ? "bg-zinc-900 text-white"
-                : "bg-white text-zinc-700 ring-1 ring-zinc-200",
+                ? "bg-primary text-white"
+                : "bg-card text-foreground/80 ring-1 ring-border",
             )}
           >
             {c.name}

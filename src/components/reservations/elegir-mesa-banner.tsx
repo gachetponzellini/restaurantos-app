@@ -2,6 +2,8 @@
 
 import { MapPin } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+
 /**
  * La barra de «el plano está esperando un tap» (spec 059, compartida en la 138).
  *
@@ -20,13 +22,15 @@ export function ElegirMesaBanner({
     <div className="flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-white shadow-sm">
       <MapPin className="h-4 w-4 shrink-0 animate-pulse" />
       <span className="min-w-0 flex-1 text-sm font-semibold">{texto}</span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         onClick={onCancelar}
-        className="shrink-0 rounded-lg bg-white/15 px-2.5 py-1 text-xs font-bold transition hover:bg-white/25"
+        className="shrink-0 bg-white/15 text-white hover:bg-white/25 hover:text-white"
       >
         Cancelar
-      </button>
+      </Button>
     </div>
   );
 }

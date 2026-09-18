@@ -206,7 +206,7 @@ export function ElegirMozoModal({
           </SectionLabel>
             {showSearch && (
               <div className="relative mt-2">
-                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                 <input
                   ref={searchRef}
                   type="text"
@@ -231,36 +231,38 @@ export function ElegirMozoModal({
                   placeholder="Buscar mozo…"
                   aria-label="Buscar mozo"
                   autoComplete="off"
-                  className="block h-11 w-full rounded-2xl border border-zinc-200 bg-white pr-9 pl-9 text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-100 focus:outline-none"
+                  className="block h-11 w-full rounded-2xl border border-border bg-card pr-9 pl-9 text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-100 focus:outline-none"
                 />
                 {search.length > 0 && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full"
                     onClick={() => {
                       setSearch("");
                       searchRef.current?.focus();
                     }}
-                    className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-zinc-400 active:bg-zinc-100"
                     aria-label="Limpiar"
                   >
                     <X className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
 
             {candidates.length === 0 ? (
-              <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+              <p className="mt-2 rounded-xl bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
                 No hay otros mozos disponibles.
               </p>
             ) : visibles.length === 0 ? (
-              <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+              <p className="mt-2 rounded-xl bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
                 Ningún mozo coincide con la búsqueda.
               </p>
             ) : (
               <div
                 onKeyDown={lista.handleKeyDown}
-                className="mt-2 max-h-64 overflow-y-auto rounded-2xl ring-1 ring-zinc-200"
+                className="mt-2 max-h-64 overflow-y-auto rounded-2xl ring-1 ring-border"
               >
                 {visibles.map((m, i) => (
                   <button
@@ -269,7 +271,7 @@ export function ElegirMozoModal({
                     onClick={() => elegir(m.user_id)}
                     disabled={submitting}
                     {...lista.itemProps(i)}
-                    className={`flex w-full items-center gap-3 border-b border-zinc-100 px-4 py-3 text-left transition outline-none last:border-b-0 focus-visible:bg-sky-50 focus-visible:ring-2 focus-visible:ring-sky-400 active:bg-zinc-50 ${
+                    className={`flex w-full items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition outline-none last:border-b-0 focus-visible:bg-sky-50 focus-visible:ring-2 focus-visible:ring-sky-400 active:bg-muted/50 ${
                       m.user_id === effectiveToMozoId ? "bg-sky-50" : ""
                     }`}
                   >
@@ -277,7 +279,7 @@ export function ElegirMozoModal({
                       className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white ${
                         m.user_id === effectiveToMozoId
                           ? "bg-sky-600"
-                          : "bg-zinc-700"
+                          : "bg-primary/80"
                       }`}
                     >
                       {(m.full_name ?? "??")
@@ -287,10 +289,10 @@ export function ElegirMozoModal({
                         .join("")}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-900">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {m.full_name ?? m.user_id}
                       </p>
-                      <p className="text-xs text-zinc-500 capitalize">
+                      <p className="text-xs text-muted-foreground capitalize">
                         {m.role}
                       </p>
                     </div>
@@ -310,15 +312,17 @@ export function ElegirMozoModal({
               no en rojo. Sólo aparece si hay mozo puesto: en una mesa sin mozo
               no hay nada que sacar. */}
           {puedeSacar && currentMozoId && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="xl"
+              className="w-full"
               disabled={submitting}
               onClick={() => void asignar(null)}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50"
             >
               <UserMinus className="h-4 w-4" />
               Sacar el mozo
-            </button>
+            </Button>
           )}
 
           {modo === "transferir" && (
@@ -329,7 +333,7 @@ export function ElegirMozoModal({
               <textarea
                 id="elegir-mozo-motivo"
                 ref={reasonRef}
-                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base"
+                className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-base"
                 rows={2}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

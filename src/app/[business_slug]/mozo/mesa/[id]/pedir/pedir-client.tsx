@@ -95,6 +95,7 @@ import {
   useProductSearch,
   type ProductSearchApi,
 } from "@/components/mozo/product-search-box";
+import { Button } from "@/components/ui/button";
 import { PriceOverrideModal } from "@/components/shared/price-override-modal";
 import { ItemLibreModal } from "@/components/shared/item-libre-modal";
 import {
@@ -286,7 +287,7 @@ const COLOR_MAP: Record<string, { inactive: string; active: string }> = {
   emerald: { inactive: "text-emerald-600", active: "text-emerald-300" },
   rose: { inactive: "text-rose-600", active: "text-rose-300" },
   violet: { inactive: "text-violet-600", active: "text-violet-300" },
-  zinc: { inactive: "text-zinc-500", active: "text-zinc-300" },
+  zinc: { inactive: "text-muted-foreground", active: "text-muted-foreground/50" },
 };
 
 function resolveColor(slug: string | undefined | null): {
@@ -1395,8 +1396,8 @@ export function MozoPedirClient({
   // Embebido = columna flex con scroll interno y footer no-fixed.
   const rootRef = useRef<HTMLDivElement>(null);
   const rootClass = embedded
-    ? "relative flex h-full min-h-0 flex-col overflow-hidden bg-zinc-50"
-    : `min-h-dvh bg-zinc-50 ${showTabNavInFooter ? "pb-48" : "pb-36"}`;
+    ? "relative flex h-full min-h-0 flex-col overflow-hidden bg-muted/50"
+    : `min-h-dvh bg-muted/50 ${showTabNavInFooter ? "pb-48" : "pb-36"}`;
   // Overlay de modales: scopeado al panel en embebido (`absolute`), full-screen
   // en la app del mozo (`fixed`).
   const overlayPos = embedded ? "absolute" : "fixed";
@@ -1404,7 +1405,7 @@ export function MozoPedirClient({
     ? "mx-auto w-full max-w-md min-h-0 flex-1 overflow-y-auto px-3 pt-3"
     : "mx-auto max-w-md px-3 pt-3";
   const footerClass = embedded
-    ? "z-20 shrink-0 border-t border-zinc-200 bg-white/95 backdrop-blur"
+    ? "z-20 shrink-0 border-t border-border bg-white/95 backdrop-blur"
     : "fixed inset-x-0 bottom-0 z-20 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur";
 
   // ── Modales, compartidos por ambos layouts (full-screen y embebido) ──
@@ -1549,51 +1550,59 @@ export function MozoPedirClient({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl"
+            className="w-full max-w-md rounded-t-3xl bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl"
           >
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-heading text-base font-bold text-zinc-900">
+              <h3 className="font-heading text-base font-bold text-foreground">
                 Cancelar &ldquo;{cancelTarget.productName}&rdquo;
               </h3>
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => {
                   setCancelTarget(null);
                   setCancelReason("");
                 }}
-                className="rounded-full p-1.5 text-zinc-500 active:bg-zinc-100"
                 aria-label="Cerrar"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Indicá un motivo. Queda registrado.
             </p>
             <textarea
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value.slice(0, 200))}
               placeholder="ej: rotura, cliente cambió de opinión..."
-              className="mt-3 block w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
+              className="mt-3 block w-full rounded-2xl border border-border px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
               rows={3}
               autoFocus
             />
             <div className="mt-4 flex gap-2">
-              <button
+              <Button
+                type="button"
+                variant="secondary"
+                size="xl"
                 onClick={() => {
                   setCancelTarget(null);
                   setCancelReason("");
                 }}
-                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-700 active:scale-[0.98]"
+                className="flex-1"
               >
                 Volver
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="destructive-solid"
+                size="xl"
                 onClick={handleCancelConfirm}
                 disabled={pending || !cancelReason.trim()}
-                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-red-600 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+                className="flex-1"
               >
                 Cancelar item
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1616,31 +1625,34 @@ export function MozoPedirClient({
     return (
       <div className={rootClass} ref={rootRef}>
         {/* Header compacto */}
-        <header className="shrink-0 border-b border-zinc-200 bg-white px-3 py-2.5">
+        <header className="shrink-0 border-b border-border bg-card px-3 py-2.5">
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => onClose?.()}
-              className="-ml-1 rounded-full p-2 text-zinc-700 active:bg-zinc-100"
+              className="-ml-1"
               aria-label="Volver al salón"
             >
               <ArrowLeft className="h-5 w-5" />
-            </button>
+            </Button>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+              <p className="truncate text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 {businessName}
               </p>
-              <h1 className="font-heading text-base leading-tight font-bold text-zinc-900">
+              <h1 className="font-heading text-base leading-tight font-bold text-foreground">
                 Mesa {table.label}
               </h1>
               {/* El estado de la mesa vive acá y no en la columna: repetir
                   «Mesa CUAD» arriba y «CUAD» abajo gastaba una franja del
                   panel en decir dos veces lo mismo. */}
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold text-zinc-500">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-semibold text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${
                       table.operational_status === "libre"
-                        ? "bg-zinc-300"
+                        ? "bg-muted-foreground/30"
                         : table.operational_status === "pidio_cuenta"
                           ? "bg-amber-500"
                           : "bg-emerald-500"
@@ -1775,7 +1787,7 @@ export function MozoPedirClient({
           <ColumnaLateral
             abierta
             modoAngosto="apilada"
-            className="max-h-[45%] border-t border-zinc-200 @min-[600px]:order-1 @min-[600px]:max-h-none @min-[600px]:border-t-0"
+            className="max-h-[45%] border-t border-border @min-[600px]:order-1 @min-[600px]:max-h-none @min-[600px]:border-t-0"
           >
             <MesaColumn
               tableLabel={table.label}
@@ -1850,47 +1862,53 @@ export function MozoPedirClient({
   return (
     <div className={rootClass} ref={rootRef}>
       {/* ─── Header sticky ─── */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-2 px-3 py-3">
           {step === "catalogo" ? (
             embedded ? (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => onClose?.()}
-                className="-ml-1 rounded-full p-2 text-zinc-700 active:bg-zinc-100"
+                className="-ml-1"
                 aria-label="Volver al salón"
               >
                 <ArrowLeft className="h-5 w-5" />
-              </button>
+              </Button>
             ) : (
               <Link
                 href={backHref}
-                className="-ml-1 rounded-full p-2 text-zinc-700 active:bg-zinc-100"
+                className="-ml-1 rounded-full p-2 text-foreground/80 active:bg-muted"
                 aria-label="Volver al salón"
               >
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             )
           ) : (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setStep("catalogo")}
-              className="-ml-1 rounded-full p-2 text-zinc-700 active:bg-zinc-100"
+              className="-ml-1"
               aria-label="Volver al catálogo"
             >
               <ArrowLeft className="h-5 w-5" />
-            </button>
+            </Button>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+            <p className="truncate text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
               {step === "catalogo" ? businessName : "Tu pedido"}
             </p>
-            <h1 className="font-heading text-base leading-tight font-bold tracking-tight text-zinc-900">
+            <h1 className="font-heading text-base leading-tight font-bold tracking-tight text-foreground">
               {step === "catalogo"
                 ? `Mesa ${table.label}`
                 : `Mesa ${table.label} · revisar`}
             </h1>
           </div>
           {tableMinutes !== null && tableMinutes >= 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
               {tableMinutes}m
             </span>
@@ -1898,13 +1916,13 @@ export function MozoPedirClient({
         </div>
         {step === "catalogo" && (
           <div className="mx-auto flex max-w-md items-center gap-2 px-3 pb-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground/80">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {TABLE_STATUS_LABEL[table.operational_status] ??
                 table.operational_status}
             </span>
             {comandas.length > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 · {comandas.length}{" "}
                 {comandas.length === 1
                   ? "comanda enviada"
@@ -1915,7 +1933,7 @@ export function MozoPedirClient({
         )}
         {/* Seat selector */}
         {step === "catalogo" && seatMode && (
-          <div className="border-t border-zinc-100 bg-violet-50/50">
+          <div className="border-t border-border/60 bg-violet-50/50">
             <div className="mx-auto flex max-w-md items-center gap-2 px-3 py-2">
               <span className="text-[11px] font-semibold text-violet-700">
                 Comensal:
@@ -1928,7 +1946,7 @@ export function MozoPedirClient({
                     className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition active:scale-95 ${
                       activeSeat === n
                         ? "bg-violet-600 text-white"
-                        : "bg-white text-violet-700 ring-1 ring-violet-200"
+                        : "bg-card text-violet-700 ring-1 ring-violet-200"
                     }`}
                   >
                     {n}
@@ -1940,7 +1958,7 @@ export function MozoPedirClient({
                     setSeatCount(next);
                     setActiveSeat(next);
                   }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-violet-700 ring-1 ring-violet-200 active:scale-95"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-violet-700 ring-1 ring-violet-200 active:scale-95"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -1950,7 +1968,7 @@ export function MozoPedirClient({
         )}
         {/* Tabs */}
         {step === "catalogo" && !isSearching && tabs.length > 0 && (
-          <div className="border-t border-zinc-100">
+          <div className="border-t border-border/60">
             <div className="mx-auto max-w-md overflow-x-auto px-3">
               <div className="flex gap-1.5 py-2">
                 {tabs.map((t) => {
@@ -1963,8 +1981,8 @@ export function MozoPedirClient({
                       onClick={() => setActiveTab(t.id)}
                       className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition active:scale-[0.96] ${
                         isActive
-                          ? "bg-zinc-900 text-white"
-                          : "bg-white text-zinc-700 ring-1 ring-zinc-200"
+                          ? "bg-primary text-white"
+                          : "bg-card text-foreground/80 ring-1 ring-border"
                       }`}
                     >
                       <Icon
@@ -1977,7 +1995,7 @@ export function MozoPedirClient({
                         <span
                           className={`flex h-4 w-4 items-center justify-center rounded-full ${
                             isActive
-                              ? "bg-emerald-400 text-zinc-900"
+                              ? "bg-emerald-400 text-foreground"
                               : "bg-emerald-500 text-white"
                           }`}
                         >
@@ -2050,7 +2068,7 @@ export function MozoPedirClient({
       <div className={footerClass}>
         <div className="mx-auto max-w-md">
           {showTabNavInFooter && (
-            <div className="border-t border-zinc-200 px-3 py-2">
+            <div className="border-t border-border px-3 py-2">
               <TabNav
                 prevTab={prevTab}
                 nextTab={nextTab}
@@ -2058,7 +2076,7 @@ export function MozoPedirClient({
               />
             </div>
           )}
-          <div className="border-t border-zinc-200 px-3 pt-3 pb-3">
+          <div className="border-t border-border px-3 pt-3 pb-3">
             {step === "catalogo" ? (
               <BottomCTACatalogo
                 cartCount={cartCount}
@@ -2170,9 +2188,9 @@ function SearchResults({
 }) {
   if (results.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-10 text-center">
-        <p className="text-sm font-semibold text-zinc-700">Sin resultados</p>
-        <p className="mt-1 text-xs text-zinc-500">Probá con otro nombre.</p>
+      <div className="rounded-2xl border border-dashed border-border bg-card py-10 text-center">
+        <p className="text-sm font-semibold text-foreground/80">Sin resultados</p>
+        <p className="mt-1 text-xs text-muted-foreground">Probá con otro nombre.</p>
       </div>
     );
   }
@@ -2238,7 +2256,7 @@ function MozoDeLaMesa({
       className={`inline-flex max-w-[10rem] items-center gap-1 truncate rounded-full px-2 py-0.5 ring-1 transition active:scale-95 ${
         p
           ? `${p.bg} ${p.text} ${p.ring} hover:brightness-95`
-          : "ring-dashed bg-white text-zinc-500 ring-zinc-300 hover:bg-zinc-50"
+          : "ring-dashed bg-card text-muted-foreground ring-foreground/20 hover:bg-muted/50"
       }`}
     >
       <UserRound className="h-3 w-3 shrink-0" />
@@ -2283,11 +2301,11 @@ function TabView({
 
   if (isEmpty) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-10 text-center">
-        <p className="text-sm font-semibold text-zinc-700">
+      <div className="rounded-2xl border border-dashed border-border bg-card py-10 text-center">
+        <p className="text-sm font-semibold text-foreground/80">
           Sin productos en {activeTabLabel.toLowerCase()}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-xs text-muted-foreground">
           Probá otra pestaña o el buscador.
         </p>
       </div>
@@ -2334,7 +2352,7 @@ function TabView({
       {tabSections.map((section, idx) => (
         <div key={section.category?.id ?? `top-${idx}`} className="space-y-2">
           {section.category && tabSections.length > 1 && (
-            <h3 className="px-1 text-xs font-bold tracking-wide text-zinc-500 uppercase">
+            <h3 className="px-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">
               {section.category.name}
             </h3>
           )}
@@ -2367,16 +2385,16 @@ function TabNav({
       {prevTab && (
         <button
           onClick={() => onJumpToTab(prevTab.id)}
-          className="flex flex-1 items-center gap-2.5 rounded-2xl bg-white p-3 text-left ring-1 ring-zinc-200 active:scale-[0.98] active:bg-zinc-50"
+          className="flex flex-1 items-center gap-2.5 rounded-2xl bg-card p-3 text-left ring-1 ring-border active:scale-[0.98] active:bg-muted/50"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100">
-            <ArrowLeft className="h-4 w-4 text-zinc-700" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+            <ArrowLeft className="h-4 w-4 text-foreground/80" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-wide text-zinc-500 uppercase">
+            <p className="text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
               Anterior
             </p>
-            <p className="flex items-center gap-1 text-sm font-bold text-zinc-900">
+            <p className="flex items-center gap-1 text-sm font-bold text-foreground">
               <prevTab.icon className={`h-3.5 w-3.5 ${prevTab.iconInactive}`} />
               <span className="truncate">{prevTab.label}</span>
             </p>
@@ -2386,18 +2404,18 @@ function TabNav({
       {nextTab && (
         <button
           onClick={() => onJumpToTab(nextTab.id)}
-          className="flex flex-1 items-center justify-end gap-2.5 rounded-2xl bg-white p-3 text-right ring-1 ring-zinc-200 active:scale-[0.98] active:bg-zinc-50"
+          className="flex flex-1 items-center justify-end gap-2.5 rounded-2xl bg-card p-3 text-right ring-1 ring-border active:scale-[0.98] active:bg-muted/50"
         >
           <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-wide text-zinc-500 uppercase">
+            <p className="text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
               Siguiente
             </p>
-            <p className="flex items-center justify-end gap-1 text-sm font-bold text-zinc-900">
+            <p className="flex items-center justify-end gap-1 text-sm font-bold text-foreground">
               <nextTab.icon className={`h-3.5 w-3.5 ${nextTab.iconInactive}`} />
               <span className="truncate">{nextTab.label}</span>
             </p>
           </div>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary">
             <ArrowRight className="h-4 w-4 text-white" />
           </span>
         </button>
@@ -2479,7 +2497,7 @@ function DailyMenuRow({
       className="flex w-full items-center gap-2.5 rounded-xl bg-emerald-50/70 px-3 py-2.5 text-left ring-1 ring-emerald-200 transition outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 active:scale-[0.99]"
     >
       <UtensilsCrossed className="h-4 w-4 shrink-0 text-emerald-600" />
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
         {menu.name}
       </span>
       <span className="shrink-0 text-sm font-bold text-emerald-700 tabular-nums">
@@ -2522,11 +2540,11 @@ function DailyMenuCard({
           <p className="text-[10px] font-bold tracking-[0.15em] text-emerald-700 uppercase">
             Menú del día
           </p>
-          <h3 className="mt-0.5 truncate text-base font-extrabold text-zinc-900">
+          <h3 className="mt-0.5 truncate text-base font-extrabold text-foreground">
             {menu.name}
           </h3>
           {menu.description && (
-            <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600">
+            <p className="mt-0.5 line-clamp-2 text-xs text-foreground/70">
               {menu.description}
             </p>
           )}
@@ -2536,7 +2554,7 @@ function DailyMenuCard({
             {formatCurrency(menu.price_cents)}
           </span>
           {menu.components.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-zinc-600 ring-1 ring-zinc-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-semibold text-foreground/70 ring-1 ring-border">
               <GalleryVertical className="h-3 w-3" />
               {menu.components.length}{" "}
               {menu.components.length === 1 ? "paso" : "pasos"}
@@ -2550,9 +2568,9 @@ function DailyMenuCard({
 
 function EmptyCatalog() {
   return (
-    <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-10 text-center">
-      <p className="text-sm font-semibold text-zinc-700">Sin productos</p>
-      <p className="mt-1 text-xs text-zinc-500">
+    <div className="rounded-2xl border border-dashed border-border bg-card py-10 text-center">
+      <p className="text-sm font-semibold text-foreground/80">Sin productos</p>
+      <p className="mt-1 text-xs text-muted-foreground">
         Pedile a admin que cargue el catálogo.
       </p>
     </div>
@@ -2606,22 +2624,19 @@ function ResumenStep({
         <header className="mb-2 space-y-2">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 Para enviar
               </p>
-              <h2 className="font-heading text-base font-bold text-zinc-900">
+              <h2 className="font-heading text-base font-bold text-foreground">
                 {cart.length === 0
                   ? "Sin items nuevos"
                   : `${cart.length} ${cart.length === 1 ? "item" : "items"} · sin enviar`}
               </h2>
             </div>
-            <button
-              onClick={onAddMore}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 active:scale-[0.96]"
-            >
+            <Button type="button" variant="outline" size="sm" onClick={onAddMore}>
               <Plus className="h-3.5 w-3.5" />
               Agregar
-            </button>
+            </Button>
           </div>
           {cart.length > 0 && (
             <button
@@ -2629,7 +2644,7 @@ function ResumenStep({
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${
                 seatMode
                   ? "bg-violet-600 text-white ring-violet-600"
-                  : "bg-white text-violet-700 ring-violet-200"
+                  : "bg-card text-violet-700 ring-violet-200"
               }`}
             >
               <Users className="h-3.5 w-3.5" />
@@ -2639,12 +2654,12 @@ function ResumenStep({
         </header>
 
         {cart.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-5 text-center">
-            <ShoppingBag className="mx-auto h-6 w-6 text-zinc-400" />
-            <p className="mt-2 text-sm font-semibold text-zinc-700">
+          <div className="rounded-2xl border border-dashed border-border bg-card p-5 text-center">
+            <ShoppingBag className="mx-auto h-6 w-6 text-muted-foreground/70" />
+            <p className="mt-2 text-sm font-semibold text-foreground/80">
               Carrito vacío
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Volvé al catálogo para agregar productos.
             </p>
           </div>
@@ -2653,11 +2668,11 @@ function ResumenStep({
             {cart.map((c) => (
               <li
                 key={c._key}
-                className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200"
+                className="overflow-hidden rounded-2xl bg-card ring-1 ring-border"
               >
                 <div className="flex items-start gap-2 p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-zinc-900">
+                    <p className="text-sm font-semibold text-foreground">
                       {isDailyMenuCart(c) && (
                         <span className="mr-1.5 inline-flex items-center rounded bg-emerald-100 px-1.5 py-0.5 align-middle text-[10px] font-bold tracking-wide text-emerald-700 uppercase">
                           Menú
@@ -2680,19 +2695,19 @@ function ResumenStep({
                       )}
                     </p>
                     {!isDailyMenuCart(c) && c.modifiers.length > 0 && (
-                      <p className="mt-0.5 text-xs text-zinc-500">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {c.modifiers.map((m) => m.name).join(" · ")}
                       </p>
                     )}
                     {isDailyMenuCart(c) && c.selected_choices.length > 0 && (
-                      <p className="mt-0.5 text-xs text-zinc-500">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {c.selected_choices
                           .map((sc) => sc.product_name)
                           .join(" · ")}
                       </p>
                     )}
                     {c.notes && (
-                      <p className="mt-0.5 text-xs text-zinc-500 italic">
+                      <p className="mt-0.5 text-xs text-muted-foreground italic">
                         &quot;{c.notes}&quot;
                       </p>
                     )}
@@ -2710,35 +2725,40 @@ function ResumenStep({
                     )}
                   </div>
                   {userCanEditPrice && !isDailyMenuCart(c) && (
-                    <button
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => onEditPrice(c._key)}
-                      className={`rounded-full p-2 ${
+                      className={
                         c.price_override_cents != null
                           ? "bg-amber-100 text-amber-700"
-                          : "text-zinc-400 active:bg-zinc-100"
-                      }`}
+                          : ""
+                      }
                       aria-label={`Cambiar el precio de ${c.product_name}`}
                     >
                       <Tag className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => onRemove(c._key)}
-                    className="rounded-full p-2 text-zinc-400 active:bg-red-50 active:text-red-600"
                     aria-label="Quitar"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
-                <div className="flex items-center justify-between border-t border-zinc-100 bg-zinc-50/60 px-3 py-2">
-                  <span className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
+                <div className="flex items-center justify-between border-t border-border/60 bg-muted/30 px-3 py-2">
+                  <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                     Cantidad
                   </span>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onChangeQty(c._key, -1)}
                       disabled={c.quantity <= 1}
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-zinc-200 active:scale-[0.95] disabled:opacity-40"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
                       aria-label="Restar"
                     >
                       <Minus className="h-5 w-5" />
@@ -2749,7 +2769,7 @@ function ResumenStep({
                     <button
                       onClick={() => onChangeQty(c._key, +1)}
                       disabled={c.quantity >= 99}
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-zinc-200 active:scale-[0.95] disabled:opacity-40"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
                       aria-label="Sumar"
                     >
                       <Plus className="h-5 w-5" />
@@ -2765,10 +2785,10 @@ function ResumenStep({
       {existingComandas.length > 0 && (
         <section>
           <header className="mb-2">
-            <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+            <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
               Ya en cocina
             </p>
-            <h2 className="font-heading text-base font-bold text-zinc-900">
+            <h2 className="font-heading text-base font-bold text-foreground">
               {existingComandas.length}{" "}
               {existingComandas.length === 1
                 ? "comanda enviada"
@@ -2784,17 +2804,17 @@ function ResumenStep({
               return (
                 <li
                   key={c.id}
-                  className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200"
+                  className="overflow-hidden rounded-2xl bg-card ring-1 ring-border"
                 >
-                  <header className="flex items-center justify-between gap-2 border-b border-zinc-100 bg-zinc-50/60 px-3 py-2">
+                  <header className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-3 py-2">
                     <div className="flex items-center gap-2 text-sm">
                       <span
                         className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT[c.status]}`}
                       />
-                      <span className="font-semibold text-zinc-900">
+                      <span className="font-semibold text-foreground">
                         {sectorName}
                       </span>
-                      <span className="text-[11px] text-zinc-500">
+                      <span className="text-[11px] text-muted-foreground">
                         · tanda {c.batch}
                       </span>
                     </div>
@@ -2804,7 +2824,7 @@ function ResumenStep({
                       {STATUS_LABEL[c.status]}
                     </span>
                   </header>
-                  <ul className="divide-y divide-zinc-100">
+                  <ul className="divide-y divide-border/60">
                     {liveItems.map((it) => {
                       // La misma regla que la columna del salón (issue #283).
                       const puedeRepreciar =
@@ -2814,22 +2834,22 @@ function ResumenStep({
                           key={it.order_item_id}
                           className="flex items-start gap-2 p-3"
                         >
-                          <span className="mt-0.5 text-sm font-bold text-zinc-700 tabular-nums">
+                          <span className="mt-0.5 text-sm font-bold text-foreground/80 tabular-nums">
                             {it.quantity}×
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-zinc-900">
+                            <p className="text-sm font-semibold text-foreground">
                               {it.product_name}
                             </p>
                             {it.modifiers.length > 0 && (
-                              <p className="mt-0.5 text-xs text-zinc-500">
+                              <p className="mt-0.5 text-xs text-muted-foreground">
                                 {it.modifiers
                                   .map((m) => m.modifier_name)
                                   .join(" · ")}
                               </p>
                             )}
                             {it.notes && (
-                              <p className="mt-0.5 text-xs text-zinc-500 italic">
+                              <p className="mt-0.5 text-xs text-muted-foreground italic">
                                 &ldquo;{it.notes}&rdquo;
                               </p>
                             )}
@@ -2846,30 +2866,35 @@ function ResumenStep({
                             )}
                           </div>
                           {puedeRepreciar && (
-                            <button
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() =>
                                 onEditPriceEnviado(it.order_item_id)
                               }
-                              className={`rounded-full p-2 ${
+                              className={
                                 it.price_original_cents != null
                                   ? "bg-amber-100 text-amber-700"
-                                  : "text-zinc-400 active:bg-zinc-100"
-                              }`}
+                                  : ""
+                              }
                               aria-label={`Cambiar el precio de ${it.product_name}, ya enviado`}
                             >
                               <Tag className="h-4 w-4" />
-                            </button>
+                            </Button>
                           )}
                           {userCanCancel && (
-                            <button
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() =>
                                 onCancelItem(it.order_item_id, it.product_name)
                               }
-                              className="rounded-full p-2 text-zinc-400 active:bg-red-50 active:text-red-600"
                               aria-label="Cancelar item"
                             >
                               <Ban className="h-4 w-4" />
-                            </button>
+                            </Button>
                           )}
                         </li>
                       );
@@ -2877,7 +2902,7 @@ function ResumenStep({
                     {cancelledItems.map((it) => (
                       <li
                         key={it.order_item_id}
-                        className="flex items-start gap-2 bg-zinc-50 px-3 py-2 text-zinc-400"
+                        className="flex items-start gap-2 bg-muted/50 px-3 py-2 text-muted-foreground/70"
                       >
                         <span className="mt-0.5 text-xs font-semibold tabular-nums line-through">
                           {it.quantity}×
@@ -2896,14 +2921,17 @@ function ResumenStep({
                     ))}
                   </ul>
                   {c.status !== "entregado" && (
-                    <div className="border-t border-zinc-100 p-2">
-                      <button
+                    <div className="border-t border-border/60 p-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="lg"
                         onClick={() => onAdvance(c.id)}
-                        className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-50 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200 active:scale-[0.98]"
+                        className="w-full"
                       >
                         <Check className="h-4 w-4" />
                         Entregar
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </li>
@@ -2933,26 +2961,25 @@ function BottomCTACatalogo({
 }) {
   if (cartCount === 0 && !hasExisting) {
     return (
-      <div className="flex h-14 items-center justify-center rounded-2xl bg-zinc-100 text-sm text-zinc-500">
+      <div className="flex h-14 items-center justify-center rounded-2xl bg-muted text-sm text-muted-foreground">
         Tocá un producto para empezar
       </div>
     );
   }
   if (cartCount === 0) {
     return (
-      <button
-        onClick={onClick}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 text-base font-semibold text-white shadow-sm active:scale-[0.98]"
-      >
+      <Button type="button" size="xl" onClick={onClick} className="w-full">
         <ClipboardList className="h-5 w-5" />
         Ver enviados
-      </button>
+      </Button>
     );
   }
   return (
-    <button
+    <Button
+      type="button"
+      size="xl"
       onClick={onClick}
-      className="flex h-14 w-full items-center justify-between gap-2 rounded-2xl bg-emerald-600 px-4 text-white shadow-sm active:scale-[0.98]"
+      className="w-full justify-between"
     >
       <span className="flex items-center gap-2">
         <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-white/20 px-2 text-sm font-bold tabular-nums">
@@ -2963,7 +2990,7 @@ function BottomCTACatalogo({
       <span className="text-base font-bold tabular-nums">
         {formatCurrency(cartTotal)}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -2984,7 +3011,7 @@ function BottomCTAResumen({
 }) {
   if (cartCount === 0) {
     return (
-      <div className="flex h-14 items-center justify-center rounded-2xl bg-zinc-100 text-sm text-zinc-500">
+      <div className="flex h-14 items-center justify-center rounded-2xl bg-muted text-sm text-muted-foreground">
         Sin items nuevos para enviar
       </div>
     );
@@ -2992,8 +3019,8 @@ function BottomCTAResumen({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1 text-sm">
-        <span className="text-zinc-600">Total a enviar</span>
-        <span className="text-lg font-bold text-zinc-900 tabular-nums">
+        <span className="text-foreground/70">Total a enviar</span>
+        <span className="text-lg font-bold text-foreground tabular-nums">
           {formatCurrency(cartTotal)}
         </span>
       </div>
@@ -3003,14 +3030,16 @@ function BottomCTAResumen({
         value={observacion}
         onChange={onObservacionChange}
       />
-      <button
+      <Button
+        type="button"
+        size="xl"
         onClick={onSend}
         disabled={pending}
-        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-semibold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
+        className="w-full"
       >
         <Send className="h-5 w-5" />
         {pending ? "Enviando..." : "Enviar a sectores"}
-      </button>
+      </Button>
     </div>
   );
 }

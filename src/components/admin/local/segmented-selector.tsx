@@ -46,8 +46,8 @@ export function SegmentedSelector({
               className={cn(
                 "shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold transition active:scale-[0.97]",
                 isActive
-                  ? "bg-zinc-900 text-white shadow-sm"
-                  : "text-zinc-700 hover:bg-zinc-100",
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-foreground/80 hover:bg-muted",
               )}
             >
               <span>{item.label}</span>
@@ -57,7 +57,7 @@ export function SegmentedSelector({
                     "ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
                     isActive
                       ? "bg-white/15 text-white"
-                      : "bg-zinc-200 text-zinc-700",
+                      : "bg-border text-foreground/80",
                   )}
                 >
                   {item.count}

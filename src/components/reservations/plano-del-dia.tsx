@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { ElegirMesaBanner } from "@/components/reservations/elegir-mesa-banner";
 import { MesaFigura } from "@/components/reservations/mesa-figura";
+import { Button } from "@/components/ui/button";
 import {
   ReservationEditPanel,
   type EditPatch,
@@ -68,19 +69,19 @@ import { cn } from "@/lib/utils";
  */
 
 const RELLENO: Record<EstadoDeMesa, string> = {
-  libre: "fill-white stroke-zinc-300",
+  libre: "fill-white stroke-foreground/20",
   reservada: "fill-blue-50 stroke-blue-400",
   pendiente: "fill-amber-50 stroke-amber-500",
 };
 
 const TEXTO: Record<EstadoDeMesa, string> = {
-  libre: "fill-zinc-400",
+  libre: "fill-muted-foreground/70",
   reservada: "fill-blue-700",
   pendiente: "fill-amber-800",
 };
 
 const DETALLE: Record<EstadoDeMesa, string> = {
-  libre: "fill-zinc-300",
+  libre: "fill-muted-foreground/40",
   reservada: "fill-blue-500",
   pendiente: "fill-amber-600",
 };
@@ -319,7 +320,7 @@ export function PlanoDelDia({
 
   if (mesasDelSalon.length === 0) {
     return (
-      <div className="rounded-2xl bg-white p-10 text-center text-sm text-zinc-500 ring-1 ring-zinc-200/70">
+      <div className="rounded-2xl bg-card p-10 text-center text-sm text-muted-foreground ring-1 ring-border/70">
         Este salón todavía no tiene mesas cargadas.
       </div>
     );
@@ -328,8 +329,8 @@ export function PlanoDelDia({
   return (
     <div
       className={cn(
-        "rounded-2xl bg-white p-4 ring-1",
-        asignando ? "ring-2 ring-indigo-500" : "ring-zinc-200/70",
+        "rounded-2xl bg-card p-4 ring-1",
+        asignando ? "ring-2 ring-indigo-500" : "ring-border/70",
       )}
     >
       {/* Spec 138 — el plano queda esperando el tap, como en Operación. */}
@@ -353,7 +354,7 @@ export function PlanoDelDia({
               setSalonId(e.target.value);
               setElegida(null);
             }}
-            className="h-8 rounded-xl border-0 bg-zinc-100 px-2.5 text-xs font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+            className="h-8 rounded-xl border-0 bg-muted px-2.5 text-xs font-medium text-foreground/90 focus:outline-none focus:ring-2 focus:ring-foreground/20"
           >
             {floorPlans.map((fp) => (
               <option key={fp.id} value={fp.id}>
@@ -367,7 +368,7 @@ export function PlanoDelDia({
             servicio normal tiene una reserva por mesa y por turno, así que casi
             siempre no hace falta tocarlos. */}
         <div
-          className="inline-flex rounded-full bg-zinc-100/80 p-1 ring-1 ring-zinc-200/60"
+          className="inline-flex rounded-full bg-muted/80 p-1 ring-1 ring-border/60"
           role="tablist"
           aria-label="Turno del plano"
         >
@@ -387,7 +388,7 @@ export function PlanoDelDia({
           ))}
         </div>
 
-        <span className="ml-auto text-[11px] text-zinc-500">
+        <span className="ml-auto text-[11px] text-muted-foreground">
           {enPantalla === 0
             ? "Sin reservas"
             : `${enPantalla} ${enPantalla === 1 ? "reserva" : "reservas"}`}
@@ -427,8 +428,8 @@ export function PlanoDelDia({
         ))}
       </svg>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-        <Leyenda className="bg-white ring-zinc-300" label="libre" />
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <Leyenda className="bg-card ring-foreground/20" label="libre" />
         <Leyenda className="bg-blue-50 ring-blue-400" label="reservada" />
         <Leyenda
           className="bg-amber-50 ring-amber-500 ring-dashed"
@@ -540,12 +541,12 @@ function FichaDeMesa({
         "mt-3 rounded-xl p-3.5 ring-1",
         estado === "pendiente"
           ? "bg-amber-50/70 ring-amber-200"
-          : "bg-zinc-50 ring-zinc-200",
+          : "bg-muted/50 ring-border",
       )}
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
             Mesa {mesa.label}
             {multiSalon && salonName ? ` · ${salonName}` : ""} · {mesa.seats}{" "}
             lugares
@@ -564,8 +565,8 @@ function FichaDeMesa({
                     className={cn(
                       "rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums ring-1 transition",
                       activa
-                        ? "bg-zinc-900 text-white ring-zinc-900"
-                        : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-100",
+                        ? "bg-primary text-white ring-primary"
+                        : "bg-card text-foreground/70 ring-border hover:bg-muted",
                       r.status === "pending" && !activa && "text-amber-800 ring-amber-300",
                     )}
                   >
@@ -578,8 +579,8 @@ function FichaDeMesa({
 
           {reserva ? (
             <>
-              <p className="mt-1 flex items-center gap-2 text-[15px] font-semibold text-zinc-900">
-                <User className="h-3.5 w-3.5 text-zinc-400" />
+              <p className="mt-1 flex items-center gap-2 text-[15px] font-semibold text-foreground">
+                <User className="h-3.5 w-3.5 text-muted-foreground/70" />
                 <span className="truncate">{reserva.customer_name}</span>
                 {STATUS_LABEL[reserva.status] && (
                   <span
@@ -593,20 +594,20 @@ function FichaDeMesa({
                 )}
               </p>
 
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600">
-                <span className="font-mono font-semibold tabular-nums text-zinc-900">
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/70">
+                <span className="font-mono font-semibold tabular-nums text-foreground">
                   {formatInTimeZone(new Date(reserva.starts_at), timezone, "HH:mm")}
                   {" → "}
                   {formatInTimeZone(new Date(reserva.ends_at), timezone, "HH:mm")}
                 </span>
                 <span className="font-medium">{reserva.party_size} comensales</span>
                 {reserva.service ? (
-                  <span className="capitalize text-zinc-500">{reserva.service}</span>
+                  <span className="capitalize text-muted-foreground">{reserva.service}</span>
                 ) : null}
                 {reserva.customer_phone ? (
                   <a
                     href={`tel:${reserva.customer_phone}`}
-                    className="inline-flex items-center gap-1 hover:text-zinc-900 hover:underline"
+                    className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
                   >
                     <Phone className="h-3 w-3" />
                     {reserva.customer_phone}
@@ -615,19 +616,19 @@ function FichaDeMesa({
               </p>
 
               {reserva.notes ? (
-                <p className="mt-1.5 rounded-lg bg-white/70 px-2 py-1 text-[11px] italic text-zinc-600 ring-1 ring-zinc-200/70">
+                <p className="mt-1.5 rounded-lg bg-white/70 px-2 py-1 text-[11px] italic text-foreground/70 ring-1 ring-border/70">
                   &ldquo;{reserva.notes}&rdquo;
                 </p>
               ) : null}
 
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-zinc-400">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground/70">
                 {reserva.source ? (
                   <span
                     className={cn(
                       "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium ring-1",
                       reserva.source === "web"
                         ? "bg-sky-50 text-sky-700 ring-sky-200"
-                        : "bg-zinc-100 text-zinc-600 ring-zinc-200",
+                        : "bg-muted text-foreground/70 ring-border",
                     )}
                   >
                     {reserva.source === "web" ? (
@@ -646,20 +647,22 @@ function FichaDeMesa({
               </div>
             </>
           ) : (
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Sin reservas {"en este turno."}
             </p>
           )}
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={onCerrar}
           aria-label="Cerrar ficha"
-          className="rounded-full p-1 text-zinc-400 transition hover:bg-white hover:text-zinc-700"
+          className="rounded-full"
         >
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
 
       {/* Acciones — las mismas que la fila de la lista, por estado. */}
@@ -777,26 +780,20 @@ function BotonFicha({
   disabled?: boolean;
   onClick: () => void;
 }) {
-  const tones: Record<typeof tone, string> = {
-    ok: "bg-emerald-600 text-white hover:bg-emerald-700",
-    neutral:
-      "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100",
-    warn: "bg-amber-50 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100",
-    danger: "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100",
+  const variants: Record<
+    typeof tone,
+    "default" | "outline" | "destructive"
+  > = {
+    ok: "default",
+    neutral: "outline",
+    warn: "destructive",
+    danger: "destructive",
   };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition active:scale-[0.97] disabled:opacity-60",
-        tones[tone],
-      )}
-    >
+    <Button type="button" variant={variants[tone]} onClick={onClick} disabled={disabled}>
       {icon}
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -818,21 +815,22 @@ function SinMesa({
     floorPlans.find((fp) => fp.id === id)?.name ?? null;
 
   return (
-    <div className="mt-3 rounded-xl bg-zinc-50 p-3 ring-1 ring-zinc-200">
-      <button
+    <div className="mt-3 rounded-xl bg-muted/50 p-3 ring-1 ring-border">
+      <Button
         type="button"
+        variant="ghost"
+        className="h-auto w-full justify-between gap-2 px-0 py-0 text-left font-normal hover:bg-transparent"
         onClick={() => setAbierto((v) => !v)}
         aria-expanded={abierto}
-        className="flex w-full items-center justify-between gap-2 text-left"
       >
-        <span className="text-xs font-semibold text-zinc-700">
+        <span className="text-xs font-semibold text-foreground/80">
           {reservas.length} {reservas.length === 1 ? "reserva" : "reservas"} sin
           mesa · {cubiertos} cubiertos
         </span>
-        <span className="text-[11px] font-medium text-zinc-500">
+        <span className="text-[11px] font-medium text-muted-foreground">
           {abierto ? "Ocultar" : "Ver"}
         </span>
-      </button>
+      </Button>
 
       {abierto && (
         <ul className="mt-2 space-y-1.5">
@@ -841,20 +839,20 @@ function SinMesa({
             return (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg bg-white px-2.5 py-1.5 text-xs text-zinc-600 ring-1 ring-zinc-200/70"
+                className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg bg-card px-2.5 py-1.5 text-xs text-foreground/70 ring-1 ring-border/70"
               >
-                <span className="font-mono font-semibold tabular-nums text-zinc-900">
+                <span className="font-mono font-semibold tabular-nums text-foreground">
                   {formatInTimeZone(new Date(r.starts_at), timezone, "HH:mm")}
                 </span>
-                <span className="font-medium text-zinc-900">
+                <span className="font-medium text-foreground">
                   {r.customer_name}
                 </span>
                 <span>{r.party_size}p</span>
-                {salon ? <span className="text-zinc-500">{salon}</span> : null}
+                {salon ? <span className="text-muted-foreground">{salon}</span> : null}
                 {r.customer_phone ? (
                   <a
                     href={`tel:${r.customer_phone}`}
-                    className="inline-flex items-center gap-1 hover:text-zinc-900 hover:underline"
+                    className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
                   >
                     <Phone className="h-3 w-3" />
                     {r.customer_phone}
@@ -871,7 +869,7 @@ function SinMesa({
                   </span>
                 )}
                 {r.notes ? (
-                  <span className="w-full truncate text-[11px] italic text-zinc-500">
+                  <span className="w-full truncate text-[11px] italic text-muted-foreground">
                     &ldquo;{r.notes}&rdquo;
                   </span>
                 ) : null}
@@ -956,15 +954,15 @@ function BotonTurno({
       className={cn(
         "rounded-full px-3 py-1.5 text-xs font-medium transition",
         activo
-          ? "bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)]"
+          ? "bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.06)]"
           : cantidad === 0
-            ? "text-zinc-400 hover:text-zinc-600"
-            : "text-zinc-500 hover:text-zinc-900",
+            ? "text-muted-foreground/70 hover:text-foreground/70"
+            : "text-muted-foreground hover:text-foreground",
       )}
     >
       {label}
       {cantidad !== undefined && cantidad > 0 && (
-        <span className="ml-1.5 tabular-nums text-zinc-400">{cantidad}</span>
+        <span className="ml-1.5 tabular-nums text-muted-foreground/70">{cantidad}</span>
       )}
     </button>
   );

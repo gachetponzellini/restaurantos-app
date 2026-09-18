@@ -14,6 +14,7 @@ import {
 } from "@/lib/mozo/party-size-keys";
 import { CustomerFields } from "@/components/shared/customer-fields";
 import { sentarWalkIn } from "@/lib/mozo/walk-in";
+import { Button } from "@/components/ui/button";
 import { InlineModal, ModalBody, ModalHeader } from "@/components/ui/modal";
 import { useArrowFocus } from "@/lib/ui/use-arrow-focus";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
@@ -155,9 +156,9 @@ function WalkInForm({
       >
         {/* Party size: quick-pick directo + stepper */}
         <div className="@xl:col-span-2 @xl:max-w-md">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Personas
-            <span className="ml-1.5 font-semibold normal-case tracking-normal text-zinc-400">
+            <span className="ml-1.5 font-semibold normal-case tracking-normal text-muted-foreground/70">
               · teclas 1-9, + y −
             </span>
           </label>
@@ -173,7 +174,7 @@ function WalkInForm({
                 className={`flex h-12 items-center justify-center rounded-xl text-lg font-extrabold tabular-nums transition active:scale-95 ${
                   partySize === n
                     ? "bg-emerald-600 text-white shadow-sm"
-                    : "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200"
+                    : "bg-muted/50 text-foreground/80 ring-1 ring-border"
                 }`}
               >
                 {n}
@@ -181,10 +182,12 @@ function WalkInForm({
             ))}
           </div>
           {/* Stepper para ajustar o más de 6 */}
-          <div className="mt-2 flex items-center justify-between rounded-2xl bg-zinc-50 p-2 ring-1 ring-zinc-200">
-            <button
+          <div className="mt-2 flex items-center justify-between rounded-2xl bg-muted/50 p-2 ring-1 ring-border">
+            <Button
               type="button"
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-200 transition active:scale-95 disabled:opacity-30"
+              variant="outline"
+              size="icon-lg"
+              className="h-12 w-12 rounded-xl"
               disabled={partySize <= MIN_PARTY_SIZE}
               aria-label="Disminuir"
               onClick={() =>
@@ -192,13 +195,15 @@ function WalkInForm({
               }
             >
               <Minus className="h-5 w-5" />
-            </button>
-            <span className="font-heading text-3xl font-extrabold tabular-nums text-zinc-900">
+            </Button>
+            <span className="font-heading text-3xl font-extrabold tabular-nums text-foreground">
               {partySize}
             </span>
-            <button
+            <Button
               type="button"
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-200 transition active:scale-95 disabled:opacity-30"
+              variant="outline"
+              size="icon-lg"
+              className="h-12 w-12 rounded-xl"
               disabled={partySize >= MAX_PARTY_SIZE}
               aria-label="Aumentar"
               onClick={() =>
@@ -206,7 +211,7 @@ function WalkInForm({
               }
             >
               <Plus className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           {errors.partySize && (
             <p className="mt-1 text-xs text-red-600">
@@ -228,24 +233,25 @@ function WalkInForm({
         />
 
         <div>
-          <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             Notas (opcional)
           </label>
           <textarea
             {...register("notes")}
             rows={2}
-            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base"
+            className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-base"
             placeholder="Ej: alérgico a maní, cumpleaños…"
           />
         </div>
       </div>
 
-      <div className={isPanel ? "shrink-0 border-t border-zinc-200 p-3" : ""}>
-        <button
+      <div className={isPanel ? "shrink-0 border-t border-border p-3" : ""}>
+        <Button
           ref={submitRef}
           type="submit"
+          size="xl"
+          className="w-full"
           disabled={submitting}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-bold text-white shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-60"
         >
           {submitting ? "Abriendo…" : `Abrir ${tableLabel}`}
           {!submitting && (
@@ -253,7 +259,7 @@ function WalkInForm({
               ↵
             </span>
           )}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -293,27 +299,29 @@ export function WalkInPanel(props: Props) {
   useEscapeToClose(props.onClose);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-zinc-50">
-      <header className="shrink-0 border-b border-zinc-200 bg-white px-3 py-2.5">
+    <div className="flex h-full min-h-0 flex-col bg-muted/50">
+      <header className="shrink-0 border-b border-border bg-card px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-lg"
+            className="-ml-1"
             onClick={props.onClose}
-            className="-ml-1 rounded-full p-2 text-zinc-700 transition active:bg-zinc-100"
             aria-label="Volver al salón"
           >
             <ArrowLeft className="h-5 w-5" />
-          </button>
+          </Button>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Walk-in
             </p>
-            <h2 className="font-heading text-base font-bold leading-tight text-zinc-900">
+            <h2 className="font-heading text-base font-bold leading-tight text-foreground">
               Abrir {props.tableLabel}
             </h2>
           </div>
         </div>
-        <p className="mt-1.5 text-xs text-zinc-500">
+        <p className="mt-1.5 text-xs text-muted-foreground">
           Solo la cantidad es obligatoria. Si dejás teléfono, entra al CRM.
         </p>
       </header>

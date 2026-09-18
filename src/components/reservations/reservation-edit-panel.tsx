@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatInTimeZone } from "date-fns-tz";
 import { Check } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { TimeField24 } from "@/components/ui/time-field-24";
 import { arrivalSlots } from "@/lib/reservations/flexible-availability";
 import type {
@@ -124,9 +125,9 @@ export function ReservationEditPanel({
   }
 
   return (
-      <div className={cn("flex flex-wrap items-end gap-3 rounded-xl bg-zinc-50 p-3 ring-1 ring-zinc-200/60", className)}>
+      <div className={cn("flex flex-wrap items-end gap-3 rounded-xl bg-muted/50 p-3 ring-1 ring-border/60", className)}>
         <div>
-          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Comensales
           </label>
           <input
@@ -138,14 +139,14 @@ export function ReservationEditPanel({
               const v = parseInt(e.target.value, 10);
               if (!Number.isNaN(v) && v >= 1) setEditPartySize(v);
             }}
-            className="h-9 w-16 rounded-xl border-0 bg-white px-2 text-center text-sm font-semibold tabular-nums text-zinc-900 ring-1 ring-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            className="h-9 w-16 rounded-xl border-0 bg-card px-2 text-center text-sm font-semibold tabular-nums text-foreground ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-emerald-300"
           />
         </div>
         {/* Spec 097 — servicio (sólo flexible: es donde "el horario" se
             elige por servicio y no por slot de grilla). */}
         {isFlexible && services.length > 0 && (
           <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Servicio
             </label>
             <select
@@ -154,7 +155,7 @@ export function ReservationEditPanel({
                 setEditService(e.target.value);
                 setOverbookAsk(null);
               }}
-              className="h-9 rounded-xl border-0 bg-white px-2.5 text-sm font-medium text-zinc-900 ring-1 ring-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              className="h-9 rounded-xl border-0 bg-card px-2.5 text-sm font-medium text-foreground ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-emerald-300"
             >
               {!services.some((s) => s.name === editService) && (
                 <option value={editService}>{editService || "—"}</option>
@@ -168,7 +169,7 @@ export function ReservationEditPanel({
           </div>
         )}
         <div>
-          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {isFlexible ? "Llegada" : "Hora"}
           </label>
           {isFlexible && serviceSlots.length > 0 ? (
@@ -178,7 +179,7 @@ export function ReservationEditPanel({
                 setEditTime(e.target.value);
                 setOverbookAsk(null);
               }}
-              className="h-9 rounded-xl border-0 bg-white px-2.5 text-sm font-semibold tabular-nums text-zinc-900 ring-1 ring-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              className="h-9 rounded-xl border-0 bg-card px-2.5 text-sm font-semibold tabular-nums text-foreground ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-emerald-300"
             >
               {!serviceSlots.includes(editTime) && (
                 <option value="" disabled>
@@ -198,12 +199,12 @@ export function ReservationEditPanel({
                 setEditTime(v);
                 setOverbookAsk(null);
               }}
-              className="h-9 w-20 rounded-xl border-0 bg-white px-2 text-center text-sm font-semibold text-zinc-900 ring-1 ring-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              className="h-9 w-20 rounded-xl border-0 bg-card px-2 text-center text-sm font-semibold text-foreground ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-emerald-300"
             />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Mesa
           </label>
           <select
@@ -212,7 +213,7 @@ export function ReservationEditPanel({
               setEditTableId(e.target.value);
               setOverbookAsk(null);
             }}
-            className="h-9 w-full max-w-[240px] rounded-xl border-0 bg-white px-2.5 text-sm font-medium text-zinc-900 ring-1 ring-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            className="h-9 w-full max-w-[240px] rounded-xl border-0 bg-card px-2.5 text-sm font-medium text-foreground ring-1 ring-border focus:outline-none focus:ring-2 focus:ring-emerald-300"
           >
             {/* Flexible: la mesa se puede decidir al llegar (spec 059), así que
                 "sin mesa" es un estado válido y no un formulario incompleto. */}
@@ -236,39 +237,40 @@ export function ReservationEditPanel({
           </select>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
+            size="lg"
             onClick={() => save(false)}
             disabled={pending || (!isFlexible && !editTableId)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-50"
           >
             <Check className="h-3.5 w-3.5" />
             Guardar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             onClick={() => {
               setOverbookAsk(null);
               onClose();
             }}
             disabled={pending}
-            className="inline-flex h-9 items-center rounded-xl bg-white px-3 text-xs font-semibold text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-100 active:scale-[0.97] disabled:opacity-50"
           >
             Cancelar
-          </button>
+          </Button>
         </div>
         {overbookAsk && (
           <div className="w-full rounded-xl bg-amber-50 p-2.5 ring-1 ring-amber-200">
             <p className="text-xs font-medium text-amber-900">{overbookAsk}</p>
-            <button
+            <Button
               type="button"
+              className="mt-2"
               onClick={() => save(true)}
               disabled={pending}
-              className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 text-xs font-semibold text-white transition hover:bg-amber-700 active:scale-[0.97] disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" />
               Guardar igual
-            </button>
+            </Button>
           </div>
         )}
       </div>

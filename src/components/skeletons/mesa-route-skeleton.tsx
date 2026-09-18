@@ -21,7 +21,7 @@ const MAX_WIDTH: Record<MesaRouteVariant, string> = {
 
 function MesaHeaderSkeleton({ variant }: { variant: MesaRouteVariant }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur-md">
       <div
         className={`mx-auto flex ${MAX_WIDTH[variant]} items-center gap-3 px-4 py-3`}
       >
@@ -59,13 +59,13 @@ export function PedirPanelSkeleton() {
     >
       {/* La mesa: al lado de la carga con el panel ancho, apilada abajo con el
           panel angosto — nunca escondida. */}
-      <div className="order-2 max-h-[45%] shrink-0 space-y-3 overflow-hidden border-t border-zinc-200 px-3 py-3 @min-[600px]:order-1 @min-[600px]:flex @min-[600px]:max-h-none @min-[600px]:w-[46%] @min-[600px]:max-w-[520px] @min-[600px]:flex-col @min-[600px]:border-t-0 @min-[600px]:border-r">
+      <div className="order-2 max-h-[45%] shrink-0 space-y-3 overflow-hidden border-t border-border px-3 py-3 @min-[600px]:order-1 @min-[600px]:flex @min-[600px]:max-h-none @min-[600px]:w-[46%] @min-[600px]:max-w-[520px] @min-[600px]:flex-col @min-[600px]:border-t-0 @min-[600px]:border-r">
         {Array.from({ length: 2 }).map((_, i) => (
           <div
             key={i}
-            className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200"
+            className="overflow-hidden rounded-2xl bg-card ring-1 ring-border"
           >
-            <div className="border-b border-zinc-100 bg-zinc-50/60 px-3 py-2">
+            <div className="border-b border-border/60 bg-muted/30 px-3 py-2">
               <Skeleton className="h-3 w-24 rounded" />
             </div>
             <div className="space-y-2 p-3">
@@ -78,7 +78,7 @@ export function PedirPanelSkeleton() {
 
       {/* La carga: el buscador fijo y la lista de productos. */}
       <div className="order-1 flex min-h-0 flex-1 flex-col @min-[600px]:order-2">
-        <div className="shrink-0 space-y-2 border-b border-zinc-200 bg-white px-3 py-2.5">
+        <div className="shrink-0 space-y-2 border-b border-border bg-card px-3 py-2.5">
           <Skeleton className="h-11 w-full rounded-2xl" />
           <div className="flex gap-2 overflow-hidden">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -126,7 +126,7 @@ function CuentaBodySkeleton() {
           <Skeleton className="h-4 w-16" />
         </div>
       ))}
-      <div className="mt-6 space-y-2 border-t border-zinc-200 pt-4">
+      <div className="mt-6 space-y-2 border-t border-border pt-4">
         <div className="flex items-center justify-between">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-5 w-20" />
@@ -142,7 +142,7 @@ function CobrarBodySkeleton() {
       {/* barra de progreso */}
       <Skeleton className="h-2 w-full rounded-full" />
       {/* KPI "falta cobrar" */}
-      <div className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200">
+      <div className="rounded-2xl bg-card p-4 ring-1 ring-border">
         <Skeleton className="mb-2 h-3 w-24" />
         <Skeleton className="h-8 w-40" />
       </div>
@@ -156,7 +156,7 @@ function CobrarBodySkeleton() {
 
 export function MesaRouteSkeleton({ variant }: { variant: MesaRouteVariant }) {
   return (
-    <div className="min-h-dvh bg-zinc-100/60">
+    <div className="min-h-dvh bg-muted/60">
       <MesaHeaderSkeleton variant={variant} />
       {variant === "pedir" && <PedirBodySkeleton />}
       {variant === "cuenta" && <CuentaBodySkeleton />}

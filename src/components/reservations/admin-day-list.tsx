@@ -8,6 +8,7 @@ import { CalendarPlus, Check, Clock, Pencil, Search, UserPlus, X } from "lucide-
 import { toast } from "sonner";
 
 import { NewReservationModal } from "@/components/admin/local/new-reservation-modal";
+import { Button } from "@/components/ui/button";
 import { matchesSalonReserva } from "@/lib/admin/salon-filter";
 import { proximaReserva, reservationDayStats } from "@/lib/reservations/day-stats";
 import {
@@ -54,10 +55,10 @@ const STATUS_LABEL: Record<ReservationStatus, string> = {
 const STATUS_DOT: Record<ReservationStatus, string> = {
   pending: "bg-amber-500",
   rejected: "bg-rose-500",
-  expired: "bg-zinc-400",
+  expired: "bg-muted-foreground",
   confirmed: "bg-blue-500",
   seated: "bg-emerald-500",
-  completed: "bg-zinc-400",
+  completed: "bg-muted-foreground",
   no_show: "bg-amber-500",
   cancelled: "bg-rose-500",
 };
@@ -65,10 +66,10 @@ const STATUS_DOT: Record<ReservationStatus, string> = {
 const STATUS_RING: Record<ReservationStatus, string> = {
   pending: "bg-amber-50 text-amber-800 ring-amber-200",
   rejected: "bg-rose-50 text-rose-700 ring-rose-200",
-  expired: "bg-zinc-100 text-zinc-600 ring-zinc-200",
+  expired: "bg-muted text-foreground/70 ring-border",
   confirmed: "bg-blue-50 text-blue-700 ring-blue-200",
   seated: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  completed: "bg-zinc-100 text-zinc-600 ring-zinc-200",
+  completed: "bg-muted text-foreground/70 ring-border",
   no_show: "bg-amber-50 text-amber-700 ring-amber-200",
   cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
 };
@@ -475,7 +476,7 @@ export function AdminDayList({
 
       {/* Secondary stats: no-show + cancelled (solo si hubo) */}
       {(stats.noShow > 0 || stats.cancelled > 0 || stats.completed > 0) && (
-        <div className="flex flex-wrap gap-3 px-1 text-xs text-zinc-500">
+        <div className="flex flex-wrap gap-3 px-1 text-xs text-muted-foreground">
           {stats.completed > 0 && (
             <span>
               ✓ {stats.completed} completada{stats.completed > 1 ? "s" : ""}
@@ -496,28 +497,32 @@ export function AdminDayList({
 
       {/* ── Date navigator + search + actions ────────────────────────────── */}
       <div
-        className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70"
+        className="rounded-2xl bg-card p-4 ring-1 ring-border/70"
         style={{ boxShadow: CARD_SHADOW }}
       >
         {/* Row 1: date nav + links */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setDate(shiftDate(date, -1))}
-              className="grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 active:scale-95"
+              className="rounded-full"
               aria-label="Día anterior"
             >
               <Ic.chevL />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setDate(shiftDate(date, 1))}
-              className="grid h-8 w-8 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 active:scale-95"
+              className="rounded-full"
               aria-label="Día siguiente"
             >
               <Ic.chevR />
-            </button>
+            </Button>
           </div>
 
           <div className="no-scrollbar -mx-1 flex flex-1 gap-1.5 overflow-x-auto px-1">
@@ -531,8 +536,8 @@ export function AdminDayList({
                   className={cn(
                     "relative my-1 flex min-w-[52px] flex-col items-center rounded-xl px-2.5 py-2 ring-1 transition active:scale-[0.97]",
                     active
-                      ? "bg-zinc-900 text-white ring-zinc-900"
-                      : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+                      ? "bg-primary text-white ring-primary"
+                      : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
                   )}
                 >
                   <span className="text-[10px] uppercase tracking-[0.14em] opacity-70">
@@ -563,25 +568,25 @@ export function AdminDayList({
               onChange={(e) => setDate(e.target.value)}
               className="absolute inset-0 cursor-pointer opacity-0"
             />
-            <span className="inline-flex h-8 cursor-pointer items-center rounded-full bg-zinc-100 px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-600 hover:bg-zinc-200">
+            <span className="inline-flex h-8 cursor-pointer items-center rounded-full bg-muted px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground/70 hover:bg-border">
               Saltar
             </span>
           </label>
 
-          <div className="hidden h-6 w-px bg-zinc-200 sm:block" />
+          <div className="hidden h-6 w-px bg-border sm:block" />
 
-          <button
+          <Button
             type="button"
+            size="lg"
             onClick={() => setShowNewReservation(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-blue-600 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.97]"
           >
             <CalendarPlus className="h-4 w-4" />
             Nueva reserva
-          </button>
+          </Button>
 
           <Link
             href={`/${slug}/admin/reservas/configuracion`}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground/80 ring-1 ring-border transition hover:bg-muted/50"
           >
             <Ic.cog /> Config
           </Link>
@@ -591,29 +596,31 @@ export function AdminDayList({
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/70" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nombre o teléfono…"
-              className="h-8 w-56 rounded-full border-0 bg-zinc-100 pl-8 pr-8 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              className="h-8 w-56 rounded-full border-0 bg-muted pl-8 pr-8 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-foreground/20"
             />
             {search && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-zinc-400 hover:text-zinc-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full"
                 aria-label="Limpiar búsqueda"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             )}
           </div>
 
           {/* Spec 137 — Lista o Plano: los mismos datos, otra pregunta. */}
           {plano && (
             <div
-              className="inline-flex rounded-full bg-zinc-100/80 p-1 ring-1 ring-zinc-200/60"
+              className="inline-flex rounded-full bg-muted/80 p-1 ring-1 ring-border/60"
               role="tablist"
             >
               {(["lista", "plano"] as const).map((v) => (
@@ -626,8 +633,8 @@ export function AdminDayList({
                   className={cn(
                     "rounded-full px-3.5 py-1.5 text-xs font-medium capitalize transition",
                     vista === v
-                      ? "bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06)]"
-                      : "text-zinc-500 hover:text-zinc-900",
+                      ? "bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.06)]"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {v}
@@ -639,7 +646,7 @@ export function AdminDayList({
           {/* Filter tabs */}
           <div
             className={cn(
-              "inline-flex rounded-full bg-zinc-100/80 p-1 ring-1 ring-zinc-200/60",
+              "inline-flex rounded-full bg-muted/80 p-1 ring-1 ring-border/60",
               vista === "plano" && "hidden",
             )}
             role="tablist"
@@ -668,8 +675,8 @@ export function AdminDayList({
                   className={cn(
                     "rounded-full px-3.5 py-1.5 text-xs font-medium transition",
                     active
-                      ? "bg-white text-zinc-900 shadow-[0_1px_2px_rgba(24,24,27,0.06),0_4px_10px_-6px_rgba(24,24,27,0.18)]"
-                      : "text-zinc-500 hover:text-zinc-900",
+                      ? "bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.06),0_4px_10px_-6px_rgba(24,24,27,0.18)]"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {opt.l}
@@ -732,17 +739,18 @@ export function AdminDayList({
           el botón viviera adentro se vería como un día sin reservas. */}
       {vista === "lista" && cancelledInView > 0 && (
         <div className="flex justify-center pt-1">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="rounded-full"
             onClick={() => setShowCancelled((v) => !v)}
             aria-expanded={showCancelled}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-zinc-50 hover:text-zinc-900"
           >
             <X className="h-3 w-3 text-rose-500" />
             {showCancelled
               ? "Ocultar canceladas"
               : `Mostrar ${cancelledInView} cancelada${cancelledInView > 1 ? "s" : ""}`}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -769,18 +777,18 @@ export function AdminDayList({
           onClick={() => setRejectDialog(null)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-zinc-900">
+            <h3 className="text-base font-bold text-foreground">
               ¿Rechazar la reserva?
             </h3>
-            <p className="mt-1.5 text-sm text-zinc-600">
+            <p className="mt-1.5 text-sm text-foreground/70">
               Le avisamos a{" "}
               <span className="font-semibold">{rejectDialog.customerName}</span>{" "}
               que no pudimos tomarla y el lugar queda libre.
             </p>
-            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Motivo (opcional)
             </label>
             <input
@@ -789,25 +797,29 @@ export function AdminDayList({
               onChange={(e) => setRejectReason(e.target.value)}
               maxLength={200}
               placeholder="Ej: esa noche tenemos un evento privado"
-              className="mt-1.5 h-10 w-full rounded-xl border-0 bg-zinc-100 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-rose-300"
+              className="mt-1.5 h-10 w-full rounded-xl border-0 bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
             <div className="mt-4 flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="xl"
+                className="flex-1"
                 onClick={() => setRejectDialog(null)}
                 disabled={pending}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60"
               >
                 Volver
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive-solid"
+                size="xl"
+                className="flex-1"
                 onClick={() => handleDecide(rejectDialog.id, "reject", rejectReason)}
                 disabled={pending}
-                className="flex-1 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
               >
                 Rechazar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -820,15 +832,15 @@ export function AdminDayList({
           onClick={() => setConfirmAction(null)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+            className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-zinc-900">
+            <h3 className="text-base font-bold text-foreground">
               {confirmAction.status === "no_show"
                 ? "¿Marcar como no vino?"
                 : "¿Cancelar reserva?"}
             </h3>
-            <p className="mt-1.5 text-sm text-zinc-600">
+            <p className="mt-1.5 text-sm text-foreground/70">
               {confirmAction.status === "no_show" ? (
                 <>
                   La reserva de{" "}
@@ -844,27 +856,28 @@ export function AdminDayList({
               )}
             </p>
             <div className="mt-4 flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="xl"
+                className="flex-1"
                 onClick={() => setConfirmAction(null)}
                 disabled={pending}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-60"
               >
                 Volver
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant={
+                  confirmAction.status === "no_show" ? "default" : "destructive-solid"
+                }
+                size="xl"
+                className="flex-1"
                 onClick={handleConfirmAction}
                 disabled={pending}
-                className={cn(
-                  "flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60",
-                  confirmAction.status === "no_show"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : "bg-rose-600 hover:bg-rose-700",
-                )}
               >
                 {confirmAction.status === "no_show" ? "No vino" : "Cancelar"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -890,7 +903,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70"
+      className="relative overflow-hidden rounded-2xl bg-card p-4 ring-1 ring-border/70"
       style={{ boxShadow: CARD_SHADOW }}
     >
       {accent ? (
@@ -899,19 +912,19 @@ function KpiCard({
           <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-500" />
         </span>
       ) : null}
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
       <p
         className={cn(
-          "mt-1.5 text-3xl font-semibold tracking-tight text-zinc-900",
+          "mt-1.5 text-3xl font-semibold tracking-tight text-foreground",
           mono && "font-mono tabular-nums",
         )}
       >
         {value}
       </p>
       {sub && (
-        <p className="mt-0.5 text-[10px] font-medium text-zinc-400">{sub}</p>
+        <p className="mt-0.5 text-[10px] font-medium text-muted-foreground/70">{sub}</p>
       )}
     </div>
   );
@@ -979,7 +992,7 @@ function ReservationRow({
   return (
     <li
       className={cn(
-        "group relative rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70 transition hover:ring-zinc-300",
+        "group relative rounded-2xl bg-card p-4 ring-1 ring-border/70 transition hover:ring-foreground/20",
         isSoftClosed && "opacity-65 hover:opacity-90",
       )}
       style={{ boxShadow: ROW_SHADOW }}
@@ -987,27 +1000,27 @@ function ReservationRow({
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         {/* Time range */}
         <div className="flex w-24 flex-col">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
             Hora
           </span>
-          <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-zinc-900">
+          <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
             {timeStart}
           </span>
-          <span className="font-mono text-xs tabular-nums text-zinc-400">
+          <span className="font-mono text-xs tabular-nums text-muted-foreground/70">
             → {timeEnd}
           </span>
         </div>
 
-        <div className="h-10 w-px bg-zinc-200/80" />
+        <div className="h-10 w-px bg-border/80" />
 
         {/* Customer + meta */}
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[15px] font-semibold text-zinc-900">
+          <p className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
             <Ic.user />
             <span className="truncate">{row.customer_name}</span>
           </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-            <span className="font-medium text-zinc-700">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground/80">
               {row.party_size}p
               {row.tables ? ` · ${row.tables.label}` : ""}
               {multiSalon && salonName ? ` · ${salonName}` : ""}
@@ -1015,7 +1028,7 @@ function ReservationRow({
             {row.customer_phone ? (
               <a
                 href={`tel:${row.customer_phone}`}
-                className="inline-flex items-center gap-1 hover:text-zinc-900 hover:underline"
+                className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
               >
                 <Ic.phone />
                 {row.customer_phone}
@@ -1025,7 +1038,7 @@ function ReservationRow({
           {/* Notes + source + created */}
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
             {row.notes ? (
-              <span className="max-w-[260px] truncate text-[11px] italic text-zinc-500">
+              <span className="max-w-[260px] truncate text-[11px] italic text-muted-foreground">
                 &ldquo;{row.notes}&rdquo;
               </span>
             ) : null}
@@ -1034,13 +1047,13 @@ function ReservationRow({
                 "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1",
                 row.source === "web"
                   ? "bg-sky-50 text-sky-700 ring-sky-200"
-                  : "bg-zinc-100 text-zinc-600 ring-zinc-200",
+                  : "bg-muted text-foreground/70 ring-border",
               )}
             >
               {row.source === "web" ? <Ic.globe /> : <Ic.user />}
               {row.source === "web" ? "Web" : "Admin"}
             </span>
-            <span className="text-[10px] text-zinc-400" title={row.created_at}>
+            <span className="text-[10px] text-muted-foreground/70" title={row.created_at}>
               {ago}
             </span>
           </div>
@@ -1067,85 +1080,63 @@ function ReservationRow({
               siguen llegando recién cuando es una reserva de verdad. */}
           {row.status === "pending" && !editing && (
             <>
-              <button
-                type="button"
-                onClick={onConfirmarSolicitud}
-                disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97] disabled:opacity-60"
-              >
+              <Button type="button" size="lg" onClick={onConfirmarSolicitud} disabled={pending}>
                 <Check className="h-3.5 w-3.5" />
                 Confirmar
-              </button>
-              <button
-                type="button"
-                onClick={openEdit}
-                disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-zinc-100 px-3 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-200 active:scale-[0.97] disabled:opacity-60"
-              >
+              </Button>
+              <Button type="button" variant="outline" size="lg" onClick={openEdit} disabled={pending}>
                 <Pencil className="h-3.5 w-3.5" />
                 Editar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
+                size="lg"
                 onClick={onRechazarSolicitud}
                 disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-50 px-3 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100 active:scale-[0.97] disabled:opacity-60"
               >
                 <X className="h-3.5 w-3.5" />
                 Rechazar
-              </button>
+              </Button>
             </>
           )}
           {row.status === "confirmed" && !editing && (
             <>
-              <button
-                type="button"
-                onClick={onSentar}
-                disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97] disabled:opacity-60"
-              >
+              <Button type="button" size="lg" onClick={onSentar} disabled={pending}>
                 <UserPlus className="h-3.5 w-3.5" />
                 Sentar
-              </button>
-              <button
-                type="button"
-                onClick={openEdit}
-                disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-zinc-100 px-3 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-200 active:scale-[0.97] disabled:opacity-60"
-              >
+              </Button>
+              <Button type="button" variant="outline" size="lg" onClick={openEdit} disabled={pending}>
                 <Pencil className="h-3.5 w-3.5" />
                 Editar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
+                size="lg"
                 onClick={onNoShow}
                 disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-amber-50 px-3 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-100 active:scale-[0.97] disabled:opacity-60"
               >
                 <Clock className="h-3.5 w-3.5" />
                 No vino
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
+                size="lg"
                 onClick={onCancel}
                 disabled={pending}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-50 px-3 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100 active:scale-[0.97] disabled:opacity-60"
               >
                 <X className="h-3.5 w-3.5" />
                 Cancelar
-              </button>
+              </Button>
             </>
           )}
           {row.status === "seated" && (
-            <button
-              type="button"
-              onClick={onComplete}
-              disabled={pending}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.97] disabled:opacity-60"
-            >
+            <Button type="button" size="lg" onClick={onComplete} disabled={pending}>
               <Check className="h-3.5 w-3.5" />
               Completar
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -1185,11 +1176,11 @@ function EmptyState({ filter, search }: { filter: Filter; search: string }) {
           : "Sin reservas pasadas hoy.";
   return (
     <div
-      className="rounded-2xl bg-white p-12 text-center ring-1 ring-dashed ring-zinc-300"
+      className="rounded-2xl bg-card p-12 text-center ring-1 ring-dashed ring-foreground/20"
       style={{ boxShadow: "0 1px 0 rgba(24, 24, 27, 0.02)" }}
     >
       <div
-        className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-zinc-100 text-zinc-400 ring-1 ring-zinc-200"
+        className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground/70 ring-1 ring-border"
         aria-hidden
       >
         {search ? (
@@ -1210,8 +1201,8 @@ function EmptyState({ filter, search }: { filter: Filter; search: string }) {
           </svg>
         )}
       </div>
-      <p className="mt-4 text-sm font-medium text-zinc-700">{message}</p>
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-4 text-sm font-medium text-foreground/80">{message}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
         {search
           ? "Probá con otro nombre o teléfono."
           : "Probá saltar a otra fecha o cambiar el filtro."}

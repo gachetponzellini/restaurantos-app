@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
   cancelarItem,
   editarItemComanda,
@@ -257,16 +258,12 @@ export function EditarItemsModal({
                 >
                   {r.productName}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant={r.removed ? "outline" : "destructive"}
+                  size="sm"
                   onClick={() => patchRow(r.itemId, { removed: !r.removed })}
                   disabled={pending}
-                  className={[
-                    "inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold transition disabled:opacity-50",
-                    r.removed
-                      ? "text-muted-foreground ring-border/70 hover:bg-muted/60 ring-1"
-                      : "text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50",
-                  ].join(" ")}
                 >
                   {r.removed ? (
                     <>
@@ -277,7 +274,7 @@ export function EditarItemsModal({
                       <Trash2 className="size-3" strokeWidth={2.5} /> Quitar
                     </>
                   )}
-                </button>
+                </Button>
               </div>
 
               {!r.removed && (
@@ -341,19 +338,20 @@ export function EditarItemsModal({
                         </span>
                       </span>
                       {r.overrideCents === null ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() =>
                             patchRow(r.itemId, {
                               overrideCents: r.catalogPriceCents,
                             })
                           }
                           disabled={pending}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-50 disabled:opacity-50"
                         >
                           <Tag className="size-3" strokeWidth={2.5} />
                           Cambiar el precio
-                        </button>
+                        </Button>
                       ) : (
                         <div className="flex flex-1 flex-wrap items-center gap-2">
                           <input
@@ -393,8 +391,10 @@ export function EditarItemsModal({
                                 : "border-input",
                             ].join(" ")}
                           />
-                          <button
+                          <Button
                             type="button"
+                            variant="outline"
+                            size="sm"
                             onClick={() =>
                               patchRow(r.itemId, {
                                 overrideCents: null,
@@ -402,11 +402,10 @@ export function EditarItemsModal({
                               })
                             }
                             disabled={pending}
-                            className="text-muted-foreground ring-border/70 hover:bg-muted/60 inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold ring-1 transition disabled:opacity-50"
                           >
                             <Undo2 className="size-3" strokeWidth={2.5} />
                             Volver a la carta
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -483,23 +482,24 @@ export function EditarItemsModal({
         </div>
 
         <DialogFooter>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             onClick={onClose}
             disabled={pending}
-            className="text-muted-foreground ring-border/70 hover:bg-muted/60 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold ring-1 transition disabled:opacity-50"
           >
             Volver
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="lg"
             onClick={submit}
             disabled={pending || !dirty || blocked}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
           >
             <Printer className="size-4" strokeWidth={2.5} />
             {pending ? "Guardando…" : saveLabel}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

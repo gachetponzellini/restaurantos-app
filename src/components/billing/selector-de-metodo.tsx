@@ -154,13 +154,13 @@ export function SelectorDeMetodo({
             data-metodo="true"
             {...zona.itemProps(i)}
             className={cn(
-              "rounded-2xl bg-white text-left ring-1 ring-zinc-200 transition outline-none hover:ring-zinc-300 active:scale-[0.98]",
-              "focus-visible:ring-2 focus-visible:ring-zinc-900",
+              "rounded-2xl bg-card text-left ring-1 ring-border transition outline-none hover:ring-foreground/20 active:scale-[0.98]",
+              "focus-visible:ring-2 focus-visible:ring-primary",
               compacto
                 ? "flex items-center gap-1.5 px-2.5 py-2"
                 : "flex flex-col items-start gap-1 p-3",
               !compacto && touch && "p-4",
-              elegido && "bg-zinc-900 text-white ring-zinc-900",
+              elegido && "bg-primary text-white ring-primary",
             )}
           >
             {compacto ? (
@@ -190,7 +190,7 @@ export function SelectorDeMetodo({
                       "shrink-0 rounded px-1 text-[10px] font-bold",
                       elegido
                         ? "bg-white/15 text-white/70"
-                        : "bg-zinc-100 text-zinc-500",
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {i + 1}
@@ -201,13 +201,13 @@ export function SelectorDeMetodo({
               // Los colores del contenido son condicionales porque acá la
               // tarjeta **puede estar elegida**: en el paso 1 de `CobroForm`
               // nunca lo está (elegir desmonta la grilla), pero en la cobranza
-              // sí, y sobre el fondo oscuro un `text-zinc-900` no se lee.
+              // sí, y sobre el fondo oscuro un `text-foreground` no se lee.
               <>
                 <div className="flex w-full items-center justify-between gap-2">
                   <Icon
                     className={cn(
                       "size-4",
-                      elegido ? "text-white/70" : "text-zinc-500",
+                      elegido ? "text-white/70" : "text-muted-foreground",
                       touch && "size-5",
                     )}
                   />
@@ -217,7 +217,7 @@ export function SelectorDeMetodo({
                         "rounded px-1 text-[10px] font-bold",
                         elegido
                           ? "bg-white/15 text-white/70"
-                          : "bg-zinc-100 text-zinc-500",
+                          : "bg-muted text-muted-foreground",
                       )}
                     >
                       {i + 1}
@@ -227,7 +227,7 @@ export function SelectorDeMetodo({
                 <span
                   className={cn(
                     "text-sm font-semibold",
-                    elegido ? "text-white" : "text-zinc-900",
+                    elegido ? "text-white" : "text-foreground",
                     touch && "text-base",
                   )}
                 >

@@ -5,7 +5,7 @@ import { Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { imprimirRendicion } from "@/lib/caja/rendicion-print-actions";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /**
  * El papel de una rendición, a pedido (spec 178 · D1).
@@ -27,8 +27,10 @@ export function ImprimirRendicionBoton({
   const [listo, setListo] = useState(false);
 
   return (
-    <button
+    <Button
       type="button"
+      variant={listo ? "secondary" : "default"}
+      size="sm"
       disabled={enviando}
       aria-label={`Imprimir rendición de ${mozoName}`}
       title={listo ? "Reimprimir" : "Imprimir el ticket"}
@@ -47,16 +49,9 @@ export function ImprimirRendicionBoton({
           }
         })
       }
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-        listo
-          ? "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
-          : "bg-zinc-900 text-white hover:bg-zinc-800",
-        enviando && "opacity-60",
-      )}
     >
       <Printer className="size-3.5" />
       {enviando ? "Mandando…" : listo ? "Reimprimir" : "Imprimir"}
-    </button>
+    </Button>
   );
 }

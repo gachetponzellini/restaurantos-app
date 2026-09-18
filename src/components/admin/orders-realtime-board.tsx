@@ -72,10 +72,10 @@ const COLUMNS: Column[] = [
     key: "delivered",
     label: "Entregados",
     statuses: ["delivered"],
-    accent: "bg-zinc-300",
-    ring: "ring-zinc-300/40",
-    countBg: "bg-zinc-100",
-    countText: "text-zinc-700",
+    accent: "bg-muted-foreground/30",
+    ring: "ring-foreground/10",
+    countBg: "bg-muted",
+    countText: "text-foreground/80",
     emptyHint: "Todavía no se entregó nada",
   },
 ];
@@ -519,14 +519,15 @@ export function OrdersRealtimeBoard({
                   pedido que cargás aparece justo abajo, así que el botón está
                   donde va a salir el resultado. */}
               {col.key === "new" && (
-                <button
+                <Button
                   type="button"
+                  size="xl"
                   onClick={() => setCargarOpen(true)}
-                  className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-base font-bold text-white shadow-sm transition hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none active:scale-[0.99]"
+                  className="w-full"
                 >
                   <Plus className="size-5 shrink-0" strokeWidth={2.75} />
                   Cargar pedido
-                </button>
+                </Button>
               )}
 
               <div className="flex flex-col gap-3">
@@ -624,7 +625,7 @@ export function OrdersRealtimeBoard({
                 maxLength={200}
                 autoFocus
                 placeholder="Ej: ya estamos cerrando la cocina"
-                className="h-10 w-full rounded-xl border-0 bg-zinc-100 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:ring-2 focus:ring-rose-300 focus:outline-none"
+                className="h-10 w-full rounded-xl border-0 bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-rose-300 focus:outline-none"
               />
             </div>
           </ModalBody>

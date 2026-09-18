@@ -60,11 +60,11 @@ export function TrasladarMesaModal({
         <div>
           <SectionLabel>Mover a</SectionLabel>
           {tables.length === 0 ? (
-            <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+            <p className="mt-2 rounded-xl bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
               No hay mesas libres para mover. Cobrá o liberá una primero.
             </p>
           ) : (
-            <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl ring-1 ring-zinc-200">
+            <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl ring-1 ring-border">
               {tables.map((t) => {
                 const selected = t.id === toTableId;
                 return (
@@ -72,13 +72,13 @@ export function TrasladarMesaModal({
                     key={t.id}
                     type="button"
                     onClick={() => setToTableId(t.id)}
-                    className={`flex w-full items-center gap-3 border-b border-zinc-100 px-4 py-3 text-left transition last:border-b-0 active:bg-zinc-50 ${
+                    className={`flex w-full items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition last:border-b-0 active:bg-muted/50 ${
                       selected ? "bg-sky-50" : ""
                     }`}
                   >
                     <span
                       className={`flex h-10 w-10 items-center justify-center rounded-full text-white ${
-                        selected ? "bg-sky-600" : "bg-zinc-700"
+                        selected ? "bg-sky-600" : "bg-primary/80"
                       }`}
                     >
                       {t.is_bar ? (
@@ -88,11 +88,11 @@ export function TrasladarMesaModal({
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-900">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         Mesa {t.label}
                         {t.is_bar ? " · barra" : ""}
                       </p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-muted-foreground">
                         {t.seats} {t.seats === 1 ? "silla" : "sillas"} · libre
                       </p>
                     </div>

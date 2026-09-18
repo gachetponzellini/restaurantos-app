@@ -90,11 +90,11 @@ export function CambiarAFacturaA({
   };
 
   return (
-    <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/60">
-      <p className="mb-1 text-sm font-medium text-zinc-900">
+    <div className="rounded-xl bg-muted/50 p-4 ring-1 ring-border/60">
+      <p className="mb-1 text-sm font-medium text-foreground">
         Cambiar a Factura A
       </p>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-muted-foreground">
         Se anula esta Factura B con su nota de crédito y se emite la Factura A al
         CUIT que indiques. Los tres comprobantes quedan registrados.
       </p>

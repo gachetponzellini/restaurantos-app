@@ -60,9 +60,9 @@ export type TablePickerBridge = {
 };
 
 const INPUT_CLS_BASE =
-  "h-12 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30";
+  "h-12 w-full rounded-xl border border-border bg-card px-3 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30";
 const INPUT_CLS = `mt-1 ${INPUT_CLS_BASE}`;
-const LABEL_CLS = "text-[11px] font-bold uppercase tracking-wider text-zinc-500";
+const LABEL_CLS = "text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
 
 function todayISO(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -519,37 +519,38 @@ export function ReservaForm({
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-indigo-900">
             Mesa {tablePicker.pickedLabel}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={tablePicker.onRequest}
-            className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+            className="shrink-0 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-700"
           >
             Cambiar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={tablePicker.onClear}
             aria-label="Quitar mesa"
-            className="shrink-0 rounded-lg p-1 text-indigo-500 transition hover:bg-indigo-100"
+            className="shrink-0 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-500"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       ) : (
-        <button
+        <Button
           type="button"
+          size="xl"
           onClick={tablePicker.onRequest}
-          className={`mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition active:scale-[0.98] @lg:max-w-xs ${
-            tablePicker.picking
-              ? "bg-indigo-700 ring-2 ring-indigo-300"
-              : "bg-indigo-600 hover:bg-indigo-700"
-          }`}
+          className={`w-full @lg:max-w-xs ${tablePicker.picking ? "ring-2 ring-ring" : ""}`}
         >
           <MapPin className="h-4 w-4" />
           {tablePicker.picking ? "Elegí en el plano…" : "Elegir mesa en el plano"}
-        </button>
+        </Button>
       )}
-      <p className="mt-1 text-[11px] text-zinc-400">
+      <p className="mt-1 text-[11px] text-muted-foreground/70">
         Sin mesa, se sienta al llegar.
       </p>
     </div>
@@ -565,39 +566,40 @@ export function ReservaForm({
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-indigo-900">
             Mesa {mesaElegida.label}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => setPlanoAbierto((v) => !v)}
-            className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+            className="shrink-0 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-700"
           >
             Cambiar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => {
               setTableId(undefined);
               setPlanoAbierto(false);
             }}
             aria-label="Quitar mesa"
-            className="shrink-0 rounded-lg p-1 text-indigo-500 transition hover:bg-indigo-100"
+            className="shrink-0 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-500"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       ) : (
-        <button
+        <Button
           type="button"
+          size="xl"
           onClick={() => setPlanoAbierto((v) => !v)}
           disabled={faltaElegirSalon}
-          className={`mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-40 @lg:max-w-xs ${
-            planoAbierto
-              ? "bg-indigo-700 ring-2 ring-indigo-300"
-              : "bg-indigo-600 hover:bg-indigo-700"
-          }`}
+          className={`w-full @lg:max-w-xs ${planoAbierto ? "ring-2 ring-ring" : ""}`}
         >
           <MapPin className="h-4 w-4" />
           {planoAbierto ? "Elegí una mesa del plano…" : "Elegir mesa en el plano"}
-        </button>
+        </Button>
       )}
 
       {planoAbierto && (
@@ -614,7 +616,7 @@ export function ReservaForm({
         />
       )}
 
-      <p className="mt-1 text-[11px] text-zinc-400">
+      <p className="mt-1 text-[11px] text-muted-foreground/70">
         Sin mesa, se sienta al llegar.
       </p>
     </div>
@@ -652,27 +654,27 @@ export function ReservaForm({
         <div>
           <SectionLabel as="label">
             Personas
-            <span className="ml-1.5 font-semibold normal-case tracking-normal text-zinc-400">
+            <span className="ml-1.5 font-semibold normal-case tracking-normal text-muted-foreground/70">
               · teclas 1-9, + y −
             </span>
           </SectionLabel>
-          <div className="mt-2 flex items-center justify-between rounded-2xl bg-zinc-50 p-2 ring-1 ring-zinc-200 @lg:max-w-xs">
+          <div className="mt-2 flex items-center justify-between rounded-2xl bg-muted/50 p-2 ring-1 ring-border @lg:max-w-xs">
             <button
               type="button"
               aria-label="Una persona menos"
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-zinc-700 outline-none ring-1 ring-zinc-200 transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-card text-foreground/80 outline-none ring-1 ring-border transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"
               disabled={partySize <= 1}
               onClick={() => setPartySize((v) => Math.max(1, v - 1))}
             >
               <Minus className="h-4 w-4" />
             </button>
-            <span className="font-heading text-2xl font-extrabold tabular-nums text-zinc-900">
+            <span className="font-heading text-2xl font-extrabold tabular-nums text-foreground">
               {partySize}
             </span>
             <button
               type="button"
               aria-label="Una persona más"
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-zinc-700 outline-none ring-1 ring-zinc-200 transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-card text-foreground/80 outline-none ring-1 ring-border transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-30"
               disabled={partySize >= 20}
               onClick={() => setPartySize((v) => Math.min(20, v + 1))}
             >
@@ -715,7 +717,7 @@ export function ReservaForm({
                   className={`rounded-xl px-3 py-2 text-sm font-semibold outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-900/30 ${
                     salonId === s.id
                       ? "bg-blue-600 text-white shadow-sm"
-                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                      : "bg-muted text-foreground/80 hover:bg-border"
                   }`}
                 >
                   {s.name}
@@ -723,7 +725,7 @@ export function ReservaForm({
               ))}
             </div>
             {faltaElegirSalon && (
-              <p className="mt-1 text-[11px] text-zinc-400">
+              <p className="mt-1 text-[11px] text-muted-foreground/70">
                 El salón define el cupo del servicio: sin él, la reserva no
                 cuenta en ninguno.
               </p>
@@ -732,7 +734,7 @@ export function ReservaForm({
         )}
 
         {mode === null ? (
-          <div className="flex items-center justify-center py-6 text-zinc-400">
+          <div className="flex items-center justify-center py-6 text-muted-foreground/70">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : mode === "flexible" ? (
@@ -740,7 +742,7 @@ export function ReservaForm({
             <div>
               <SectionLabel as="label">Servicio</SectionLabel>
               {serviceNames.length === 0 ? (
-                <p className="mt-2 text-center text-sm text-zinc-400">
+                <p className="mt-2 text-center text-sm text-muted-foreground/70">
                   No hay servicios configurados para esta fecha.
                 </p>
               ) : (
@@ -760,7 +762,7 @@ export function ReservaForm({
                       className={`rounded-xl px-3 py-2 text-sm font-semibold outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-900/30 ${
                         service === s
                           ? "bg-blue-600 text-white shadow-sm"
-                          : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                          : "bg-muted text-foreground/80 hover:bg-border"
                       }`}
                     >
                       {s}
@@ -773,9 +775,9 @@ export function ReservaForm({
             <div>
               <SectionLabel as="label">Horario</SectionLabel>
               {!service ? (
-                <p className="mt-2 text-sm text-zinc-400">Elegí un servicio primero.</p>
+                <p className="mt-2 text-sm text-muted-foreground/70">Elegí un servicio primero.</p>
               ) : shownArrivalOptions.length === 0 ? (
-                <p className="mt-2 text-sm text-zinc-400">
+                <p className="mt-2 text-sm text-muted-foreground/70">
                   No quedan horarios disponibles para este servicio.
                 </p>
               ) : (
@@ -793,7 +795,7 @@ export function ReservaForm({
                       className={`rounded-xl px-2 py-2.5 text-sm font-semibold outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-900/30 ${
                         arrivalTime === t
                           ? "bg-blue-600 text-white shadow-sm"
-                          : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                          : "bg-muted text-foreground/80 hover:bg-border"
                       }`}
                     >
                       {t}
@@ -806,7 +808,7 @@ export function ReservaForm({
             {flexInfo && flexInfo.softCapacity != null ? (
               <p
                 className={`text-sm ${
-                  flexInfo.overCapacity ? "font-semibold text-amber-600" : "text-zinc-500"
+                  flexInfo.overCapacity ? "font-semibold text-amber-600" : "text-muted-foreground"
                 }`}
               >
                 {flexInfo.reservedCovers}/{flexInfo.softCapacity} cubiertos reservados
@@ -840,11 +842,11 @@ export function ReservaForm({
             <div>
               <SectionLabel as="label">Horario</SectionLabel>
               {loadingSlots ? (
-                <div className="mt-2 flex items-center justify-center py-6 text-zinc-400">
+                <div className="mt-2 flex items-center justify-center py-6 text-muted-foreground/70">
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
               ) : slots.length === 0 ? (
-                <p className="mt-2 text-center text-sm text-zinc-400">
+                <p className="mt-2 text-center text-sm text-muted-foreground/70">
                   {faltaElegirSalon
                     ? "Elegí un salón para ver los horarios."
                     : "Sin horarios disponibles para esta fecha."}
@@ -864,7 +866,7 @@ export function ReservaForm({
                       className={`rounded-xl px-2 py-2.5 text-sm font-semibold outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-900/30 ${
                         selectedSlot === s.slot
                           ? "bg-blue-600 text-white shadow-sm"
-                          : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                          : "bg-muted text-foreground/80 hover:bg-border"
                       }`}
                     >
                       {s.slot}
@@ -884,7 +886,7 @@ export function ReservaForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-base focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
             placeholder="Ej: cumpleaños, alérgico a maní…"
           />
         </div>

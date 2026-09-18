@@ -10,6 +10,7 @@ import {
   withItemLibreEntry,
 } from "@/lib/mozo/item-libre-entry";
 import { useStickyFilter } from "@/lib/ui/use-sticky-filter";
+import { Button } from "@/components/ui/button";
 
 export const CARTA_ALL = "all";
 /**
@@ -234,7 +235,7 @@ export function CartaOnlineSelector({ api }: { api: ProductSearchApi }) {
           // de la carta online, un filtro puesto y mudo esconde media carta.
           filtrando
             ? "bg-amber-50 text-amber-900 ring-amber-300"
-            : "bg-white text-zinc-500 ring-zinc-200/70 hover:text-zinc-900"
+            : "bg-card text-muted-foreground ring-border/70 hover:text-foreground"
         }`}
       >
         <BookOpen className="size-4 shrink-0" strokeWidth={2.5} />
@@ -248,7 +249,7 @@ export function CartaOnlineSelector({ api }: { api: ProductSearchApi }) {
         // izquierda con ancho libre, las descripciones estiraban el menú más
         // allá del panel y quedaban cortadas al medio. Anclado a la derecha y
         // con ancho, el texto envuelve y se lee entero.
-        <div className="absolute top-full right-0 z-50 mt-1.5 w-64 rounded-xl bg-white p-1 shadow-lg ring-1 ring-zinc-200">
+        <div className="absolute top-full right-0 z-50 mt-1.5 w-64 rounded-xl bg-card p-1 shadow-lg ring-1 ring-border">
           {[CARTA_ALL, CARTA_EN_LINEA, CARTA_SOLO_LOCAL].map((id) => (
             <button
               key={id}
@@ -260,13 +261,13 @@ export function CartaOnlineSelector({ api }: { api: ProductSearchApi }) {
               aria-pressed={cartaFilter === id}
               className={`flex w-full flex-col items-start rounded-lg px-2.5 py-2 text-left transition ${
                 cartaFilter === id
-                  ? "bg-zinc-100 text-zinc-900"
-                  : "text-zinc-700 hover:bg-zinc-50"
+                  ? "bg-muted text-foreground"
+                  : "text-foreground/80 hover:bg-muted/50"
               }`}
             >
               <span className="text-sm font-semibold">{CARTA_LABEL[id]}</span>
               {CARTA_HINT[id] && (
-                <span className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+                <span className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
                   {CARTA_HINT[id]}
                 </span>
               )}
@@ -288,7 +289,7 @@ export function ProductSearchInput({
   inputRef: externalRef,
   autoFocus = false,
   placeholder = "Buscar producto…",
-  className = "block h-11 w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-9 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100",
+  className = "block h-11 w-full rounded-2xl border border-border bg-card pl-9 pr-9 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100",
   conFiltroDeCarta = true,
 }: {
   api: ProductSearchApi;
@@ -332,8 +333,8 @@ export function ProductSearchInput({
       aria-pressed={cartaFilter === id}
       className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
         cartaFilter === id
-          ? "bg-zinc-900 text-white"
-          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+          ? "bg-primary text-white"
+          : "bg-muted text-foreground/70 hover:bg-border"
       }`}
     >
       {label}
@@ -343,7 +344,7 @@ export function ProductSearchInput({
   return (
     <>
       <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
         <input
           ref={inputRef}
           type="text"
@@ -356,24 +357,26 @@ export function ProductSearchInput({
           autoComplete="off"
         />
         {search.length > 0 && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full"
             onClick={() => {
               setSearch("");
               inputRef.current?.focus();
             }}
-            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-zinc-400 active:bg-zinc-100"
             aria-label="Limpiar"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         )}
       </div>
 
       {conFiltroDeCarta && showCartaFilter && (
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase">
               Carta online
             </span>
             {chip(CARTA_ALL, "Todos")}
@@ -383,7 +386,7 @@ export function ProductSearchInput({
           {/* La explicación aparece sólo cuando hay un filtro puesto: con
               «Todos» no hay nada que aclarar y sería ruido permanente. */}
           {cartaHint && (
-            <p className="text-[11px] leading-snug text-zinc-500">
+            <p className="text-[11px] leading-snug text-muted-foreground">
               {cartaHint}
             </p>
           )}

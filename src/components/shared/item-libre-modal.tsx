@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { parsePesos } from "@/lib/catalog/money-input";
 import { formatCurrency } from "@/lib/currency";
 
@@ -139,22 +140,18 @@ export function ItemLibreModal({
         )}
 
         <DialogFooter className="gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted-foreground ring-border/70 hover:bg-muted/60 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold ring-1 transition"
-          >
+          <Button type="button" variant="outline" size="lg" onClick={onClose}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="lg"
             onClick={confirmar}
             disabled={!canConfirm}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold transition disabled:opacity-50"
           >
             <Plus className="size-4" strokeWidth={2.5} />
             Agregar
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

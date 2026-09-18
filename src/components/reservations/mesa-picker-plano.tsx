@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MesaFigura } from "@/components/reservations/mesa-figura";
+import { Button } from "@/components/ui/button";
 import { encuadreDeMesas } from "@/lib/reservations/plano-del-dia";
 import type { FloorTable } from "@/lib/reservations/types";
 import { cn } from "@/lib/utils";
@@ -25,16 +26,16 @@ type EstadoPick = "elegida" | "libre" | "ocupada" | "chica";
 
 const RELLENO: Record<EstadoPick, string> = {
   elegida: "fill-indigo-600 stroke-indigo-700",
-  libre: "fill-white stroke-zinc-300",
+  libre: "fill-white stroke-foreground/20",
   ocupada: "fill-blue-50 stroke-blue-300",
-  chica: "fill-zinc-100 stroke-zinc-200",
+  chica: "fill-muted stroke-border",
 };
 
 const TEXTO: Record<EstadoPick, string> = {
   elegida: "fill-white",
-  libre: "fill-zinc-500",
+  libre: "fill-muted-foreground",
   ocupada: "fill-blue-400",
-  chica: "fill-zinc-300",
+  chica: "fill-muted-foreground/40",
 };
 
 const MOTIVO: Record<EstadoPick, string> = {
@@ -116,16 +117,16 @@ export function MesaPickerPlano({
 
   if (mesas.length === 0) {
     return (
-      <p className="mt-2 rounded-xl bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-400">
+      <p className="mt-2 rounded-xl bg-muted/50 px-3 py-4 text-center text-sm text-muted-foreground/70">
         Este salón todavía no tiene mesas cargadas.
       </p>
     );
   }
 
   return (
-    <div className="mt-2 rounded-xl bg-zinc-50 p-2 ring-1 ring-zinc-200">
+    <div className="mt-2 rounded-xl bg-muted/50 p-2 ring-1 ring-border">
       {aviso ? (
-        <p className="px-1 pb-2 pt-1 text-center text-xs text-zinc-500">{aviso}</p>
+        <p className="px-1 pb-2 pt-1 text-center text-xs text-muted-foreground">{aviso}</p>
       ) : null}
       <svg
         viewBox={encuadreDeMesas(mesas)}
@@ -168,18 +169,20 @@ export function MesaPickerPlano({
         })}
       </svg>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-0.5 pt-2 text-[11px] text-zinc-500">
-        <Leyenda className="bg-white ring-zinc-300" label="libre" />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-0.5 pt-2 text-[11px] text-muted-foreground">
+        <Leyenda className="bg-card ring-foreground/20" label="libre" />
         <Leyenda className="bg-blue-50 ring-blue-300" label="ocupada" />
-        <Leyenda className="bg-zinc-100 ring-zinc-200" label="no entran" />
+        <Leyenda className="bg-muted ring-border" label="no entran" />
         {elegida ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
             onClick={() => onElegir(null)}
-            className="ml-auto rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-600 transition hover:bg-zinc-200"
           >
             Sin mesa
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

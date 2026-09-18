@@ -75,7 +75,7 @@ export function ComprobanteFields({
   const esA = value.tipo === "factura_a";
   return (
     <div>
-      <label className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
+      <label className="flex items-center gap-2 text-sm font-semibold text-foreground/90">
         <input
           type="checkbox"
           checked={esA}
@@ -85,11 +85,11 @@ export function ComprobanteFields({
               tipo: e.target.checked ? "factura_a" : "factura_b",
             })
           }
-          className="size-4 rounded border-zinc-300"
+          className="size-4 rounded border-foreground/20"
         />
         Factura A (empresa con CUIT)
       </label>
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1 text-xs text-muted-foreground">
         {esA
           ? "Se emite Factura A al CUIT indicado."
           : "Por defecto: Factura B (consumidor final)."}
@@ -117,7 +117,7 @@ export function ComprobanteFields({
           <div className="grid gap-1.5">
             <label
               htmlFor="comprobante-cuit"
-              className="text-xs font-semibold text-zinc-600"
+              className="text-xs font-semibold text-foreground/70"
             >
               CUIT del receptor
             </label>
@@ -137,13 +137,13 @@ export function ComprobanteFields({
                 })
               }
               placeholder="11 dígitos"
-              className="block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              className="block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             />
           </div>
           <div className="grid gap-1.5">
             <label
               htmlFor="comprobante-razon"
-              className="text-xs font-semibold text-zinc-600"
+              className="text-xs font-semibold text-foreground/70"
             >
               Razón social (opcional)
             </label>
@@ -154,11 +154,11 @@ export function ComprobanteFields({
               onChange={(e) =>
                 onChange({ ...value, razonSocial: e.target.value })
               }
-              className="block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              className="block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             />
           </div>
           <div>
-            <p className="mb-1.5 text-xs font-semibold text-zinc-600">
+            <p className="mb-1.5 text-xs font-semibold text-foreground/70">
               Condición IVA del receptor
             </p>
             <div className="flex flex-wrap gap-2">
@@ -169,8 +169,8 @@ export function ComprobanteFields({
                   onClick={() => onChange({ ...value, condicionIva: cond })}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                     value.condicionIva === cond
-                      ? "bg-zinc-900 text-white"
-                      : "bg-white text-zinc-700 ring-1 ring-zinc-200"
+                      ? "bg-primary text-white"
+                      : "bg-card text-foreground/80 ring-1 ring-border"
                   }`}
                 >
                   {CONDICION_IVA_LABEL[cond]}

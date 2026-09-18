@@ -33,8 +33,8 @@ export function CustomerFields({
   nameLabel = "Cliente (opcional)",
   phoneLabel = "Teléfono (opcional · entra al CRM)",
   idPrefix = "cliente",
-  labelClassName = "text-[11px] font-bold uppercase tracking-wider text-zinc-500",
-  inputClassName = "h-12 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base",
+  labelClassName = "text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
+  inputClassName = "h-12 w-full rounded-xl border border-border bg-card px-3 text-base",
 }: {
   slug: string;
   name: string;
@@ -111,7 +111,7 @@ export function CustomerFields({
             <button
               type="button"
               onClick={quitar}
-              className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 underline underline-offset-2 transition hover:text-zinc-700"
+              className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70 underline underline-offset-2 transition hover:text-foreground/80"
             >
               Quitar
             </button>
@@ -124,7 +124,7 @@ export function CustomerFields({
           aria-readonly={!!picked}
           onChange={(e) => onPhoneChange(e.target.value)}
           className={`mt-1 ${inputClassName}${
-            picked ? " cursor-not-allowed bg-zinc-100 text-zinc-600" : ""
+            picked ? " cursor-not-allowed bg-muted text-foreground/70" : ""
           }`}
           placeholder="+54 9 …"
           inputMode="tel"

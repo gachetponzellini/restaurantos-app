@@ -68,7 +68,7 @@ export function CajaAssignmentsPanel({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Asignación caja → usuario
         </p>
         <Button
@@ -83,7 +83,7 @@ export function CajaAssignmentsPanel({
 
       {cajas.length === 0 ? (
         <Surface padding="default">
-          <p className="py-4 text-center text-sm text-zinc-500">
+          <p className="py-4 text-center text-sm text-muted-foreground">
             No hay cajas configuradas.
           </p>
         </Surface>
@@ -92,16 +92,16 @@ export function CajaAssignmentsPanel({
           {byCaja.map(({ caja, assigned }) => (
             <div
               key={caja.id}
-              className="rounded-xl bg-white p-4 ring-1 ring-zinc-200/70"
+              className="rounded-xl bg-card p-4 ring-1 ring-border/70"
             >
               <div className="flex items-center gap-2">
-                <Wallet className="size-4 text-zinc-400" />
-                <h4 className="text-sm font-semibold text-zinc-900">
+                <Wallet className="size-4 text-muted-foreground/70" />
+                <h4 className="text-sm font-semibold text-foreground">
                   {caja.name}
                 </h4>
               </div>
               {assigned.length === 0 ? (
-                <p className="mt-2 text-xs text-zinc-400">
+                <p className="mt-2 text-xs text-muted-foreground/70">
                   Sin usuarios asignados
                 </p>
               ) : (
@@ -109,14 +109,17 @@ export function CajaAssignmentsPanel({
                   {assigned.map((a) => (
                     <li
                       key={a.id}
-                      className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50"
+                      className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50"
                     >
-                      <span className="inline-flex items-center gap-2 text-sm text-zinc-700">
-                        <User className="size-3.5 text-zinc-400" />
+                      <span className="inline-flex items-center gap-2 text-sm text-foreground/80">
+                        <User className="size-3.5 text-muted-foreground/70" />
                         {a.user_name ?? "Sin nombre"}
                       </span>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground/70 hover:bg-rose-50 hover:text-rose-600"
                         onClick={() =>
                           startTransition(async () => {
                             const r = await desasignarCajaUsuario(
@@ -131,11 +134,10 @@ export function CajaAssignmentsPanel({
                             }
                           })
                         }
-                        className="rounded-full p-1 text-zinc-400 transition hover:bg-rose-50 hover:text-rose-600"
                         aria-label="Desasignar"
                       >
                         <Trash2 className="size-3.5" />
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -204,8 +206,8 @@ function AddAssignmentModal({
               value={cajaId}
               onChange={(e) => setCajaId(e.target.value)}
               className={cn(
-                "flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950",
+                "flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
             >
               <option value="">Seleccioná una caja</option>
@@ -222,8 +224,8 @@ function AddAssignmentModal({
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               className={cn(
-                "flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950",
+                "flex h-10 w-full rounded-md border border-border bg-card px-3 py-2 text-sm",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
             >
               <option value="">Seleccioná un usuario</option>

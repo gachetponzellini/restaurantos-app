@@ -167,18 +167,18 @@ export function AtajosHelp({
                 {a.teclas.map((t) => (
                   <kbd
                     key={t}
-                    className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-bold text-zinc-700 ring-1 ring-zinc-200"
+                    className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-bold text-foreground/80 ring-1 ring-border"
                   >
                     {t}
                   </kbd>
                 ))}
               </span>
-              <span className="min-w-0 flex-1 text-zinc-600">{a.que}</span>
+              <span className="min-w-0 flex-1 text-foreground/70">{a.que}</span>
             </li>
           ))}
         </ul>
 
-        <p className="mt-3 text-[11px] text-zinc-400">
+        <p className="mt-3 text-[11px] text-muted-foreground/70">
           Tab y Shift+Tab siguen funcionando como siempre.
         </p>
       </ModalBody>

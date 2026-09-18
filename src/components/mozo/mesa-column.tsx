@@ -12,6 +12,7 @@ import {
 import type { ComandaConItems } from "@/lib/comandas/queries";
 import type { KitchenItemStatus } from "@/lib/comandas/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
 import { ObservacionDeLaTanda } from "./observacion-de-la-tanda";
 import {
@@ -52,7 +53,7 @@ const KITCHEN_LABEL: Record<KitchenItemStatus, string> = {
 };
 
 const KITCHEN_PILL: Record<KitchenItemStatus, string> = {
-  pending: "bg-zinc-100 text-zinc-600",
+  pending: "bg-muted text-foreground/70",
   preparing: "bg-sky-100 text-sky-800",
   ready: "bg-amber-100 text-amber-800",
   delivered: "bg-emerald-100 text-emerald-800",
@@ -211,7 +212,7 @@ export function MesaColumn({
   return (
     <section
       aria-label={`Mesa ${tableLabel}`}
-      className={`flex min-h-0 flex-col border-zinc-200 @min-[600px]:border-r ${className}`}
+      className={`flex min-h-0 flex-col border-border @min-[600px]:border-r ${className}`}
     >
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {cargando && (
@@ -223,9 +224,9 @@ export function MesaColumn({
             {Array.from({ length: 2 }).map((_, i) => (
               <div
                 key={i}
-                className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200"
+                className="overflow-hidden rounded-2xl bg-card ring-1 ring-border"
               >
-                <div className="border-b border-zinc-100 bg-zinc-50/60 px-3 py-2">
+                <div className="border-b border-border/60 bg-muted/30 px-3 py-2">
                   <Skeleton className="h-3 w-24 rounded" />
                 </div>
                 <div className="space-y-2 p-3">
@@ -238,7 +239,7 @@ export function MesaColumn({
         )}
 
         {!cargando && tandas.length === 0 && !haySinEnviar && (
-          <p className="px-1 py-8 text-center text-xs text-zinc-500">
+          <p className="px-1 py-8 text-center text-xs text-muted-foreground">
             La mesa todavía no tiene nada cargado. Buscá un producto y agregalo
             con Enter.
           </p>
@@ -261,20 +262,20 @@ export function MesaColumn({
           return (
             <article
               key={tanda.numero ?? "sin-comanda"}
-              className="overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200"
+              className="overflow-hidden rounded-2xl bg-card ring-1 ring-border"
             >
-              <header className="flex items-baseline justify-between gap-2 border-b border-zinc-100 bg-zinc-50/60 px-3 py-1.5">
-                <span className="text-[11px] font-semibold text-zinc-700">
+              <header className="flex items-baseline justify-between gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+                <span className="text-[11px] font-semibold text-foreground/80">
                   {tanda.numero == null
                     ? "Sin comanda"
                     : `Tanda ${tanda.numero}`}
                 </span>
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] text-muted-foreground">
                   {tanda.numero == null ? "no va a cocina" : (hora ?? "")}
                 </span>
               </header>
 
-              <ul className="divide-y divide-zinc-100">
+              <ul className="divide-y divide-border/60">
                 {tanda.items.map((item) => (
                   <ItemEnviado
                     key={item.order_item_id}
@@ -293,13 +294,14 @@ export function MesaColumn({
               </ul>
 
               {comandasDeTanda.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 border-t border-zinc-100 p-2">
+                <div className="flex flex-wrap gap-1.5 border-t border-border/60 p-2">
                   {comandasDeTanda.map((c) => (
-                    <button
+                    <Button
                       key={c.id}
                       type="button"
+                      size="lg"
+                      className="flex-1"
                       onClick={() => onAdvance(c.id)}
-                      className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 active:scale-[0.98] disabled:opacity-60"
                     >
                       <Check className="h-3.5 w-3.5" />
                       Entregar
@@ -308,7 +310,7 @@ export function MesaColumn({
                           {stationNameById[c.station_id] ?? "sector"}
                         </span>
                       )}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
@@ -351,13 +353,13 @@ export function MesaColumn({
       </div>
 
       {/* ── Pie: total + qué hacer ── */}
-      <footer className="shrink-0 space-y-2 border-t border-zinc-200 bg-white px-3 py-3">
+      <footer className="shrink-0 space-y-2 border-t border-border bg-card px-3 py-3">
         {loPedido && hayEnviado && (
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-muted-foreground">
               {haySinEnviar ? "Enviado hasta ahora" : "Total de la mesa"}
             </span>
-            <span className="text-lg font-bold text-zinc-900 tabular-nums">
+            <span className="text-lg font-bold text-foreground tabular-nums">
               {formatCurrency(loPedido.total_cents)}
             </span>
           </div>
@@ -376,11 +378,12 @@ export function MesaColumn({
         <div className="flex items-stretch gap-2">
           <div className="min-w-0 flex-1">
             {haySinEnviar ? (
-              <button
+              <Button
                 type="button"
+                size="xl"
+                className="w-full"
                 onClick={onEnviar}
                 disabled={enviando}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
               >
                 <Send className="h-5 w-5" />
                 {enviando
@@ -389,15 +392,16 @@ export function MesaColumn({
                 <kbd className="ml-1 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
                   ⌘↵
                 </kbd>
-              </button>
+              </Button>
             ) : acciones?.onCobrar && hayEnviado ? (
-              <button
+              <Button
                 type="button"
+                size="xl"
+                className="w-full"
                 onClick={acciones.onCobrar}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 text-base font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
               >
                 Cobrar
-              </button>
+              </Button>
             ) : null}
           </div>
 
@@ -405,7 +409,7 @@ export function MesaColumn({
             <DropdownMenu>
               <DropdownMenuTrigger
                 aria-label="Más acciones de la mesa"
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-50 disabled:opacity-50"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-card text-foreground/70 ring-1 ring-border transition hover:bg-muted/50 disabled:opacity-50"
               >
                 <MoreVertical className="size-5" strokeWidth={2.5} />
               </DropdownMenuTrigger>
@@ -459,7 +463,7 @@ function ItemEnviado({
 }) {
   if (estaAnulado(item)) {
     return (
-      <li className="flex items-start gap-2 bg-zinc-50 px-3 py-2 text-zinc-400">
+      <li className="flex items-start gap-2 bg-muted/50 px-3 py-2 text-muted-foreground/70">
         <span className="text-xs font-semibold tabular-nums line-through">
           {item.quantity}×
         </span>
@@ -485,22 +489,22 @@ function ItemEnviado({
 
   return (
     <li className="flex items-start gap-2 px-3 py-2">
-      <span className="mt-0.5 text-sm font-bold text-zinc-700 tabular-nums">
+      <span className="mt-0.5 text-sm font-bold text-foreground/80 tabular-nums">
         {item.quantity}×
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold break-words text-zinc-900">
+        <p className="text-sm font-semibold break-words text-foreground">
           {item.product_name}
         </p>
         {/* Los modificadores son la mitad del pedido: sin ellos «Milanesa» no
             dice si va con papas o con puré. */}
         {item.modifiers.length > 0 && (
-          <p className="mt-0.5 text-xs text-zinc-600">
+          <p className="mt-0.5 text-xs text-foreground/70">
             {item.modifiers.join(" · ")}
           </p>
         )}
         {item.notes && (
-          <p className="mt-0.5 text-xs text-zinc-500 italic">
+          <p className="mt-0.5 text-xs text-muted-foreground italic">
             &ldquo;{item.notes}&rdquo;
           </p>
         )}
@@ -511,12 +515,12 @@ function ItemEnviado({
             {KITCHEN_LABEL[item.kitchen_status]}
           </span>
           {sector && (
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">
               {sector}
             </span>
           )}
           {item.seat_number != null && (
-            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">
               Cubierto {item.seat_number}
             </span>
           )}
@@ -539,32 +543,36 @@ function ItemEnviado({
           </p>
         )}
       </div>
-      <span className="shrink-0 text-xs font-semibold text-zinc-700 tabular-nums">
+      <span className="shrink-0 text-xs font-semibold text-foreground/80 tabular-nums">
         {formatCurrency(item.subtotal_cents)}
       </span>
       {puedeRepreciar && (
-        <button
+        <Button
           type="button"
-          onClick={() => onEditPriceEnviado?.(item.order_item_id)}
-          className={`shrink-0 rounded-full p-1.5 ${
+          variant="ghost"
+          size="icon-sm"
+          className={
             item.price_original_cents != null
-              ? "bg-amber-100 text-amber-700"
-              : "text-zinc-400 active:bg-zinc-100"
-          }`}
+              ? "shrink-0 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-100"
+              : "shrink-0 rounded-full text-muted-foreground/70"
+          }
+          onClick={() => onEditPriceEnviado?.(item.order_item_id)}
           aria-label={`Cambiar el precio de ${item.product_name}, ya enviado`}
         >
           <Tag className="h-4 w-4" />
-        </button>
+        </Button>
       )}
       {userCanCancel && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 rounded-full text-muted-foreground/70 hover:bg-red-50 hover:text-red-600"
           onClick={() => onCancelItem(item.order_item_id, item.product_name)}
-          className="shrink-0 rounded-full p-1.5 text-zinc-400 active:bg-red-50 active:text-red-600"
           aria-label={`Anular ${item.product_name}`}
         >
           <Ban className="h-4 w-4" />
-        </button>
+        </Button>
       )}
     </li>
   );
@@ -604,7 +612,7 @@ function ItemSinEnviar({
         {item.quantity}×
       </span>
       <div className="min-w-[7rem] flex-1 basis-0">
-        <p className="text-sm font-semibold break-words text-zinc-900">
+        <p className="text-sm font-semibold break-words text-foreground">
           {item.esMenuDelDia && (
             <span className="mr-1 inline-flex items-center rounded bg-emerald-200 px-1 align-middle text-[9px] font-bold text-emerald-800 uppercase">
               Menú
@@ -613,12 +621,12 @@ function ItemSinEnviar({
           {item.product_name}
         </p>
         {item.modifiers.length > 0 && (
-          <p className="mt-0.5 text-xs text-zinc-600">
+          <p className="mt-0.5 text-xs text-foreground/70">
             {item.modifiers.join(" · ")}
           </p>
         )}
         {item.notes && (
-          <p className="mt-0.5 text-xs text-zinc-500 italic">
+          <p className="mt-0.5 text-xs text-muted-foreground italic">
             &ldquo;{item.notes}&rdquo;
           </p>
         )}
@@ -637,52 +645,60 @@ function ItemSinEnviar({
       </span>
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {userCanEditPrice && !item.esMenuDelDia && (
-          <button
+          <Button
             type="button"
-            onClick={() => onEditPrice(item._key)}
-            className={`flex h-8 w-8 items-center justify-center rounded-full ring-1 active:scale-95 ${
+            variant="outline"
+            size="icon"
+            className={
               item.price_override_cents != null
-                ? "bg-amber-100 text-amber-700 ring-amber-300"
-                : "bg-white text-zinc-500 ring-zinc-200"
-            }`}
+                ? "rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100"
+                : "rounded-full"
+            }
+            onClick={() => onEditPrice(item._key)}
             aria-label={`Cambiar el precio de ${item.product_name}`}
           >
             <Tag className="h-4 w-4" />
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
+          className="rounded-full"
           onClick={() => onChangeQty(item._key, -1)}
           disabled={item.quantity <= 1}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 active:scale-95 disabled:opacity-40"
           aria-label={`Restar ${item.product_name}`}
         >
           <span aria-hidden className="text-lg leading-none">
             −
           </span>
-        </button>
+        </Button>
         <span className="w-6 text-center text-sm font-bold tabular-nums">
           {item.quantity}
         </span>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
+          className="rounded-full"
           onClick={() => onChangeQty(item._key, 1)}
           disabled={item.quantity >= 99}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200 active:scale-95 disabled:opacity-40"
           aria-label={`Sumar ${item.product_name}`}
         >
           <span aria-hidden className="text-lg leading-none">
             +
           </span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-muted-foreground/70 hover:bg-red-50 hover:text-red-600"
           onClick={() => onRemove(item._key)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 active:bg-red-50 active:text-red-600"
           aria-label={`Quitar ${item.product_name}`}
         >
           <Trash2 className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </li>
   );

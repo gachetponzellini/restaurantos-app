@@ -134,7 +134,7 @@ export function ReservasWorkspace({
       </div>
       <aside className="order-1 w-full lg:order-2 lg:sticky lg:top-6 lg:w-[340px] lg:shrink-0">
         <div className="mb-2.5 flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-zinc-900">A confirmar</h2>
+          <h2 className="text-sm font-semibold text-foreground">A confirmar</h2>
           {solicitudes.length > 0 && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
               {solicitudes.length}

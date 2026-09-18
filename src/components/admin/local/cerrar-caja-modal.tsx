@@ -175,8 +175,8 @@ export function CerrarCajaModal({
         <ModalBody>
         {cargando && !data && (
           <div className="space-y-3 py-6">
-            <div className="h-24 animate-pulse rounded-2xl bg-zinc-100" />
-            <div className="h-32 animate-pulse rounded-2xl bg-zinc-100" />
+            <div className="h-24 animate-pulse rounded-2xl bg-muted" />
+            <div className="h-32 animate-pulse rounded-2xl bg-muted" />
           </div>
         )}
 
@@ -189,12 +189,12 @@ export function CerrarCajaModal({
         {data && stats && (
           <div className="space-y-5">
             {/* ── 1 · La plata del período ───────────────────────── */}
-            <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
+            <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
               <SectionLabel>La plata del período</SectionLabel>
-              <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-zinc-900">
+              <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-foreground">
                 {formatCurrency(stats.total_ventas_cents)}
               </p>
-              <p className="mt-1 text-xs text-zinc-600">
+              <p className="mt-1 text-xs text-foreground/70">
                 {stats.cobros_count}{" "}
                 {stats.cobros_count === 1 ? "cobro" : "cobros"}
                 {/* La propina no está adentro de ese número: es plata del mozo
@@ -218,21 +218,21 @@ export function CerrarCajaModal({
             </section>
 
             {/* ── 2 · Quién la tiene ─────────────────────────────── */}
-            <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
+            <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
               <div className="flex items-baseline justify-between gap-3">
                 <SectionLabel>Quién tiene el efectivo</SectionLabel>
-                <p className="text-sm font-semibold tabular-nums text-zinc-900">
+                <p className="text-sm font-semibold tabular-nums text-foreground">
                   {formatCurrency(expected)}
                 </p>
               </div>
 
-              <ul className="mt-3 divide-y divide-zinc-100 rounded-lg ring-1 ring-zinc-200/70">
+              <ul className="mt-3 divide-y divide-border/60 rounded-lg ring-1 ring-border/70">
                 <li className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <span className="inline-flex items-center gap-2 text-sm text-zinc-700">
-                    <Wallet className="size-3.5 text-zinc-400" />
+                  <span className="inline-flex items-center gap-2 text-sm text-foreground/80">
+                    <Wallet className="size-3.5 text-muted-foreground/70" />
                     <span className="font-medium">En el cajón</span>
                   </span>
-                  <span className="text-sm font-semibold tabular-nums text-zinc-900">
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
                     {formatCurrency(data.reparto.en_cajon_cents)}
                   </span>
                 </li>
@@ -260,7 +260,7 @@ export function CerrarCajaModal({
                 </p>
               )}
 
-              <p className="mt-2 text-xs text-zinc-500">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Rendir no cambia el total: pasa la plata de la columna del mozo
                 a la del cajón.
               </p>
@@ -278,7 +278,7 @@ export function CerrarCajaModal({
               )}
 
               {data.sin_operadores && (
-                <p className="mt-2 text-xs text-zinc-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Nadie figura como operador de esta caja, así que todos los que
                   cobraron tienen que rendir —{" "}
                   <Link
@@ -329,7 +329,7 @@ export function CerrarCajaModal({
               )}
 
               {data.pedidos_abiertos.length > 0 && (
-                <p className="mt-3 text-xs text-zinc-600">
+                <p className="mt-3 text-xs text-foreground/70">
                   {data.pedidos_abiertos.length === 1
                     ? "Queda 1 pedido de delivery / take away abierto"
                     : `Quedan ${data.pedidos_abiertos.length} pedidos de delivery / take away abiertos`}
@@ -340,7 +340,7 @@ export function CerrarCajaModal({
             </section>
 
             {/* ── 3 · Contar y cerrar ────────────────────────────── */}
-            <section className="rounded-2xl bg-zinc-50 p-5 ring-1 ring-zinc-200/70">
+            <section className="rounded-2xl bg-muted/50 p-5 ring-1 ring-border/70">
               <SectionLabel>Contar y cerrar</SectionLabel>
 
               <div className="mt-3 grid gap-1.5">
@@ -348,7 +348,7 @@ export function CerrarCajaModal({
                   Efectivo contado en el cajón
                 </Label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-zinc-400">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground/70">
                     $
                   </span>
                   <Input
@@ -365,10 +365,12 @@ export function CerrarCajaModal({
                 </div>
               </div>
 
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-3"
                 onClick={() => setConteoAbierto((v) => !v)}
-                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-zinc-900"
               >
                 <ChevronDown
                   className={cn(
@@ -377,13 +379,13 @@ export function CerrarCajaModal({
                   )}
                 />
                 Contar por billete (opcional)
-              </button>
+              </Button>
 
               {conteoAbierto && (
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                   {DENOMINACIONES.map((d) => (
                     <label key={d} className="grid gap-1">
-                      <span className="text-[0.7rem] font-semibold text-zinc-500">
+                      <span className="text-[0.7rem] font-semibold text-muted-foreground">
                         {formatCurrency(d * 100)}
                       </span>
                       <Input
@@ -448,15 +450,15 @@ export function CerrarCajaModal({
                   mañana». La spec 177 · Parte C lo revierte sin perder ese
                   argumento: el fondo está CONFIGURADO, así que acá no hay nada
                   que decidir — el cierre lo aplica solo y el cartel lo dice. */}
-              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-white p-3 ring-1 ring-zinc-200">
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-card p-3 ring-1 ring-border">
                 <input
                   type="checkbox"
                   checked={retirar}
                   onChange={(e) => setRetirar(e.target.checked)}
-                  className="mt-0.5 size-4 accent-zinc-900"
+                  className="mt-0.5 size-4 accent-primary"
                 />
                 <span>
-                  <span className="block text-sm font-semibold text-zinc-900">
+                  <span className="block text-sm font-semibold text-foreground">
                     {fondo > 0 ? "Retirar el efectivo" : "Retirar todo el efectivo"}
                     {cents !== null && cents > 0 && (
                       <span className="tabular-nums">
@@ -465,7 +467,7 @@ export function CerrarCajaModal({
                       </span>
                     )}
                   </span>
-                  <span className="mt-0.5 block text-xs text-zinc-600">
+                  <span className="mt-0.5 block text-xs text-foreground/70">
                     {!retirar
                       ? "La caja queda con lo contado — es el arqueo de mitad de turno."
                       : fondo > 0
@@ -478,7 +480,7 @@ export function CerrarCajaModal({
               {data.barre_salon &&
                 (data.salon.mesas_a_liberar > 0 ||
                   data.salon.mozos_asignados > 0) && (
-                  <p className="mt-3 text-xs text-zinc-600">
+                  <p className="mt-3 text-xs text-foreground/70">
                     Al cerrar:{" "}
                     {data.salon.mesas_a_liberar > 0 && (
                       <>
@@ -599,48 +601,51 @@ function MozoPendienteRow({
   return (
     <li className="px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-zinc-700">
-          <User className="size-3.5 shrink-0 text-zinc-400" />
+        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-foreground/80">
+          <User className="size-3.5 shrink-0 text-muted-foreground/70" />
           <span className="truncate font-medium">{nombre}</span>
-          <span className="shrink-0 text-xs text-zinc-500">· sin rendir</span>
+          <span className="shrink-0 text-xs text-muted-foreground">· sin rendir</span>
         </span>
         <span className="flex shrink-0 items-center gap-3">
           <span className="text-right">
-            <span className="block text-sm font-semibold tabular-nums text-zinc-900">
+            <span className="block text-sm font-semibold tabular-nums text-foreground">
               {formatCurrency(efectivoCents)}
             </span>
             {/* El que cobró todo con tarjeta rinde $0 de efectivo, pero rinde:
                 cierra su período y entrega los tickets (D4). */}
             {efectivoCents === 0 && ticketsCents > 0 && (
-              <span className="block text-[0.7rem] text-zinc-500">
+              <span className="block text-[0.7rem] text-muted-foreground">
                 sólo tickets
               </span>
             )}
           </span>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => abrir("rendir")}
-            className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200"
           >
             {modo === "rendir" ? "Cancelar" : "Rendir"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="link"
+            size="sm"
+            className="text-muted-foreground hover:text-rose-700"
             onClick={() => abrir("no_entrego")}
-            className="rounded-full px-2 py-1 text-xs font-semibold text-zinc-500 underline underline-offset-2 transition hover:text-rose-700"
           >
             {modo === "no_entrego" ? "Cancelar" : "No entregó"}
-          </button>
+          </Button>
         </span>
       </div>
 
       {modo === "rendir" && (
-        <div className="mt-2 grid gap-2 rounded-lg bg-zinc-50 p-3 ring-1 ring-zinc-200/70">
+        <div className="mt-2 grid gap-2 rounded-lg bg-muted/50 p-3 ring-1 ring-border/70">
           <Label htmlFor={`rendir-${mozoId}`} className="text-xs font-medium">
             Efectivo que entrega
           </Label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-zinc-400">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground/70">
               $
             </span>
             <Input

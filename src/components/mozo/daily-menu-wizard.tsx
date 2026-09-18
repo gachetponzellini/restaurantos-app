@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Minus, Plus, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
 import {
   autoResolvedModifierIds,
@@ -669,30 +670,31 @@ export function DailyMenuWizard({
         role="dialog"
         aria-modal="true"
         aria-label={`${menu.name} — ${stepLabel}`}
-        className={`flex w-full max-w-md ${embedded ? "max-h-full" : "max-h-[92dvh]"} flex-col rounded-t-3xl bg-white shadow-2xl`}
+        className={`flex w-full max-w-md ${embedded ? "max-h-full" : "max-h-[92dvh]"} flex-col rounded-t-3xl bg-card shadow-2xl`}
       >
         {/* ── Header: dónde estoy y qué estoy decidiendo ── */}
-        <div className="shrink-0 border-b border-zinc-100 px-3 pb-3 pt-2.5">
+        <div className="shrink-0 border-b border-border/60 px-3 pb-3 pt-2.5">
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={goBack}
-              className="rounded-full p-2 text-zinc-600 active:bg-zinc-100"
               aria-label={vista === "cantidad" ? "Cerrar" : "Paso anterior"}
             >
               <ArrowLeft className="h-5 w-5" />
-            </button>
+            </Button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-700">
                 {menu.name}
               </p>
-              <h3 className="truncate font-heading text-lg font-extrabold leading-tight text-zinc-900">
+              <h3 className="truncate font-heading text-lg font-extrabold leading-tight text-foreground">
                 {stepLabel}
               </h3>
               {/* El contador de la vuelta. Sin esta línea el mozo cuenta cuatro
                   menús, ve un paso que pide dos, y parece un bug (D4). */}
               {esBloque && vista === "paso" && paso && (
-                <p className="truncate text-[11px] font-semibold text-zinc-500">
+                <p className="truncate text-[11px] font-semibold text-muted-foreground">
                   {paso.faltan > 0
                     ? `Faltan ${paso.faltan} de ${paso.lineas.length}`
                     : `Listos los ${paso.lineas.length}`}
@@ -700,14 +702,15 @@ export function DailyMenuWizard({
                 </p>
               )}
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="rounded-full p-2 text-zinc-500 active:bg-zinc-100"
               aria-label="Cerrar"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
 
           <div className="mt-2 flex items-center gap-2 pl-1">
@@ -720,12 +723,12 @@ export function DailyMenuWizard({
                       ? "w-5 bg-emerald-600"
                       : i < indiceActual
                         ? "w-1.5 bg-emerald-300"
-                        : "w-1.5 bg-zinc-200"
+                        : "w-1.5 bg-border"
                   }`}
                 />
               ))}
             </div>
-            <span className="text-[11px] font-semibold text-zinc-500">
+            <span className="text-[11px] font-semibold text-muted-foreground">
               Paso {indiceActual + 1} de {totalPasos}
             </span>
           </div>
@@ -783,17 +786,17 @@ export function DailyMenuWizard({
         </div>
 
         {/* ── Pie: total + acción del paso ── */}
-        <div className="shrink-0 border-t border-zinc-200 bg-white px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-border bg-card px-3 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {vista === "cantidad" ? (
             <div className="flex items-center gap-3">
-              <div className="flex items-center rounded-full ring-1 ring-zinc-200">
+              <div className="flex items-center rounded-full ring-1 ring-border">
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() =>
                     setLineas((ls) => redimensionar(ls, Math.max(1, ls.length - 1)))
                   }
-                  className="flex h-11 w-11 items-center justify-center text-zinc-700 active:bg-zinc-50"
+                  className="flex h-11 w-11 items-center justify-center text-foreground/80 active:bg-muted/50"
                   aria-label="Menos"
                 >
                   <Minus className="h-4 w-4" />
@@ -807,23 +810,24 @@ export function DailyMenuWizard({
                   onClick={() =>
                     setLineas((ls) => redimensionar(ls, Math.min(99, ls.length + 1)))
                   }
-                  className="flex h-11 w-11 items-center justify-center text-zinc-700 active:bg-zinc-50"
+                  className="flex h-11 w-11 items-center justify-center text-foreground/80 active:bg-muted/50"
                   aria-label="Más"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
-              <button
+              <Button
                 type="button"
+                size="xl"
                 onClick={() => confirmarCantidad(lineas.length)}
-                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-base font-semibold text-white transition active:scale-[0.98]"
+                className="flex-1"
               >
                 Seguir
-              </button>
+              </Button>
             </div>
           ) : paso?.step.kind === "choice" ? (
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted-foreground">
                 {esBloque && paso.faltan > 0
                   ? `Elegí ${paso.faltan} más`
                   : "Elegí una opción para seguir"}
@@ -835,7 +839,7 @@ export function DailyMenuWizard({
           ) : paso?.step.kind === "modifiers" ? (
             isSingleChoiceGroup(paso.step.group) ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-muted-foreground">
                   {esBloque && paso.faltan > 0
                     ? `Elegí ${paso.faltan} más`
                     : "Elegí una opción para seguir"}
@@ -848,30 +852,32 @@ export function DailyMenuWizard({
               // Opcional o de varias: «ninguno» y «dos» son respuestas válidas,
               // así que el paso lo cierra el usuario (FR-003).
               <div className="flex items-center gap-3">
-                <p className="min-w-0 flex-1 text-xs text-zinc-500">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
                   {sinMinimo > 0
                     ? esBloque
                       ? `Faltan ${sinMinimo} de ${paso.lineas.length}`
                       : `Elegí ${faltanMods} para seguir`
                     : `Total ${formatCurrency(totalBloque)}`}
                 </p>
-                <button
+                <Button
                   ref={submitRef}
                   type="button"
+                  size="xl"
                   disabled={sinMinimo > 0}
                   onClick={() => seguir(paso)}
-                  className="flex h-11 shrink-0 items-center rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+                  className="shrink-0"
                 >
                   Seguir
-                </button>
+                </Button>
               </div>
             )
           ) : (
-            <button
+            <Button
               ref={submitRef}
               type="button"
+              size="xl"
               onClick={handleAdd}
-              className="flex h-12 w-full items-center justify-between rounded-2xl bg-emerald-600 px-4 text-white transition active:scale-[0.98]"
+              className="w-full justify-between"
             >
               <span className="text-base font-semibold">
                 {esBloque ? `Agregar ${lineas.length} menús` : "Agregar"}
@@ -879,11 +885,11 @@ export function DailyMenuWizard({
               <span className="text-base font-bold tabular-nums">
                 {formatCurrency(totalBloque)}
               </span>
-            </button>
+            </Button>
           )}
 
           {embedded && (
-            <p className="mt-2 text-[11px] text-zinc-400">
+            <p className="mt-2 text-[11px] text-muted-foreground/70">
               {vista === "cantidad"
                 ? "1-8 cuántos · ←→↑↓ mover · +/− ajustar · Enter seguir"
                 : vista === "paso"
@@ -920,7 +926,7 @@ function CantidadStep({
 }) {
   return (
     <>
-      <p className="mb-2 px-1 text-xs text-zinc-500">
+      <p className="mb-2 px-1 text-xs text-muted-foreground">
         Se preguntan las opciones de todos juntos, por vuelta de mesa.
       </p>
       <div
@@ -951,8 +957,8 @@ function CantidadStep({
                 isChosen
                   ? "bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500"
                   : isActive
-                    ? "bg-white text-zinc-900 ring-2 ring-emerald-400"
-                    : "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-100"
+                    ? "bg-card text-foreground ring-2 ring-emerald-400"
+                    : "bg-muted/50 text-foreground/80 ring-1 ring-border/60"
               }`}
             >
               {n}
@@ -1018,15 +1024,15 @@ function ChoiceStep({
                 isChosen
                   ? "bg-emerald-50 ring-2 ring-emerald-500"
                   : isActive
-                    ? "bg-white ring-2 ring-emerald-400"
-                    : "bg-zinc-50 ring-1 ring-zinc-100"
+                    ? "bg-card ring-2 ring-emerald-400"
+                    : "bg-muted/50 ring-1 ring-border/60"
               }`}
             >
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
                   isChosen
                     ? "bg-emerald-600 text-white"
-                    : "bg-white text-zinc-500 ring-1 ring-zinc-200"
+                    : "bg-card text-muted-foreground ring-1 ring-border"
                 }`}
               >
                 {isChosen ? (
@@ -1040,11 +1046,11 @@ function ChoiceStep({
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold text-zinc-900">
+                <span className="block truncate text-[15px] font-semibold text-foreground">
                   {opt.product_name ?? opt.label}
                 </span>
                 {opt.description && (
-                  <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                     {opt.description}
                   </span>
                 )}
@@ -1107,7 +1113,7 @@ function ModifierStep({
   return (
     <>
       {!single && (
-        <p className="mb-2 px-1 text-xs text-zinc-500">
+        <p className="mb-2 px-1 text-xs text-muted-foreground">
           {step.group.min_selection > 0
             ? `Elegí ${step.group.min_selection}`
             : "Opcional"}
@@ -1145,15 +1151,15 @@ function ModifierStep({
                   isChosen
                     ? "bg-emerald-50 ring-2 ring-emerald-500"
                     : isActive
-                      ? "bg-white ring-2 ring-emerald-400"
-                      : "bg-zinc-50 ring-1 ring-zinc-100"
+                      ? "bg-card ring-2 ring-emerald-400"
+                      : "bg-muted/50 ring-1 ring-border/60"
                 }`}
               >
                 <span
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
                     isChosen
                       ? "bg-emerald-600 text-white"
-                      : "bg-white text-zinc-500 ring-1 ring-zinc-200"
+                      : "bg-card text-muted-foreground ring-1 ring-border"
                   }`}
                 >
                   {isChosen ? (
@@ -1166,7 +1172,7 @@ function ModifierStep({
                     i + 1
                   )}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-zinc-900">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-foreground">
                   {m.name}
                 </span>
                 {m.price_delta_cents > 0 && (
@@ -1235,20 +1241,20 @@ function ConfirmStep({
 
       {fixedComponents.length > 0 && (
         <section>
-          <p className="px-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+          <p className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Incluye
           </p>
           <ul className="mt-1.5 space-y-1">
             {fixedComponents.map((c) => (
               <li
                 key={c.id}
-                className="flex items-start gap-2.5 rounded-xl bg-zinc-50 px-3 py-2 ring-1 ring-zinc-100"
+                className="flex items-start gap-2.5 rounded-xl bg-muted/50 px-3 py-2 ring-1 ring-border/60"
               >
                 <Check
                   className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600"
                   strokeWidth={3}
                 />
-                <span className="min-w-0 text-sm text-zinc-700">
+                <span className="min-w-0 text-sm text-foreground/80">
                   {c.kind === "product" && c.product_name
                     ? `${c.label}: ${c.product_name}`
                     : c.label}
@@ -1291,13 +1297,13 @@ function ConfirmStep({
                   <button
                     type="button"
                     onClick={() => onEditPaso(p.clave)}
-                    className="flex w-full items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-left ring-1 ring-zinc-200 transition active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex w-full items-center gap-3 rounded-2xl bg-card px-3 py-2.5 text-left ring-1 ring-border transition active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                         {g.label}
                       </span>
-                      <span className="block truncate text-[15px] font-semibold text-zinc-900">
+                      <span className="block truncate text-[15px] font-semibold text-foreground">
                         {detalle || "—"}
                       </span>
                     </span>
@@ -1322,7 +1328,7 @@ function ConfirmStep({
           sobre plata en la pantalla donde se decide qué se cobra. */}
       {esBloque && !lineasValenIgual(lineas) && (
         <section>
-          <p className="px-1 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+          <p className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
             Cómo suma
           </p>
           <ul className="mt-1.5 space-y-1">
@@ -1330,12 +1336,12 @@ function ConfirmStep({
               ({ importe, cuantos }) => (
                 <li
                   key={importe}
-                  className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-sm ring-1 ring-zinc-100"
+                  className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2 text-sm ring-1 ring-border/60"
                 >
-                  <span className="text-zinc-600 tabular-nums">
+                  <span className="text-foreground/70 tabular-nums">
                     {cuantos} × {formatCurrency(importe)}
                   </span>
-                  <span className="font-semibold text-zinc-900 tabular-nums">
+                  <span className="font-semibold text-foreground tabular-nums">
                     {formatCurrency(importe * cuantos)}
                   </span>
                 </li>

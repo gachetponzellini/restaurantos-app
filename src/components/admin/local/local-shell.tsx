@@ -99,6 +99,7 @@ import {
 } from "@/lib/permissions/operacion-tabs";
 import { cn } from "@/lib/utils";
 import { AyudaChip } from "@/components/admin/ayuda-chip";
+import { Button } from "@/components/ui/button";
 
 // Spec 182 — la lista y el gate viven en `lib/permissions/operacion-tabs.ts`:
 // el server los necesita para no crear la promesa de una tab que el rol no ve.
@@ -213,13 +214,14 @@ function TabLoadError({ money }: { money?: boolean }) {
           ? "Esto NO significa que no haya nada: hay datos, pero fallaron al cargar. Reintentá antes de tomar decisiones de cierre."
           : "Reintentá para volver a cargarla."}
       </p>
-      <button
+      <Button
         type="button"
+        size="lg"
+        variant="destructive-solid"
         onClick={() => window.location.reload()}
-        className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
       >
         Reintentar
-      </button>
+      </Button>
     </div>
   );
 }
@@ -610,7 +612,7 @@ function SalonSelector({
           // Filtrando = estado "no estás viendo todo": tiene que cantar.
           filtrando
             ? "bg-amber-50 text-amber-900 ring-amber-300"
-            : "bg-white text-zinc-500 ring-zinc-200/70 hover:text-zinc-900",
+            : "bg-card text-muted-foreground ring-border/70 hover:text-foreground",
         )}
       >
         <MapPin className="size-4 shrink-0" strokeWidth={2.5} />
@@ -619,20 +621,20 @@ function SalonSelector({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1.5 min-w-52 rounded-xl bg-white p-1 shadow-lg ring-1 ring-zinc-200">
+        <div className="absolute top-full left-0 z-50 mt-1.5 min-w-52 rounded-xl bg-card p-1 shadow-lg ring-1 ring-border">
           <button
             type="button"
             onClick={onClear}
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold transition",
               filtrando
-                ? "text-zinc-500 hover:bg-zinc-50"
-                : "bg-zinc-100 text-zinc-900",
+                ? "text-muted-foreground hover:bg-muted/50"
+                : "bg-muted text-foreground",
             )}
           >
             Todos los salones
           </button>
-          <div className="my-1 h-px bg-zinc-100" />
+          <div className="my-1 h-px bg-muted" />
           {salones.map((s) => {
             const on = selected.includes(s.id);
             return (
@@ -642,14 +644,14 @@ function SalonSelector({
                 role="checkbox"
                 aria-checked={on}
                 onClick={() => onToggle(s.id)}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-foreground/80 transition hover:bg-muted/50"
               >
                 <span
                   className={cn(
                     "flex size-4 shrink-0 items-center justify-center rounded border transition",
                     on
                       ? "border-amber-500 bg-amber-500 text-white"
-                      : "border-zinc-300",
+                      : "border-foreground/20",
                   )}
                 >
                   {on && <Check className="size-3" strokeWidth={4} />}
@@ -768,7 +770,7 @@ function TabsInner({
   const tabsBar = (
     <nav
       aria-label="Secciones del operativo"
-      className="inline-flex rounded-2xl bg-white p-1 ring-1 ring-zinc-200/70"
+      className="inline-flex rounded-2xl bg-card p-1 ring-1 ring-border/70"
     >
       <TabButton
         active={active === "salon"}
@@ -885,7 +887,7 @@ function TabsInner({
   );
 
   return (
-    <div className="fixed inset-x-0 top-14 bottom-0 z-30 flex flex-col bg-zinc-50 transition-[left] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:top-0 md:left-[var(--admin-sidebar-width,60px)]">
+    <div className="fixed inset-x-0 top-14 bottom-0 z-30 flex flex-col bg-muted/50 transition-[left] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:top-0 md:left-[var(--admin-sidebar-width,60px)]">
       {/* El selector va pegado a las tabs, NO en la esquina derecha: ahí flota
           la campana de notificaciones del panel admin y se chocaban.
 
@@ -1077,8 +1079,8 @@ function TabButton({
       className={cn(
         "relative inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold whitespace-nowrap transition sm:px-4",
         active
-          ? "bg-zinc-100 text-zinc-900"
-          : "text-zinc-500 hover:text-zinc-900",
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:text-foreground",
       )}
     >
       {children}
@@ -1087,8 +1089,8 @@ function TabButton({
           className={cn(
             "rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums",
             active
-              ? "bg-white text-zinc-900 ring-1 ring-zinc-200"
-              : "bg-zinc-100 text-zinc-500",
+              ? "bg-card text-foreground ring-1 ring-border"
+              : "bg-muted text-muted-foreground",
           )}
         >
           {count}

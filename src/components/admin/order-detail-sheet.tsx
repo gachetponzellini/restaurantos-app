@@ -88,7 +88,7 @@ const STATUS_DOT: Record<OrderStatus, string> = {
   preparing: "bg-amber-500",
   ready: "bg-emerald-500",
   on_the_way: "bg-indigo-500",
-  delivered: "bg-zinc-400",
+  delivered: "bg-muted-foreground",
   cancelled: "bg-rose-500",
 };
 
@@ -788,7 +788,7 @@ function PaymentChip({
     paid: { bg: "bg-emerald-50", text: "text-emerald-800", label: "MP · Pagado" },
     pending: { bg: "bg-amber-50", text: "text-amber-800", label: "MP · Pendiente" },
     failed: { bg: "bg-rose-50", text: "text-rose-800", label: "MP · Rechazado" },
-    refunded: { bg: "bg-zinc-100", text: "text-zinc-700", label: "MP · Reembolsado" },
+    refunded: { bg: "bg-muted", text: "text-foreground/80", label: "MP · Reembolsado" },
   };
   const s = styles[status ?? "pending"] ?? styles.pending;
   return (

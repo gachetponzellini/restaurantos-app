@@ -5,6 +5,7 @@ import { Check, Eraser, UserMinus, X } from "lucide-react";
 
 import { initialsFromName, mozoColor } from "@/lib/mozo/colors";
 import type { MozoMember } from "@/lib/mozo/queries";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -58,38 +59,40 @@ export function AsignarMozosPanel({
       {/* Header — mismo lenguaje que TableDetail. */}
       <header className="border-border/60 flex items-center justify-between gap-3 border-b px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             Modo pintura
           </p>
           <h3 className="text-foreground text-lg font-semibold tracking-tight">
             Distribuir mozos
           </h3>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
+          className="-mr-1"
           onClick={onDone}
-          className="hover:bg-muted -mr-1 inline-flex size-8 items-center justify-center rounded-md transition-colors"
           aria-label="Cerrar"
         >
           <X className="size-4" />
-        </button>
+        </Button>
       </header>
 
       {/* Lista de mozos — palette */}
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         <div className="flex items-center justify-between">
-          <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+          <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Mozos
           </p>
           {totalSinAsignar > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 tabular-nums">
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground/80 tabular-nums">
               {totalSinAsignar} sin asignar
             </span>
           )}
         </div>
 
         {targetMozos.length === 0 ? (
-          <p className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500 ring-1 ring-zinc-200">
+          <p className="rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground ring-1 ring-border">
             No hay mozos cargados. Agregá empleados con rol &quot;mozo&quot;
             desde <span className="font-semibold">/admin/empleados</span>.
           </p>
@@ -109,8 +112,8 @@ export function AsignarMozosPanel({
                   className={cn(
                     "flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left transition active:scale-[0.99]",
                     isActive
-                      ? "bg-zinc-900 text-white shadow"
-                      : "bg-zinc-50 text-zinc-700 hover:bg-zinc-100",
+                      ? "bg-primary text-white shadow"
+                      : "bg-muted/50 text-foreground/80 hover:bg-muted",
                   )}
                 >
                   <span
@@ -123,7 +126,7 @@ export function AsignarMozosPanel({
                     <p
                       className={cn(
                         "truncate text-sm font-semibold",
-                        isActive ? "text-white" : "text-zinc-900",
+                        isActive ? "text-white" : "text-foreground",
                       )}
                     >
                       {m.full_name ?? "—"}
@@ -131,7 +134,7 @@ export function AsignarMozosPanel({
                     <p
                       className={cn(
                         "text-[0.65rem] tabular-nums",
-                        isActive ? "text-zinc-300" : "text-zinc-500",
+                        isActive ? "text-muted-foreground/50" : "text-muted-foreground",
                       )}
                     >
                       {countByMozo[m.user_id] ?? 0} mesas
@@ -153,15 +156,15 @@ export function AsignarMozosPanel({
                 "flex flex-shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left transition active:scale-[0.99] @xl:col-span-2",
                 activeMozoId === null
                   ? "bg-rose-100 text-rose-900 ring-1 ring-rose-300"
-                  : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100",
+                  : "bg-muted/50 text-foreground/70 hover:bg-muted",
               )}
             >
-              <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-500 ring-2 ring-white">
+              <span className="flex size-9 flex-shrink-0 items-center justify-center rounded-full bg-border text-muted-foreground ring-2 ring-white">
                 <UserMinus className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">Desasignar</p>
-                <p className="text-[0.65rem] text-zinc-500 tabular-nums">
+                <p className="text-[0.65rem] text-muted-foreground tabular-nums">
                   {totalSinAsignar} mesas
                 </p>
               </div>
@@ -169,7 +172,7 @@ export function AsignarMozosPanel({
           </div>
         )}
 
-        <p className="mt-2 rounded-xl bg-zinc-50 p-3 text-[0.7rem] leading-relaxed text-zinc-600 ring-1 ring-zinc-200 @xl:max-w-prose">
+        <p className="mt-2 rounded-xl bg-muted/50 p-3 text-[0.7rem] leading-relaxed text-foreground/70 ring-1 ring-border @xl:max-w-prose">
           Tocá un mozo y después las mesas que le tocan en el plano. Tap en una
           mesa ya asignada al mozo activo la desasigna. La asignación queda{" "}
           <span className="font-semibold">fija</span> hasta que la cambies.
@@ -183,48 +186,42 @@ export function AsignarMozosPanel({
             <p className="min-w-0 flex-1 px-1 text-xs font-medium text-rose-900">
               ¿Desasignar las {totalAsignadas} mesas?
             </p>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setConfirmClear(false)}
-              className="rounded-xl px-3 py-2 text-xs font-semibold text-zinc-600 transition hover:bg-white"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="destructive-solid"
               onClick={() => {
                 setConfirmClear(false);
                 onClearAll();
               }}
-              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 active:scale-[0.98]"
             >
               Limpiar
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="xl"
+            className="w-full"
             onClick={() => setConfirmClear(true)}
             disabled={totalAsignadas === 0}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
           >
             <Eraser className="h-4 w-4" />
             Limpiar distribución
-          </button>
+          </Button>
         )}
 
-        <button
-          type="button"
-          onClick={onDone}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold shadow-sm transition active:scale-[0.98]"
-          style={{
-            background: "var(--brand, #18181B)",
-            color: "var(--brand-foreground, white)",
-          }}
-        >
+        <Button type="button" size="xl" className="w-full" onClick={onDone}>
           <Check className="h-5 w-5" />
           Listo
-        </button>
+        </Button>
       </div>
     </>
   );

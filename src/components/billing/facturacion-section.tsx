@@ -16,6 +16,7 @@ import type {
   Invoice,
   TipoComprobante,
 } from "@/lib/afip/types";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/currency";
@@ -164,16 +165,16 @@ export function FacturacionSection({
   // Emisión en curso — el gateway está resolviendo el CAE (polling).
   if (invoice && invoice.status === "pending") {
     return (
-      <section className="rounded-2xl bg-white p-4 ring-1 ring-amber-200">
+      <section className="rounded-2xl bg-card p-4 ring-1 ring-amber-200">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
             <Loader2 className="size-5 animate-spin" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-zinc-900">
+            <p className="text-sm font-semibold text-foreground">
               Emitiendo comprobante…
             </p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               ARCA la está procesando. Podés cerrar: queda en Facturación.
             </p>
           </div>
@@ -185,20 +186,20 @@ export function FacturacionSection({
   // Ya facturada OK
   if (invoice && invoice.status === "authorized") {
     return (
-      <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70">
+      <section className="rounded-2xl bg-card p-4 ring-1 ring-border/70">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
             <FileText className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-zinc-900">
+            <p className="text-sm font-semibold text-foreground">
               {TIPO_LABEL[invoice.tipo_comprobante] ?? "Comprobante"}{" "}
-              <span className="font-normal text-zinc-500">
+              <span className="font-normal text-muted-foreground">
                 #{String(invoice.punto_venta).padStart(4, "0")}-
                 {String(invoice.numero).padStart(8, "0")}
               </span>
             </p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               CAE: {invoice.cae} · {formatCurrency(invoice.total_cents)}
             </p>
           </div>
@@ -212,7 +213,7 @@ export function FacturacionSection({
             href={invoice.pdf_url}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 transition hover:text-zinc-900"
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-foreground/70 transition hover:text-foreground"
           >
             <FileText className="size-3" /> Ver PDF
           </a>
@@ -237,24 +238,24 @@ export function FacturacionSection({
   // Factura fallida — retry
   if (invoice && invoice.status === "failed") {
     return (
-      <section className="rounded-2xl bg-white p-4 ring-1 ring-rose-200">
+      <section className="rounded-2xl bg-card p-4 ring-1 ring-rose-200">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-full bg-rose-100 text-rose-700">
             <FileText className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-zinc-900">
+            <p className="text-sm font-semibold text-foreground">
               Factura no emitida
             </p>
             <p className="text-xs text-rose-600">
               {invoice.error_message ?? "Error al emitir el comprobante"}
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            size="sm"
             disabled={emitting}
             onClick={() => handleRetry(invoice.id)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
           >
             {emitting ? (
               <Loader2 className="size-3 animate-spin" />
@@ -262,7 +263,7 @@ export function FacturacionSection({
               <RotateCcw className="size-3" />
             )}
             Reintentar
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -270,16 +271,16 @@ export function FacturacionSection({
 
   // Sin factura — formulario de emisión
   return (
-    <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200/70 space-y-3">
+    <section className="rounded-2xl bg-card p-4 ring-1 ring-border/70 space-y-3">
       <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted text-foreground/80">
           <FileText className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-zinc-900">
+          <p className="text-sm font-semibold text-foreground">
             Emitir comprobante
           </p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             Opcional — {formatCurrency(totalCents)}
           </p>
         </div>
@@ -297,8 +298,8 @@ export function FacturacionSection({
           className={cn(
             "flex-1 rounded-xl px-3 py-2.5 text-center text-xs font-semibold transition ring-1",
             !tipoA
-              ? "bg-zinc-900 text-white ring-zinc-900"
-              : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+              ? "bg-primary text-white ring-primary"
+              : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
           )}
         >
           Factura B
@@ -315,8 +316,8 @@ export function FacturacionSection({
           className={cn(
             "flex-1 rounded-xl px-3 py-2.5 text-center text-xs font-semibold transition ring-1",
             tipoA
-              ? "bg-zinc-900 text-white ring-zinc-900"
-              : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+              ? "bg-primary text-white ring-primary"
+              : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
           )}
         >
           Factura A
@@ -347,12 +348,12 @@ export function FacturacionSection({
         )}
 
         <div className="grid gap-1">
-          <Label className="text-xs text-zinc-600">
+          <Label className="text-xs text-foreground/70">
             CUIT del cliente{" "}
             {tipoA ? (
               <span className="text-rose-600">*</span>
             ) : (
-              <span className="text-zinc-400">(opcional)</span>
+              <span className="text-muted-foreground/70">(opcional)</span>
             )}
           </Label>
           <Input
@@ -373,7 +374,7 @@ export function FacturacionSection({
         {showReceptor && (
           <>
             <div className="grid gap-1">
-              <Label className="text-xs text-zinc-600">Razón social</Label>
+              <Label className="text-xs text-foreground/70">Razón social</Label>
               <Input
                 value={razonSocial}
                 onChange={(e) => setRazonSocial(e.target.value)}
@@ -381,7 +382,7 @@ export function FacturacionSection({
               />
             </div>
             <div className="grid gap-1">
-              <Label className="text-xs text-zinc-600">
+              <Label className="text-xs text-foreground/70">
                 Condición de IVA <span className="text-rose-600">*</span>
               </Label>
               <div className="grid grid-cols-2 gap-2">
@@ -393,8 +394,8 @@ export function FacturacionSection({
                     className={cn(
                       "rounded-xl px-3 py-2 text-center text-xs font-semibold transition ring-1",
                       condicionIva === value
-                        ? "bg-zinc-900 text-white ring-zinc-900"
-                        : "bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50",
+                        ? "bg-primary text-white ring-primary"
+                        : "bg-card text-foreground/80 ring-border hover:bg-muted/50",
                     )}
                   >
                     {CONDICION_IVA_LABEL[value]}
@@ -410,15 +411,12 @@ export function FacturacionSection({
         <p className="text-xs text-rose-600">{error}</p>
       )}
 
-      <button
+      <Button
         type="button"
+        size="xl"
+        className="w-full"
         disabled={emitting}
         onClick={handleEmit}
-        className="flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition hover:brightness-95 active:translate-y-px disabled:opacity-50"
-        style={{
-          background: "var(--brand, #18181B)",
-          color: "var(--brand-foreground, white)",
-        }}
       >
         {emitting ? (
           <>
@@ -431,7 +429,7 @@ export function FacturacionSection({
             Emitir {tipoA ? "Factura A" : "Factura B"}
           </>
         )}
-      </button>
+      </Button>
     </section>
   );
 }

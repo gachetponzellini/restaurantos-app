@@ -138,7 +138,7 @@ export function CobrarSaldoModal({
                 id="cobranza-caja"
                 value={cajaId}
                 onChange={(e) => setCajaId(e.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-base"
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-base"
               >
                 {cajas.map((c) => (
                   <option key={c.id} value={c.id}>

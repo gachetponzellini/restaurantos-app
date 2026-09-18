@@ -148,10 +148,10 @@ export function FichajeTab({
       <div className="flex flex-1 flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2 className="text-lg font-semibold text-foreground">
               Asistencia del día
             </h2>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-muted-foreground">
               {present.length}{" "}
               {present.length === 1 ? "persona" : "personas"} trabajando
               ahora
@@ -164,7 +164,7 @@ export function FichajeTab({
         </div>
 
         {present.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-zinc-400">
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground/70">
             <Clock className="size-10 opacity-40" />
             <p className="text-sm">No hay nadie fichado todavía.</p>
           </div>
@@ -184,10 +184,10 @@ export function FichajeTab({
 
       {/* Sidebar: finished + absent (apilado debajo en <lg) */}
       {(finished.length > 0 || absent.length > 0) && (
-        <aside className="w-full shrink-0 space-y-5 overflow-y-auto rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70 lg:w-72">
+        <aside className="w-full shrink-0 space-y-5 overflow-y-auto rounded-2xl bg-card p-5 ring-1 ring-border/70 lg:w-72">
           {finished.length > 0 && (
             <section className="space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <LogOut className="size-3.5" />
                 Ya salieron ({finished.length})
               </div>
@@ -195,12 +195,12 @@ export function FichajeTab({
                 {finished.map((e) => (
                   <li
                     key={e.id}
-                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-50"
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50"
                   >
-                    <span className="truncate font-medium text-zinc-700">
+                    <span className="truncate font-medium text-foreground/80">
                       {e.name}
                     </span>
-                    <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {formatDuration(e.durationMinutes)}
                     </span>
                   </li>
@@ -211,7 +211,7 @@ export function FichajeTab({
 
           {absent.length > 0 && (
             <section className="space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <UserX className="size-3.5" />
                 Sin fichar ({absent.length})
               </div>
@@ -221,7 +221,7 @@ export function FichajeTab({
                     key={a.userId}
                     className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm"
                   >
-                    <span className="truncate text-zinc-500">{a.name}</span>
+                    <span className="truncate text-muted-foreground">{a.name}</span>
                     <RoleBadge role={a.role} size="xs" />
                   </li>
                 ))}

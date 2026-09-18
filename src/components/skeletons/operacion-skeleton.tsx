@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function OperacionTabsBarSkeleton() {
   return (
-    <div className="inline-flex gap-1 rounded-2xl bg-white p-1 ring-1 ring-zinc-200/70">
+    <div className="inline-flex gap-1 rounded-2xl bg-card p-1 ring-1 ring-border/70">
       {Array.from({ length: 6 }).map((_, i) => (
         <Skeleton key={i} className="h-9 w-24 rounded-xl" />
       ))}
@@ -48,7 +48,7 @@ export function TabContentSkeleton() {
 
 export function OperacionSkeleton() {
   return (
-    <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex flex-col bg-zinc-50 md:left-[var(--admin-sidebar-width,60px)] md:top-0">
+    <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex flex-col bg-muted/50 md:left-[var(--admin-sidebar-width,60px)] md:top-0">
       <div className="border-border/60 flex items-center gap-3 overflow-x-auto border-b bg-white/95 px-3 py-3 backdrop-blur sm:px-4">
         <OperacionTabsBarSkeleton />
       </div>

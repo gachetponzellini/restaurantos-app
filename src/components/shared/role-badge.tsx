@@ -32,7 +32,7 @@ export function RoleBadge({
         size === "xs"
           ? "px-1.5 py-0.5 text-[0.6rem]"
           : "px-2 py-0.5 text-[0.7rem]",
-        ROLE_COLORS[role] ?? "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200",
+        ROLE_COLORS[role] ?? "bg-muted text-foreground/80 ring-1 ring-border",
         className,
       )}
     >
@@ -43,6 +43,6 @@ export function RoleBadge({
 
 export function roleBadgeColor(role: string): string {
   return (
-    ROLE_COLORS[role] ?? "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200"
+    ROLE_COLORS[role] ?? "bg-muted text-foreground/80 ring-1 ring-border"
   );
 }

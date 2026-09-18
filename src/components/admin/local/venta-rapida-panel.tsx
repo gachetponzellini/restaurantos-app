@@ -51,6 +51,7 @@ import {
   type ItemLibreDraft,
 } from "@/lib/mozo/item-libre-entry";
 import { ItemLibreModal } from "@/components/shared/item-libre-modal";
+import { Button } from "@/components/ui/button";
 import type { BusinessRole } from "@/lib/admin/context";
 import { canCargarItemLibre } from "@/lib/permissions/can";
 import {
@@ -415,20 +416,22 @@ export function VentaRapidaPanel({
           <Store className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+          <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             Venta rápida
           </p>
-          <h3 className="font-heading text-base leading-tight font-bold text-zinc-900">
+          <h3 className="font-heading text-base leading-tight font-bold text-foreground">
             Kiosko / barra · sin mesa
           </h3>
         </div>
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
           onClick={onClose}
-          className="rounded-full p-2 text-zinc-500 transition active:bg-zinc-100"
           aria-label="Cerrar venta rápida"
         >
           <X className="h-5 w-5" />
-        </button>
+        </Button>
       </header>
 
       {initError && (
@@ -459,7 +462,7 @@ export function VentaRapidaPanel({
           }}
         >
           {loadingCatalog ? (
-            <div className="flex h-40 items-center justify-center text-zinc-400">
+            <div className="flex h-40 items-center justify-center text-muted-foreground/70">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : catalogError ? (
@@ -469,8 +472,8 @@ export function VentaRapidaPanel({
               </p>
             </div>
           ) : visibleProducts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-10 text-center">
-              <p className="text-sm font-semibold text-zinc-700">
+            <div className="rounded-2xl border border-dashed border-border bg-card py-10 text-center">
+              <p className="text-sm font-semibold text-foreground/80">
                 {isSearching ? "Sin resultados" : "Sin productos"}
               </p>
             </div>
@@ -496,14 +499,14 @@ export function VentaRapidaPanel({
         <ColumnaLateral
           abierta
           modoAngosto="apilada"
-          className="@min-[600px]:order-1 @min-[600px]:border-r @min-[600px]:border-zinc-200"
+          className="@min-[600px]:order-1 @min-[600px]:border-r @min-[600px]:border-border"
         >
-          <div className="flex min-h-0 flex-col overflow-y-auto border-t border-zinc-200 bg-white @min-[600px]:border-t-0">
+          <div className="flex min-h-0 flex-col overflow-y-auto border-t border-border bg-card @min-[600px]:border-t-0">
             <div className="flex items-center justify-between px-3 pt-2.5">
-              <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                 La venta
               </p>
-              <span className="text-[11px] font-semibold text-zinc-500 tabular-nums">
+              <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
                 {cartCount > 0
                   ? `${cartCount} ${cartCount === 1 ? "ítem" : "ítems"}`
                   : "vacía"}
@@ -511,7 +514,7 @@ export function VentaRapidaPanel({
             </div>
 
             {cart.length === 0 ? (
-              <p className="px-3 pt-1 pb-2 text-xs text-zinc-500">
+              <p className="px-3 pt-1 pb-2 text-xs text-muted-foreground">
                 Buscá arriba y agregá con Enter. Se cobra sin abrir mesa.
               </p>
             ) : (
@@ -524,14 +527,14 @@ export function VentaRapidaPanel({
                     key={c._key}
                     {...carrito.itemProps(i)}
                     aria-label={`${c.product_name}, cantidad ${c.quantity}. ← y → cambian la cantidad, Supr la quita.`}
-                    className="flex items-center gap-2 rounded-xl bg-zinc-50 px-2.5 py-1.5 ring-1 ring-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    className="flex items-center gap-2 rounded-xl bg-muted/50 px-2.5 py-1.5 ring-1 ring-border/60 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-900">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {c.product_name}
                       </p>
                       {c.notes && (
-                        <p className="truncate text-[11px] text-zinc-500 italic">
+                        <p className="truncate text-[11px] text-muted-foreground italic">
                           &quot;{c.notes}&quot;
                         </p>
                       )}
@@ -540,32 +543,38 @@ export function VentaRapidaPanel({
                       {formatCurrency(c.line_subtotal_cents)}
                     </span>
                     <div className="flex shrink-0 items-center gap-1">
-                      <button
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => changeQty(c._key, -1)}
                         disabled={c.quantity <= 1}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100 disabled:opacity-40"
                         aria-label="Menos"
                       >
                         <Minus className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                       <span className="w-5 text-center text-sm font-bold tabular-nums">
                         {c.quantity}
                       </span>
-                      <button
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => changeQty(c._key, 1)}
                         disabled={c.quantity >= 99}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100 disabled:opacity-40"
                         aria-label="Más"
                       >
                         <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => removeFromCart(c._key)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 active:bg-zinc-100"
                         aria-label={`Quitar ${c.product_name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 ))}
@@ -575,11 +584,11 @@ export function VentaRapidaPanel({
             {/* El total del carrito, sin ajuste de método: el mismo encuadre
                 que el sheet del pedido (spec 157 · D1). El recargo/descuento y
                 lo que se cobra de verdad los canta el botón de Confirmar. */}
-            <div className="flex items-baseline justify-between border-t border-zinc-100 px-3 py-2">
-              <span className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
+            <div className="flex items-baseline justify-between border-t border-border/60 px-3 py-2">
+              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                 Total
               </span>
-              <span className="text-lg font-bold text-zinc-900 tabular-nums">
+              <span className="text-lg font-bold text-foreground tabular-nums">
                 {formatCurrency(subtotal)}
               </span>
             </div>
@@ -587,7 +596,7 @@ export function VentaRapidaPanel({
             {/* spec 157 · D3 — el comprobante, el mismo de la mesa y el pedido.
                 Colapsado en Factura B, que es el 95 % del mostrador: la A cuesta
                 un tap, la B no cuesta ninguno. */}
-            <div className="border-t border-zinc-100 px-3 py-2.5">
+            <div className="border-t border-border/60 px-3 py-2.5">
               <ComprobanteFields
                 slug={slug}
                 value={comprobante}
@@ -600,7 +609,7 @@ export function VentaRapidaPanel({
                 foco intacto en el buscador. La grilla propia, el selector de
                 caja y el fiado cableado a mano vivían acá y se fueron: los tres
                 ya estaban resueltos adentro. */}
-            <div className="border-t border-zinc-100 px-3 py-2.5">
+            <div className="border-t border-border/60 px-3 py-2.5">
               <CobroForm<VentaMostradorResult>
                 flujo="rapido"
                 confirmRef={cobrarRef}
@@ -626,8 +635,8 @@ export function VentaRapidaPanel({
                 la siguiente: para cuando aparece, la venta ya está cobrada y el
                 carrito ya está vacío (spec 157 · D4). */}
             {ultima && (
-              <div className="flex items-center gap-2 border-t border-zinc-100 bg-zinc-50 px-3 py-2">
-                <p className="min-w-0 flex-1 text-[11px] text-zinc-600">
+              <div className="flex items-center gap-2 border-t border-border/60 bg-muted/50 px-3 py-2">
+                <p className="min-w-0 flex-1 text-[11px] text-foreground/70">
                   Venta #{ultima.orderNumber} cobrada ·{" "}
                   {formatCurrency(ultima.totalCents)}
                   {emisionOk ? (
@@ -643,21 +652,27 @@ export function VentaRapidaPanel({
                   ) : null}
                 </p>
                 {!emisionOk && (
-                  <button
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="shrink-0"
                     onClick={facturarUltima}
                     disabled={facturando}
-                    className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700 ring-1 ring-zinc-200 transition active:bg-zinc-100 disabled:opacity-40"
                   >
                     {facturando ? "Facturando…" : "Reintentar"}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
                   onClick={() => setUltima(null)}
-                  className="shrink-0 rounded-full p-1 text-zinc-400 active:bg-zinc-100"
                   aria-label="Descartar aviso"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               </div>
             )}
           </div>

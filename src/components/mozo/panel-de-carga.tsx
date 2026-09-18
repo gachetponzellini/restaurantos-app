@@ -156,7 +156,7 @@ export function ColumnaLateral({
       className={cn(
         "flex min-h-0 flex-col",
         abierta
-          ? `absolute inset-0 z-10 bg-zinc-50 @min-[600px]:static @min-[600px]:z-auto ${anchoDeColumna}`
+          ? `absolute inset-0 z-10 bg-muted/50 @min-[600px]:static @min-[600px]:z-auto ${anchoDeColumna}`
           : `hidden @min-[600px]:flex ${anchoDeColumna}`,
         className,
       )}
@@ -194,7 +194,7 @@ export function ColumnaDeCarga({
 }) {
   return (
     <div className={cn("relative flex min-h-0 flex-1 flex-col", className)}>
-      <div className="shrink-0 space-y-2 border-b border-zinc-200 bg-white px-3 py-2.5">
+      <div className="shrink-0 space-y-2 border-b border-border bg-card px-3 py-2.5">
         {encabezado}
       </div>
       <div

@@ -9,7 +9,7 @@ import {
   crearClienteParaFiar,
 } from "@/lib/caja/cuenta-corriente-actions";
 import { formatCurrency } from "@/lib/currency";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export type ClienteParaFiar = {
   id: string;
@@ -73,7 +73,7 @@ export function FiarAQuien({
   if (value) {
     return (
       <div className="grid gap-1.5">
-        <span className="text-xs font-semibold text-zinc-600">Se le fía a</span>
+        <span className="text-xs font-semibold text-foreground/70">Se le fía a</span>
         <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 ring-1 ring-emerald-200">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-emerald-900">
@@ -85,17 +85,19 @@ export function FiarAQuien({
               </p>
             )}
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-800"
             onClick={() => {
               onChange(null);
               setQ("");
             }}
             aria-label="Elegir otro cliente"
-            className="shrink-0 rounded-full p-1 text-emerald-800 transition hover:bg-emerald-100"
           >
             <X className="size-4" />
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -103,16 +105,16 @@ export function FiarAQuien({
 
   if (creando) {
     return (
-      <div className="grid gap-2 rounded-xl bg-zinc-50 p-3 ring-1 ring-zinc-200">
+      <div className="grid gap-2 rounded-xl bg-muted/50 p-3 ring-1 ring-border">
         <div className="grid gap-0.5">
-          <span className="text-xs font-semibold text-zinc-600">
+          <span className="text-xs font-semibold text-foreground/70">
             Abrir cuenta corriente
           </span>
           {/* El teléfono es la clave única de `customers`: si el cliente ya
               existe en el negocio, esto NO lo duplica — le abre la cuenta al que
               ya estaba. Decirlo evita que el encargado dude y vaya a buscarlo a
               Clientes, que es el viaje que esta pantalla vino a sacar. */}
-          <span className="text-[11px] text-zinc-500">
+          <span className="text-[11px] text-muted-foreground">
             Si el teléfono ya está cargado, se le abre la cuenta a ese mismo
             cliente.
           </span>
@@ -122,25 +124,29 @@ export function FiarAQuien({
           onChange={(e) => setNuevoNombre(e.target.value)}
           placeholder="Nombre"
           autoFocus
-          className="h-10 rounded-lg border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:outline-none"
+          className="h-10 rounded-lg border border-border px-3 text-sm focus:border-emerald-400 focus:outline-none"
         />
         <input
           value={nuevoTel}
           onChange={(e) => setNuevoTel(e.target.value)}
           placeholder="Teléfono"
           inputMode="tel"
-          className="h-10 rounded-lg border border-zinc-200 px-3 text-sm tabular-nums focus:border-emerald-400 focus:outline-none"
+          className="h-10 rounded-lg border border-border px-3 text-sm tabular-nums focus:border-emerald-400 focus:outline-none"
         />
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
+            className="flex-1"
             onClick={() => setCreando(false)}
-            className="flex-1 rounded-lg bg-white py-2 text-sm text-zinc-700 ring-1 ring-zinc-200"
           >
             Volver
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="lg"
+            className="flex-1"
             disabled={guardando || !nuevoNombre.trim()}
             onClick={() =>
               startGuardar(async () => {
@@ -157,10 +163,9 @@ export function FiarAQuien({
                 setCreando(false);
               })
             }
-            className="flex-1 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {guardando ? "Abriendo…" : "Abrir cuenta"}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -168,32 +173,32 @@ export function FiarAQuien({
 
   return (
     <div className="grid gap-1.5">
-      <span className="text-xs font-semibold text-zinc-600">
+      <span className="text-xs font-semibold text-foreground/70">
         ¿A quién se le fía?
       </span>
       <div className="relative">
-        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400" />
+        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground/70" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nombre o teléfono"
-          className="h-11 w-full rounded-xl border border-zinc-200 pr-3 pl-9 text-base focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+          className="h-11 w-full rounded-xl border border-border pr-3 pl-9 text-base focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
         />
       </div>
 
-      <ul className="max-h-52 overflow-y-auto rounded-xl ring-1 ring-zinc-200/70">
+      <ul className="max-h-52 overflow-y-auto rounded-xl ring-1 ring-border/70">
         {resultados.map((c) => (
           <li key={c.id}>
             <button
               type="button"
               onClick={() => onChange(c)}
-              className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-zinc-50"
+              className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-muted/50"
             >
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-zinc-900">
+                <span className="block truncate text-sm font-medium text-foreground">
                   {c.name ?? c.phone}
                 </span>
-                <span className="block text-xs text-zinc-500">
+                <span className="block text-xs text-muted-foreground">
                   {c.habilitado === false
                     ? "primera vez que se le fía"
                     : c.saldo_cents > 0
@@ -202,7 +207,7 @@ export function FiarAQuien({
                 </span>
               </span>
               {c.saldo_cents > 0 && (
-                <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">
+                <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
                   {formatCurrency(c.saldo_cents)}
                 </span>
               )}
@@ -210,7 +215,7 @@ export function FiarAQuien({
           </li>
         ))}
         {resultados.length === 0 && (
-          <li className="px-3 py-3 text-center text-sm text-zinc-500">
+          <li className="px-3 py-3 text-center text-sm text-muted-foreground">
             {buscando
               ? "Buscando…"
               : q.trim().length >= 2
@@ -220,22 +225,21 @@ export function FiarAQuien({
         )}
       </ul>
 
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="lg"
+        className="w-full border-dashed"
         onClick={() => {
           setCreando(true);
           // Lo tipeado en el buscador suele ser el nombre: no se pierde.
           setNuevoNombre(/\d/.test(q) ? "" : q.trim());
           setNuevoTel(/\d/.test(q) ? q.replace(/\D/g, "") : "");
         }}
-        className={cn(
-          "flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2 text-sm font-medium text-zinc-600",
-          "transition hover:border-zinc-400 hover:text-zinc-900",
-        )}
       >
         <UserPlus className="size-4" />
         Abrir cuenta a alguien más
-      </button>
+      </Button>
     </div>
   );
 }

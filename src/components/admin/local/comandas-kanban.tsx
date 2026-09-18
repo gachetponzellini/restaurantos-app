@@ -50,6 +50,7 @@ import {
 } from "@/lib/permissions/can";
 import { AnularComandaModal } from "@/components/shared/anular-comanda-modal";
 import { EditarItemsModal } from "@/components/shared/editar-items-modal";
+import { Button } from "@/components/ui/button";
 
 /**
  * Umbral (ms) para considerar "caído" al print agent: sin heartbeat hace más
@@ -86,9 +87,9 @@ const SECTOR_PALETTE = [
   { bg: "bg-indigo-100", text: "text-indigo-700", dot: "bg-indigo-500" },
 ];
 const FALLBACK = {
-  bg: "bg-zinc-100",
-  text: "text-zinc-700",
-  dot: "bg-zinc-400",
+  bg: "bg-muted",
+  text: "text-foreground/80",
+  dot: "bg-muted-foreground",
 };
 
 // ─── Columnas (estilo idéntico al board de pedidos) ─────────────────────────
@@ -100,9 +101,6 @@ type Column = {
   ring: string;
   countBg: string;
   countText: string;
-  /** Color del botón de acción de la card. Matchea el estado actual de la
-   *  comanda (no el próximo) para que la card lea como un bloque coherente. */
-  buttonClass: string;
   emptyHint: string;
   /** Aclaración chica bajo el título. Hoy sólo la usa Entregadas, para que el
    *  encargado sepa por qué las cards se van solas (spec 082). */
@@ -117,7 +115,6 @@ const COLUMNS: Column[] = [
     ring: "ring-amber-500/30",
     countBg: "bg-amber-50",
     countText: "text-amber-800",
-    buttonClass: "bg-amber-500 hover:bg-amber-600 text-white",
     emptyHint: "Sin comandas pendientes",
   },
   {
@@ -127,7 +124,6 @@ const COLUMNS: Column[] = [
     ring: "ring-sky-500/30",
     countBg: "bg-sky-50",
     countText: "text-sky-800",
-    buttonClass: "bg-sky-500 hover:bg-sky-600 text-white",
     emptyHint: "Cocina libre",
   },
   {
@@ -137,7 +133,6 @@ const COLUMNS: Column[] = [
     ring: "ring-emerald-500/30",
     countBg: "bg-emerald-50",
     countText: "text-emerald-800",
-    buttonClass: "bg-emerald-500 hover:bg-emerald-600 text-white",
     emptyHint: "Sin entregas recientes",
     note: `Últimos ${ENTREGADAS_VISIBLE_MINUTES} min`,
   },
@@ -606,13 +601,13 @@ export function ComandasKanban({
                 : `${failedCount} comandas no se imprimieron`}
             </span>
           </div>
-          <button
+          <Button
             type="button"
+            variant="destructive-solid"
             onClick={() => setShowOnlyFailed((v) => !v)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white transition hover:bg-rose-700 active:translate-y-px"
           >
             {showOnlyFailed ? "Mostrar todas" : "Ver solo las fallidas"}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -660,7 +655,6 @@ export function ComandasKanban({
                       stationStyleById.get(c.station_id) ?? FALLBACK
                     }
                     columnRing={col.ring}
-                    buttonClass={col.buttonClass}
                     mozoName={
                       c.mozo_id ? (mozoNameById.get(c.mozo_id) ?? null) : null
                     }
@@ -805,7 +799,6 @@ function ComandaCard({
   comanda,
   stationStyle,
   columnRing,
-  buttonClass,
   mozoName,
   onEmpezar,
   onEntregar,
@@ -821,7 +814,6 @@ function ComandaCard({
   comanda: LocalComanda;
   stationStyle: (typeof SECTOR_PALETTE)[number];
   columnRing: string;
-  buttonClass: string;
   mozoName: string | null;
   onEmpezar: (id: string) => void;
   onEntregar: (id: string) => void;
@@ -1016,24 +1008,26 @@ function ComandaCard({
       {!isTerminal ? (
         <div className="flex items-center gap-1.5 pt-0.5">
           {comanda.status === "pendiente" && puedeEmpezar && (
-            <button
+            <Button
               type="button"
+              size="lg"
+              className="flex-1"
               onClick={() => onEmpezar(comanda.id)}
-              className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition active:translate-y-px ${buttonClass}`}
             >
               <Play className="size-3.5" strokeWidth={2.5} />
               Empezar
-            </button>
+            </Button>
           )}
           {comanda.status === "en_preparacion" && (
-            <button
+            <Button
               type="button"
+              size="lg"
+              className="flex-1"
               onClick={() => onEntregar(comanda.id)}
-              className={`inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition active:translate-y-px ${buttonClass}`}
             >
               <Check className="size-3.5" strokeWidth={2.5} />
               Entregar
-            </button>
+            </Button>
           )}
           <ComandaMenu
             comanda={comanda}

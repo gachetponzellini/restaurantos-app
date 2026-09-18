@@ -11,6 +11,7 @@ import {
   type EntidadFiscalMatch,
 } from "@/lib/afip/fiscal-entities-actions";
 import type { CondicionIvaReceptor } from "@/lib/afip/types";
+import { Button } from "@/components/ui/button";
 
 // ============================================================================
 // Buscador de entidades fiscales para el cobro (spec 150 · D2).
@@ -161,12 +162,12 @@ export function FiscalEntitySearchField({
     <div className="grid gap-1.5">
       <label
         htmlFor="entidad-fiscal-buscador"
-        className="text-xs font-semibold text-zinc-600"
+        className="text-xs font-semibold text-foreground/70"
       >
         Buscar receptor guardado
       </label>
       <div ref={boxRef} className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70" />
         <input
           id="entidad-fiscal-buscador"
           type="text"
@@ -176,16 +177,16 @@ export function FiscalEntitySearchField({
           onFocus={() => setOpen(results.length > 0)}
           placeholder="Razón social o CUIT…"
           autoComplete="off"
-          className="block h-10 w-full rounded-xl border border-zinc-200 pl-9 pr-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          className="block h-10 w-full rounded-xl border border-border pl-9 pr-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
         />
         {loading && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-zinc-400">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground/70">
             Buscando…
           </span>
         )}
 
         {open && results.length > 0 && (
-          <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white p-1 shadow-lg ring-1 ring-zinc-200">
+          <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-card p-1 shadow-lg ring-1 ring-border">
             {results.map((entidad, i) => (
               <li key={entidad.id}>
                 <button
@@ -193,15 +194,15 @@ export function FiscalEntitySearchField({
                   onClick={() => pick(entidad)}
                   onMouseEnter={() => setCursor(i)}
                   className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition ${
-                    i === cursor ? "bg-zinc-100" : "hover:bg-zinc-50"
+                    i === cursor ? "bg-muted" : "hover:bg-muted/50"
                   }`}
                 >
-                  <Building2 className="size-4 shrink-0 text-zinc-400" />
+                  <Building2 className="size-4 shrink-0 text-muted-foreground/70" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-zinc-900">
+                    <span className="block truncate text-sm font-semibold text-foreground">
                       {entidad.razon_social}
                     </span>
-                    <span className="block truncate text-xs text-zinc-500">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {formatCuit(entidad.cuit)}
                     </span>
                   </span>
@@ -218,11 +219,13 @@ export function FiscalEntitySearchField({
           Receptor guardado — podés corregir los datos para esta factura.
         </p>
       ) : puedeGuardar ? (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="w-fit"
           onClick={guardar}
           disabled={guardando}
-          className="inline-flex w-fit items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-200 disabled:opacity-50"
         >
           {guardando ? (
             <Loader2 className="size-3 animate-spin" />
@@ -230,7 +233,7 @@ export function FiscalEntitySearchField({
             <Building2 className="size-3" />
           )}
           Guardar este receptor
-        </button>
+        </Button>
       ) : null}
     </div>
   );

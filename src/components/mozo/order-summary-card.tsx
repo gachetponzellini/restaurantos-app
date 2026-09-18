@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { marcarComandaEntregada } from "@/lib/comandas/actions";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
@@ -174,7 +175,7 @@ export function OrderSummaryCard({
           <p className="text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">
             Orden #{order.daily_number}
           </p>
-          <p className="inline-flex items-center gap-1.5 text-lg font-bold text-zinc-900 tabular-nums">
+          <p className="inline-flex items-center gap-1.5 text-lg font-bold text-foreground tabular-nums">
             <Receipt className="h-4 w-4" />
             {formatCurrency(order.total_cents)}
           </p>
@@ -194,9 +195,9 @@ export function OrderSummaryCard({
             {active.map((it, i) => (
               <li
                 key={`a-${i}`}
-                className="flex items-center gap-2 text-sm text-zinc-800"
+                className="flex items-center gap-2 text-sm text-foreground/90"
               >
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-zinc-700 tabular-nums ring-1 ring-zinc-200">
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-card px-1 text-[11px] font-bold text-foreground/80 tabular-nums ring-1 ring-border">
                   {it.quantity}
                 </span>
                 <span className="flex-1 truncate">{it.product_name}</span>
@@ -206,9 +207,9 @@ export function OrderSummaryCard({
               cancelled.map((it, i) => (
                 <li
                   key={`c-${i}`}
-                  className="flex items-center gap-2 text-xs text-zinc-400 line-through"
+                  className="flex items-center gap-2 text-xs text-muted-foreground/70 line-through"
                 >
-                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold tabular-nums">
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-card px-1 text-[10px] font-bold tabular-nums">
                     {it.quantity}
                   </span>
                   <span className="flex-1 truncate">{it.product_name}</span>
@@ -216,12 +217,12 @@ export function OrderSummaryCard({
               ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-zinc-500">
+          <p className="mt-3 text-sm text-muted-foreground">
             Sin items cargados todavía.
           </p>
         )}
         {active.length > 0 && (
-          <p className="mt-3 border-t border-emerald-100 pt-2 text-[11px] text-zinc-500 tabular-nums">
+          <p className="mt-3 border-t border-emerald-100 pt-2 text-[11px] text-muted-foreground tabular-nums">
             {totalQty} items · {active.length}{" "}
             {active.length === 1 ? "producto" : "productos"}
           </p>
@@ -230,13 +231,13 @@ export function OrderSummaryCard({
 
       {/* Comandas por sector con su estado */}
       {showComandas && (
-        <div className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200">
+        <div className="rounded-2xl bg-card p-4 ring-1 ring-border">
           <div className="flex items-center justify-between gap-2">
-            <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">
+            <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
               <ChefHat className="size-3" strokeWidth={2} />
               Comandas
             </p>
-            <p className="text-[10px] font-semibold text-zinc-500 tabular-nums">
+            <p className="text-[10px] font-semibold text-muted-foreground tabular-nums">
               {activeComandasCount > 0
                 ? `${activeComandasCount} activa${activeComandasCount === 1 ? "" : "s"} · ${order.comandas.length} total`
                 : `${order.comandas.length} cerrada${order.comandas.length === 1 ? "" : "s"}`}
@@ -351,8 +352,8 @@ function ComandaRow({
       className={cn(
         "overflow-hidden rounded-xl ring-1 transition",
         displayStatus === "activa"
-          ? "bg-white ring-zinc-200"
-          : "bg-zinc-50 ring-zinc-200",
+          ? "bg-card ring-border"
+          : "bg-muted/50 ring-border",
         isUrgent && "ring-rose-300",
         isLate && "ring-amber-300",
       )}
@@ -366,10 +367,10 @@ function ComandaRow({
               DISPLAY_DOT[displayStatus],
             )}
           />
-          <span className="truncate text-sm font-bold text-zinc-900">
+          <span className="truncate text-sm font-bold text-foreground">
             {comanda.station_name}
           </span>
-          <span className="shrink-0 text-[11px] font-medium text-zinc-500 tabular-nums">
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground tabular-nums">
             Tanda {comanda.batch}
           </span>
         </div>
@@ -380,7 +381,7 @@ function ComandaRow({
               ? "text-rose-700"
               : isLate
                 ? "text-amber-700"
-                : "text-zinc-500",
+                : "text-muted-foreground",
           )}
         >
           {formatElapsed(elapsed)}
@@ -393,7 +394,7 @@ function ComandaRow({
         <ul
           className={cn(
             "mt-2 space-y-0.5 px-3 pb-2 text-xs",
-            displayStatus === "activa" ? "text-zinc-700" : "text-zinc-500",
+            displayStatus === "activa" ? "text-foreground/80" : "text-muted-foreground",
           )}
         >
           {comanda.items.slice(0, 4).map((it, i) => (
@@ -401,14 +402,14 @@ function ComandaRow({
               key={`${comanda.id}-${i}`}
               className="flex items-baseline gap-1.5"
             >
-              <span className="shrink-0 font-semibold text-zinc-500 tabular-nums">
+              <span className="shrink-0 font-semibold text-muted-foreground tabular-nums">
                 {it.quantity}x
               </span>
               <span className="truncate font-medium">{it.product_name}</span>
             </li>
           ))}
           {comanda.items.length > 4 && (
-            <li className="text-zinc-400">+{comanda.items.length - 4} mas</li>
+            <li className="text-muted-foreground/70">+{comanda.items.length - 4} mas</li>
           )}
         </ul>
       )}
@@ -418,8 +419,8 @@ function ComandaRow({
         className={cn(
           "flex items-center justify-between gap-2 border-t px-3 py-2",
           displayStatus === "activa"
-            ? "border-zinc-100 bg-zinc-50/50"
-            : "border-zinc-200/70 bg-zinc-50",
+            ? "border-border/60 bg-muted/25"
+            : "border-border/70 bg-muted/50",
         )}
       >
         <span
@@ -436,15 +437,15 @@ function ComandaRow({
 
         {displayStatus === "activa" && (
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={onMarcarEntregada}
               disabled={isPending}
-              className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700 active:translate-y-px disabled:opacity-50"
             >
               <Check className="size-3.5" strokeWidth={2.5} />
               Entregar
-            </button>
+            </Button>
             {/* Anular vive en el ⋯ y no suelta al lado de Entregar: Entregar se
                 toca todo el turno y esto cancela comida ya pedida. */}
             {showAnular && (
@@ -452,7 +453,7 @@ function ComandaRow({
                 <DropdownMenuTrigger
                   aria-label="Opciones de la comanda"
                   disabled={isPending}
-                  className="inline-flex size-8 items-center justify-center rounded-full text-zinc-500 ring-1 ring-zinc-200 transition hover:bg-white disabled:opacity-50 data-[popup-open]:bg-white"
+                  className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground ring-1 ring-border transition hover:bg-card disabled:opacity-50 data-[popup-open]:bg-card"
                 >
                   <MoreVertical className="size-4" strokeWidth={2.5} />
                 </DropdownMenuTrigger>

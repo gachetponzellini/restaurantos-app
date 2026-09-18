@@ -73,18 +73,18 @@ export function CobrosPorOrigen({
         return (
           <li
             key={origen}
-            className="rounded-xl bg-zinc-50 p-3.5 ring-1 ring-zinc-200/70"
+            className="rounded-xl bg-muted/50 p-3.5 ring-1 ring-border/70"
           >
             <div className="flex items-baseline justify-between gap-3">
               <span className="inline-flex items-baseline gap-2 text-sm">
-                <Icon className="size-3.5 shrink-0 translate-y-px text-zinc-400" />
-                <span className="font-medium text-zinc-700">{label}</span>
+                <Icon className="size-3.5 shrink-0 translate-y-px text-muted-foreground/70" />
+                <span className="font-medium text-foreground/80">{label}</span>
               </span>
               <span className="flex shrink-0 items-baseline gap-2">
-                <span className="text-base font-bold tracking-tight text-zinc-900 tabular-nums">
+                <span className="text-base font-bold tracking-tight text-foreground tabular-nums">
                   {formatCurrency(monto)}
                 </span>
-                <span className="text-xs font-medium tabular-nums text-zinc-400">
+                <span className="text-xs font-medium tabular-nums text-muted-foreground/70">
                   {pct.toFixed(0)}%
                 </span>
               </span>
@@ -94,7 +94,7 @@ export function CobrosPorOrigen({
               <>
                 {/* Barra apilada: cada segmento es un método, con el mismo
                     color en todos los orígenes. */}
-                <div className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full bg-zinc-200">
+                <div className="mt-2.5 flex h-2 w-full overflow-hidden rounded-full bg-border">
                   {metodos.map((m) => (
                     <div
                       key={m.key}
@@ -115,15 +115,15 @@ export function CobrosPorOrigen({
                         key={m.key}
                         className="flex items-baseline justify-between gap-2 text-xs"
                       >
-                        <span className="inline-flex items-baseline gap-1.5 text-zinc-600">
+                        <span className="inline-flex items-baseline gap-1.5 text-foreground/70">
                           <span
                             className="inline-block size-2 shrink-0 translate-y-px rounded-full"
                             style={{ background: METHOD_COLOR[m.key] }}
                           />
-                          <Ic className="size-3 shrink-0 translate-y-px text-zinc-400" />
+                          <Ic className="size-3 shrink-0 translate-y-px text-muted-foreground/70" />
                           {METHOD_LABEL[m.key]}
                         </span>
-                        <span className="font-semibold tabular-nums text-zinc-800">
+                        <span className="font-semibold tabular-nums text-foreground/90">
                           {formatCurrency(m.monto)}
                         </span>
                       </li>
@@ -132,7 +132,7 @@ export function CobrosPorOrigen({
                 </ul>
               </>
             ) : (
-              <p className="mt-1.5 text-xs text-zinc-400">Sin cobros</p>
+              <p className="mt-1.5 text-xs text-muted-foreground/70">Sin cobros</p>
             )}
           </li>
         );

@@ -32,6 +32,7 @@ import {
 } from "@/lib/admin/customers-actions";
 import { TimeField24 } from "@/components/ui/time-field-24";
 import { SectionLabel } from "@/components/ui/section-label";
+import { Button } from "@/components/ui/button";
 import { enviarComanda } from "@/lib/comandas/actions";
 import { formatCurrency } from "@/lib/currency";
 import type { CatalogForMozo, CatalogProduct } from "@/lib/mozo/catalog-query";
@@ -760,16 +761,19 @@ export function CargarPedidoSheet({
         className="@container relative flex h-full w-full max-w-md flex-col overflow-hidden bg-popover shadow-2xl xl:max-w-[900px]"
       >
         {/* ─── Header ─── */}
-        <header className="shrink-0 border-b border-zinc-200 bg-white px-5 pt-5 pb-4">
+        <header className="shrink-0 border-b border-border bg-card px-5 pt-5 pb-4">
           <div className="flex items-start gap-3">
             {view === "datos" ? (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setView("carga")}
-                className="-ml-1 rounded-full p-2 text-zinc-700 active:bg-zinc-100 @min-[600px]:hidden"
+                className="-ml-1 @min-[600px]:hidden"
                 aria-label="Volver a la carga"
               >
                 <ArrowLeft className="h-5 w-5" />
-              </button>
+              </Button>
             ) : (
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
                 <ShoppingBag className="size-[18px]" />
@@ -787,21 +791,24 @@ export function CargarPedidoSheet({
                     : "Cliente y entrega"}
               </h2>
             </div>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="-mt-1 -mr-2 rounded-full p-2 text-zinc-500 active:bg-zinc-100"
+              className="-mt-1 -mr-2"
               aria-label="Cerrar"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <div className={`mt-2.5 flex gap-2 ${agregarA ? "hidden" : ""}`}>
             <button
               onClick={() => setDeliveryType("pickup")}
               className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition ${
                 deliveryType === "pickup"
-                  ? "bg-zinc-900 text-white"
-                  : "bg-white text-zinc-700 ring-1 ring-zinc-200"
+                  ? "bg-primary text-white"
+                  : "bg-card text-foreground/80 ring-1 ring-border"
               }`}
             >
               <ShoppingBag className="h-4 w-4" /> Para llevar
@@ -810,8 +817,8 @@ export function CargarPedidoSheet({
               onClick={() => setDeliveryType("delivery")}
               className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition ${
                 deliveryType === "delivery"
-                  ? "bg-zinc-900 text-white"
-                  : "bg-white text-zinc-700 ring-1 ring-zinc-200"
+                  ? "bg-primary text-white"
+                  : "bg-card text-foreground/80 ring-1 ring-border"
               }`}
             >
               <Bike className="h-4 w-4" /> Delivery
@@ -843,35 +850,36 @@ export function CargarPedidoSheet({
             // no hay a dónde «continuar» — igual que la carga del salón, que no
             // tiene pie. Angosto es el único lugar donde el carrito no se ve.
             pie={
-              <div className="shrink-0 border-t border-zinc-200 bg-white @min-[600px]:hidden">
+              <div className="shrink-0 border-t border-border bg-card @min-[600px]:hidden">
                 <div className="flex items-center gap-2 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-zinc-500">
+                    <p className="text-[11px] text-muted-foreground">
                       Total ·{" "}
                       {cartCount > 0
                         ? `${cartCount} ${cartCount === 1 ? "ítem" : "ítems"}`
                         : "vacío"}
                     </p>
-                    <p className="text-lg font-bold text-zinc-900 tabular-nums">
+                    <p className="text-lg font-bold text-foreground tabular-nums">
                       {formatCurrency(totalConEnvio)}
                     </p>
                   </div>
-                  <button
+                  <Button
+                    type="button"
+                    size="xl"
                     onClick={() => setView("datos")}
                     disabled={cart.length === 0}
-                    className="flex h-11 items-center gap-2 rounded-2xl bg-zinc-900 px-5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
                   >
                     Continuar
                     <span className="ml-1 hidden rounded bg-white/20 px-1.5 py-0.5 text-[10px] sm:inline">
                       ⌘↵
                     </span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             }
           >
             {loadingCatalog ? (
-              <div className="flex h-40 items-center justify-center text-zinc-400">
+              <div className="flex h-40 items-center justify-center text-muted-foreground/70">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : catalogError ? (
@@ -881,8 +889,8 @@ export function CargarPedidoSheet({
                 </p>
               </div>
             ) : catalogProducts.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-10 text-center">
-                <p className="text-sm font-semibold text-zinc-700">
+              <div className="rounded-2xl border border-dashed border-border bg-card py-10 text-center">
+                <p className="text-sm font-semibold text-foreground/80">
                   {isSearching ? "Sin resultados" : "Sin productos"}
                 </p>
               </div>
@@ -926,7 +934,7 @@ export function CargarPedidoSheet({
           {/* ─── Izquierda: cliente, entrega y el pedido en armado ─── */}
           <ColumnaLateral
             abierta={view === "datos"}
-            className="@min-[600px]:order-1 @min-[600px]:border-r @min-[600px]:border-zinc-200"
+            className="@min-[600px]:order-1 @min-[600px]:border-r @min-[600px]:border-border"
           >
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
               {/* Modo agregar (spec 125): el cliente, la entrega y el «para
@@ -937,7 +945,7 @@ export function CargarPedidoSheet({
                   {/* Spec 068: mismo bloque de cliente que abrir mesa y nueva
                   reserva — un solo buscador, y la regla del teléfono bloqueado
                   con un cliente elegido (spec 067) vive en `CustomerFields`. */}
-                  <section className="space-y-2.5 rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
+                  <section className="space-y-2.5 rounded-2xl bg-card p-3 ring-1 ring-border">
                     <CustomerFields
                       slug={slug}
                       idPrefix="cargar"
@@ -957,12 +965,12 @@ export function CargarPedidoSheet({
                           ? "Teléfono (requerido)"
                           : "Teléfono (opcional)"
                       }
-                      labelClassName="text-xs font-semibold text-zinc-600"
-                      inputClassName="block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      labelClassName="text-xs font-semibold text-foreground/70"
+                      inputClassName="block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                     />
                     {deliveryType === "delivery" && (
                       <div>
-                        <label className="text-xs font-semibold text-zinc-600">
+                        <label className="text-xs font-semibold text-foreground/70">
                           {entrega.porLote
                             ? "Nro de lote (requerido)"
                             : "Dirección de entrega (requerida)"}
@@ -979,8 +987,8 @@ export function CargarPedidoSheet({
                                   onClick={() => setDeliveryAddress(linea)}
                                   className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
                                     activa
-                                      ? "bg-zinc-900 text-white"
-                                      : "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-200"
+                                      ? "bg-primary text-white"
+                                      : "bg-muted text-foreground/80 ring-1 ring-border active:bg-border"
                                   }`}
                                 >
                                   {a.label ? `${a.label}: ` : ""}
@@ -995,10 +1003,10 @@ export function CargarPedidoSheet({
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
                           placeholder={entrega.placeholder}
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          className="mt-1 block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
                         {clienteDirecciones.length > 0 && (
-                          <p className="mt-1 text-[11px] text-zinc-500">
+                          <p className="mt-1 text-[11px] text-muted-foreground">
                             Elegí una dirección guardada o editá el campo.
                           </p>
                         )}
@@ -1012,7 +1020,7 @@ export function CargarPedidoSheet({
                       <div>
                         <label
                           htmlFor="cargar-nota-entrega"
-                          className="text-xs font-semibold text-zinc-600"
+                          className="text-xs font-semibold text-foreground/70"
                         >
                           Indicaciones para la entrega (opcional)
                         </label>
@@ -1022,9 +1030,9 @@ export function CargarPedidoSheet({
                           value={deliveryNotes}
                           onChange={(e) => setDeliveryNotes(e.target.value)}
                           placeholder="ej: tocar timbre, portón negro…"
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          className="mt-1 block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
-                        <p className="mt-1 text-[11px] text-zinc-500">
+                        <p className="mt-1 text-[11px] text-muted-foreground">
                           Para el que reparte. Sale en el ticket de control,
                           junto con la dirección: cocina no la ve.
                         </p>
@@ -1050,8 +1058,8 @@ export function CargarPedidoSheet({
                   ventana de marcha (spec 127)—, pero la hora y la nota de
                   cocina se leen como una sola cosa. La indicación de entrega
                   vive con la dirección, que es su papel y su contexto. */}
-                  <section className="space-y-2.5 rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
-                    <h3 className="text-[11px] font-bold tracking-wide text-zinc-500 uppercase">
+                  <section className="space-y-2.5 rounded-2xl bg-card p-3 ring-1 ring-border">
+                    <h3 className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
                       ¿Para cuándo?
                     </h3>
                     <div className="flex gap-2">
@@ -1063,8 +1071,8 @@ export function CargarPedidoSheet({
                         }}
                         className={`h-9 flex-1 rounded-xl text-sm font-semibold transition ${
                           !esProgramado
-                            ? "bg-zinc-900 text-white"
-                            : "bg-white text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100"
+                            ? "bg-primary text-white"
+                            : "bg-card text-foreground/80 ring-1 ring-border active:bg-muted"
                         }`}
                       >
                         Para hoy
@@ -1079,8 +1087,8 @@ export function CargarPedidoSheet({
                         }}
                         className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition ${
                           esProgramado
-                            ? "bg-zinc-900 text-white"
-                            : "bg-white text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100"
+                            ? "bg-primary text-white"
+                            : "bg-card text-foreground/80 ring-1 ring-border active:bg-muted"
                         }`}
                       >
                         <Clock className="h-4 w-4" /> Programado
@@ -1091,7 +1099,7 @@ export function CargarPedidoSheet({
                       <div>
                         <label
                           htmlFor="cargar-dia"
-                          className="text-xs font-semibold text-zinc-600"
+                          className="text-xs font-semibold text-foreground/70"
                         >
                           Día
                         </label>
@@ -1101,9 +1109,9 @@ export function CargarPedidoSheet({
                           value={dia}
                           min={manana}
                           onChange={(e) => setDia(e.target.value)}
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          className="mt-1 block h-10 w-full rounded-xl border border-border px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500">
+                        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                           Un pedido programado es para otro día. Para hoy,
                           cargalo como «Para hoy».
                         </p>
@@ -1113,10 +1121,10 @@ export function CargarPedidoSheet({
                     {/* Un recuadro por papel. El encabezado dice qué papel es
                         y quién lo lee, así la pregunta «¿cuál de los dos sale
                         en la comanda?» se contesta sin leer el gris. */}
-                    <div className="space-y-2 rounded-xl bg-zinc-50 p-2.5 ring-1 ring-zinc-200">
-                      <p className="text-[11px] font-bold text-zinc-700">
+                    <div className="space-y-2 rounded-xl bg-muted/50 p-2.5 ring-1 ring-border">
+                      <p className="text-[11px] font-bold text-foreground/80">
                         Para cocina{" "}
-                        <span className="font-medium text-zinc-500">
+                        <span className="font-medium text-muted-foreground">
                           · sale en la comanda
                         </span>
                       </p>
@@ -1124,7 +1132,7 @@ export function CargarPedidoSheet({
                         <div className="w-24 shrink-0">
                           <label
                             htmlFor="cargar-hora-cocina"
-                            className="text-xs font-semibold text-zinc-600"
+                            className="text-xs font-semibold text-foreground/70"
                           >
                             Hora
                           </label>
@@ -1132,13 +1140,13 @@ export function CargarPedidoSheet({
                             id="cargar-hora-cocina"
                             value={horaCocina}
                             onChange={setHoraCocina}
-                            className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                            className="mt-1 block h-10 w-full rounded-xl border border-border bg-card px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
                           <label
                             htmlFor="cargar-nota-cocina"
-                            className="text-xs font-semibold text-zinc-600"
+                            className="text-xs font-semibold text-foreground/70"
                           >
                             Nota (opcional)
                           </label>
@@ -1149,27 +1157,27 @@ export function CargarPedidoSheet({
                             onChange={(e) => setKitchenNotes(e.target.value)}
                             maxLength={120}
                             placeholder="ej: junto con la mesa 5…"
-                            className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                            className="mt-1 block h-10 w-full rounded-xl border border-border bg-card px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                           />
                         </div>
                       </div>
-                      <p className="text-[11px] leading-snug text-zinc-500">
+                      <p className="text-[11px] leading-snug text-muted-foreground">
                         La hora es para cuándo el plato tiene que estar listo.
                         Para «sin cebolla», usá la nota del producto.
                       </p>
                     </div>
 
-                    <div className="space-y-2 rounded-xl bg-zinc-50 p-2.5 ring-1 ring-zinc-200">
-                      <p className="text-[11px] font-bold text-zinc-700">
+                    <div className="space-y-2 rounded-xl bg-muted/50 p-2.5 ring-1 ring-border">
+                      <p className="text-[11px] font-bold text-foreground/80">
                         Para el cliente{" "}
-                        <span className="font-medium text-zinc-500">
+                        <span className="font-medium text-muted-foreground">
                           · sale en el ticket de control
                         </span>
                       </p>
                       <div className="w-24">
                         <label
                           htmlFor="cargar-hora-pedido"
-                          className="text-xs font-semibold text-zinc-600"
+                          className="text-xs font-semibold text-foreground/70"
                         >
                           Hora
                         </label>
@@ -1177,10 +1185,10 @@ export function CargarPedidoSheet({
                           id="cargar-hora-pedido"
                           value={horaPedido}
                           onChange={setHoraPedido}
-                          className="mt-1 block h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+                          className="mt-1 block h-10 w-full rounded-xl border border-border bg-card px-3 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
                         />
                       </div>
-                      <p className="text-[11px] leading-snug text-zinc-500">
+                      <p className="text-[11px] leading-snug text-muted-foreground">
                         Cuándo lo retira o lo recibe.
                         {deliveryType === "delivery"
                           ? " Las indicaciones de la entrega van arriba, con la dirección."
@@ -1191,7 +1199,7 @@ export function CargarPedidoSheet({
                     {/* Lo que va a pasar, dicho antes de que pase. Cambia con el
                         modo: para hoy el papel sale ya y lo único que espera es
                         el kanban; programado, espera todo. */}
-                    <p className="text-[11px] leading-snug text-zinc-500">
+                    <p className="text-[11px] leading-snug text-muted-foreground">
                       {!hayHoras
                         ? esProgramado
                           ? "Cargá las dos horas del encargue."
@@ -1207,19 +1215,19 @@ export function CargarPedidoSheet({
               {/* El pedido en armado. Vive acá, con el cliente y la entrega:
                   la izquierda es «el pedido y a quién va», que es el espejo de
                   la columna de la mesa en el salón (spec 115). */}
-              <section className="space-y-2 rounded-2xl bg-white p-3 ring-1 ring-zinc-200">
+              <section className="space-y-2 rounded-2xl bg-card p-3 ring-1 ring-border">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+                  <p className="text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                     Tu pedido
                   </p>
-                  <span className="text-[11px] font-semibold text-zinc-500 tabular-nums">
+                  <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
                     {cartCount > 0
                       ? `${cartCount} ${cartCount === 1 ? "ítem" : "ítems"}`
                       : "vacío"}
                   </span>
                 </div>
                 {cart.length === 0 ? (
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-muted-foreground">
                     Todavía no cargaste nada. Buscá en la carta y agregá con
                     Enter.
                   </p>
@@ -1230,14 +1238,14 @@ export function CargarPedidoSheet({
                         key={c._key}
                         {...carrito.itemProps(i)}
                         aria-label={`${c.product_name}, cantidad ${c.quantity}. ← y → cambian la cantidad, Supr la quita.`}
-                        className="flex items-center gap-2 rounded-xl bg-zinc-50 px-2.5 py-1.5 ring-1 ring-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                        className="flex items-center gap-2 rounded-xl bg-muted/50 px-2.5 py-1.5 ring-1 ring-border/60 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-zinc-900">
+                          <p className="truncate text-sm font-semibold text-foreground">
                             {c.product_name}
                           </p>
                           {c.notes && (
-                            <p className="truncate text-[11px] text-zinc-500 italic">
+                            <p className="truncate text-[11px] text-muted-foreground italic">
                               &quot;{c.notes}&quot;
                             </p>
                           )}
@@ -1255,43 +1263,52 @@ export function CargarPedidoSheet({
                           {formatCurrency(c.line_subtotal_cents)}
                         </span>
                         <div className="flex shrink-0 items-center gap-1">
-                          <button
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => setPriceTargetKey(c._key)}
-                            className={`flex h-7 w-7 items-center justify-center rounded-full ring-1 active:scale-95 ${
+                            className={
                               c.price_override_cents != null
-                                ? "bg-amber-100 text-amber-700 ring-amber-300"
-                                : "text-zinc-500 ring-zinc-200 active:bg-zinc-100"
-                            }`}
+                                ? "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
+                                : ""
+                            }
                             aria-label={`Cambiar el precio de ${c.product_name}`}
                           >
                             <Tag className="h-3.5 w-3.5" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => changeQty(c._key, -1)}
                             disabled={c.quantity <= 1}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100 disabled:opacity-40"
                             aria-label="Menos"
                           >
                             <Minus className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                           <span className="w-5 text-center text-sm font-bold tabular-nums">
                             {c.quantity}
                           </span>
-                          <button
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => changeQty(c._key, 1)}
                             disabled={c.quantity >= 99}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-100 disabled:opacity-40"
                             aria-label="Más"
                           >
                             <Plus className="h-3.5 w-3.5" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => removeFromCart(c._key)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 active:bg-zinc-100"
                             aria-label={`Quitar ${c.product_name}`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                         </div>
                       </li>
                     ))}
@@ -1299,17 +1316,17 @@ export function CargarPedidoSheet({
                 )}
                 {envioCents > 0 && (
                   <div className="flex items-center justify-between pt-2.5 text-sm">
-                    <span className="text-zinc-600">Envío</span>
-                    <span className="tabular-nums text-zinc-700">
+                    <span className="text-foreground/70">Envío</span>
+                    <span className="tabular-nums text-foreground/80">
                       {formatCurrency(envioCents)}
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-t border-zinc-100 pt-2.5">
-                  <span className="text-sm font-medium text-zinc-600">
+                <div className="flex items-center justify-between border-t border-border/60 pt-2.5">
+                  <span className="text-sm font-medium text-foreground/70">
                     Total
                   </span>
-                  <span className="text-lg font-bold text-zinc-900 tabular-nums">
+                  <span className="text-lg font-bold text-foreground tabular-nums">
                     {formatCurrency(totalConEnvio)}
                   </span>
                 </div>
@@ -1318,7 +1335,7 @@ export function CargarPedidoSheet({
 
             {/* Footer datos — programado: una sola acción, porque "enviar a
                 cocina" contradice el diferido (spec 085). */}
-            <footer className="shrink-0 space-y-2 border-t border-zinc-200 bg-white px-3 py-3">
+            <footer className="shrink-0 space-y-2 border-t border-border bg-card px-3 py-3">
               {/* Por qué el botón está gris (issue #219). Con el carrito vacío
                   no se dice: «Tu pedido · vacío» está tres centímetros arriba y
                   repetirlo es ruido. El caso que importa es el otro — hay
@@ -1336,19 +1353,23 @@ export function CargarPedidoSheet({
                 // Una sola acción: lo que se agrega a un pedido vivo va a
                 // cocina ahora. «Cargar sin marchar» era para el pedido que
                 // todavía no existe — acá el pedido ya está andando.
-                <button
+                <Button
+                  type="button"
+                  size="xl"
                   onClick={() => submit(true)}
                   disabled={cart.length === 0 || pending}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+                  className="w-full"
                 >
                   {pending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Agregar al pedido #{agregarA.dailyNumber}
-                </button>
+                </Button>
               ) : esProgramado ? (
-                <button
+                <Button
+                  type="button"
+                  size="xl"
                   onClick={() => submit(false)}
                   disabled={!canSubmit}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+                  className="w-full"
                 >
                   {pending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1358,24 +1379,29 @@ export function CargarPedidoSheet({
                   {/* «Enviar a cocina» no aplica: no hay nada que enviar
                       todavía. El papel sale ese día, solo. */}
                   {hayHoras ? "Cargar el encargue" : "Cargá las dos horas"}
-                </button>
+                </Button>
               ) : (
                 <>
-                  <button
+                  <Button
+                    type="button"
+                    size="xl"
                     onClick={() => submit(true)}
                     disabled={!canSubmit}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+                    className="w-full"
                   >
                     {pending && <Loader2 className="h-4 w-4 animate-spin" />}
                     Cargar y enviar a cocina
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="lg"
                     onClick={() => submit(false)}
                     disabled={!canSubmit}
-                    className="h-10 w-full rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-700 transition active:scale-[0.98] disabled:opacity-40"
+                    className="w-full"
                   >
                     Sólo cargar (marchar después)
-                  </button>
+                  </Button>
                 </>
               )}
             </footer>

@@ -238,7 +238,7 @@ const STATUS_COLORS: Record<
   OperationalStatus,
   { dot: string; bg: string; text: string }
 > = {
-  libre: { dot: "bg-zinc-300", bg: "bg-zinc-50", text: "text-zinc-600" },
+  libre: { dot: "bg-muted-foreground/30", bg: "bg-muted/50", text: "text-foreground/70" },
   ocupada: {
     dot: "bg-emerald-500",
     bg: "bg-emerald-50",
@@ -1997,25 +1997,22 @@ export function SalonDesktop({
               /* Sin nada cacheado y con la carga fallada, el panel no puede
                  quedarse en el skeleton para siempre: hay que poder salir. */
               <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                <p className="text-sm font-semibold text-zinc-900">
+                <p className="text-sm font-semibold text-foreground">
                   No pudimos cargar el menú.
                 </p>
-                <p className="max-w-xs text-xs text-zinc-600">{catalogError}</p>
+                <p className="max-w-xs text-xs text-foreground/70">{catalogError}</p>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={recargarCatalogo}
-                    className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white"
-                  >
+                  <Button type="button" size="lg" onClick={recargarCatalogo}>
                     Reintentar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="lg"
                     onClick={closePedir}
-                    className="rounded-full px-4 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-100"
                   >
                     Cerrar
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : catalogBundle ? (
@@ -2354,7 +2351,7 @@ export function SalonDesktop({
                 value={anularReason}
                 onChange={(e) => setAnularReason(e.target.value.slice(0, 200))}
                 placeholder="ej: cliente se fue, error de carga, ..."
-                className="block w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
+                className="block w-full rounded-2xl border border-border px-3 py-2 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 focus:outline-none"
                 rows={3}
                 autoFocus
               />
@@ -2526,7 +2523,7 @@ function MozosLegend({
       {entries.map((m) => (
         <span
           key={m.id}
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-700"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/80"
           title={`${m.fullName} · ${m.count} mesa${m.count === 1 ? "" : "s"}`}
         >
           <span
@@ -2535,20 +2532,20 @@ function MozosLegend({
             style={{ background: m.color }}
           />
           <span className="max-w-[10rem] truncate">{m.name}</span>
-          <span className="text-zinc-400 tabular-nums">{m.count}</span>
+          <span className="text-muted-foreground/70 tabular-nums">{m.count}</span>
         </span>
       ))}
       {sinAsignar > 0 && (
         <span
-          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-zinc-500"
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
           title={`${sinAsignar} mesa${sinAsignar === 1 ? "" : "s"} sin mozo`}
         >
           <span
             aria-hidden
-            className="size-2.5 shrink-0 rounded-full bg-zinc-300"
+            className="size-2.5 shrink-0 rounded-full bg-muted-foreground/30"
           />
           Sin asignar
-          <span className="text-zinc-400 tabular-nums">{sinAsignar}</span>
+          <span className="text-muted-foreground/70 tabular-nums">{sinAsignar}</span>
         </span>
       )}
     </div>
@@ -2605,17 +2602,17 @@ function DemorasPanel({
               type="button"
               onClick={() => onSelect(d.tableId)}
               {...rowProps(`demora:${d.tableId}`)}
-              className="flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition outline-none hover:bg-zinc-50 focus-visible:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900/20 focus-visible:ring-inset"
+              className="flex w-full items-center gap-2.5 px-4 py-1.5 text-left transition outline-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-inset"
             >
               <span
                 aria-hidden
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ background: DELAY_COLORS[d.level] }}
               />
-              <span className="font-heading min-w-0 flex-1 truncate text-sm font-bold text-zinc-900">
+              <span className="font-heading min-w-0 flex-1 truncate text-sm font-bold text-foreground">
                 {d.label}
               </span>
-              <span className="max-w-[7rem] truncate text-[11px] text-zinc-500 @lg:max-w-[14rem]">
+              <span className="max-w-[7rem] truncate text-[11px] text-muted-foreground @lg:max-w-[14rem]">
                 {d.station}
               </span>
               <span className="shrink-0 text-[11px] font-semibold text-red-700 tabular-nums">
@@ -2673,7 +2670,7 @@ function ActiveTablesList({
     if (group.tables.length === 0) return null;
     return (
       <section key={group.tone} className="space-y-1.5">
-        <h4 className="px-4 pt-3 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+        <h4 className="px-4 pt-3 text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
           {group.title} · {group.tables.length}
         </h4>
         <ul>
@@ -2719,42 +2716,35 @@ function ActiveTablesList({
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {canVentaRapida && (
-            <button
-              type="button"
-              onClick={onVentaRapida}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110 active:scale-[0.97]"
-            >
+            <Button type="button" size="sm" onClick={onVentaRapida}>
               <Store className="size-3" />
               Venta rápida
-            </button>
+            </Button>
           )}
           {canDistribuir && (
-            <button
-              type="button"
-              onClick={onDistribuir}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110 active:scale-[0.97]"
-            >
+            <Button type="button" size="sm" onClick={onDistribuir}>
               <Users className="size-3" />
               Distribuir mozos
-            </button>
+            </Button>
           )}
           {/* El teclado es el camino rápido de este panel; el botón es para
                 descubrirlo con el mouse. Mismo panel que abre `?`. */}
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onAtajos}
             aria-label="Ver atajos de teclado"
             title="Atajos de teclado (?)"
-            className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-600 ring-1 ring-zinc-200 transition hover:bg-zinc-200"
           >
             <Keyboard className="size-3" />?
-          </button>
+          </Button>
           {editPlanHref && (
             // Icon-only: es la acción menos frecuente de las tres y así las
             // otras dos entran en un solo renglón.
             <Link
               href={editPlanHref}
-              className="inline-flex items-center justify-center rounded-full bg-zinc-100 p-2 text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-200 active:scale-[0.97]"
+              className="inline-flex items-center justify-center rounded-full bg-muted p-2 text-foreground/80 ring-1 ring-border transition hover:bg-border active:scale-[0.97]"
               aria-label="Editar mesas del salón"
               title="Editar mesas del salón"
             >
@@ -2801,7 +2791,7 @@ function ActiveTableRow({
 }) {
   // Color del border-left según estado.
   const borderClass: Record<OperationalStatus, string> = {
-    libre: "border-l-zinc-200",
+    libre: "border-l-border",
     ocupada: "border-l-emerald-500",
     pidio_cuenta: "border-l-amber-500",
   };
@@ -2830,14 +2820,14 @@ function ActiveTableRow({
         onClick={() => onSelect(table.id)}
         {...rowProps(`mesa:${table.id}`)}
         className={cn(
-          "block w-full border-l-[3px] px-4 py-3 text-left transition outline-none hover:bg-zinc-50",
-          "focus-visible:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900/20 focus-visible:ring-inset",
+          "block w-full border-l-[3px] px-4 py-3 text-left transition outline-none hover:bg-muted/50",
+          "focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-inset",
           borderClass[tone],
         )}
       >
         {/* Línea 1: label + tiempo a la derecha */}
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-heading truncate text-base font-bold tracking-tight text-zinc-900">
+          <span className="font-heading truncate text-base font-bold tracking-tight text-foreground">
             {table.label}
           </span>
           {tiempo && (
@@ -2846,7 +2836,7 @@ function ActiveTableRow({
                 "shrink-0 text-[11px] tabular-nums",
                 tone === "pidio_cuenta"
                   ? "font-semibold text-amber-700"
-                  : "text-zinc-500",
+                  : "text-muted-foreground",
               )}
             >
               {tiempo}
@@ -2856,10 +2846,10 @@ function ActiveTableRow({
 
         {/* Línea 2: nombre del comensal (si hay) */}
         {partyName && (
-          <p className="mt-0.5 truncate text-xs font-medium text-zinc-700">
+          <p className="mt-0.5 truncate text-xs font-medium text-foreground/80">
             {partyName}
             {reservation && (
-              <span className="ml-1 text-[11px] font-normal text-zinc-500 tabular-nums">
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground tabular-nums">
                 · {reservation.party_size}p
               </span>
             )}
@@ -2868,12 +2858,12 @@ function ActiveTableRow({
 
         {/* Línea 3: order info (si hay) */}
         {order && (
-          <p className="mt-0.5 text-[11px] text-zinc-500">
-            <span className="font-semibold text-zinc-700 tabular-nums">
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-foreground/80 tabular-nums">
               {formatMoney(order.total_cents)}
             </span>
             {activeItemsCount > 0 && (
-              <span className="text-zinc-400">
+              <span className="text-muted-foreground/70">
                 {" · "}
                 {activeItemsCount} {activeItemsCount === 1 ? "item" : "items"}
               </span>
@@ -2946,27 +2936,29 @@ function CobroPanelEmptyState({
             Cobrar mesa
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
           onClick={onClose}
-          className="hover:bg-muted/60 flex-shrink-0 rounded-full p-1.5 text-zinc-500"
           aria-label="Cerrar cobro"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </header>
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
           {isNoCuenta ? (
             <ClipboardList className="size-5" />
           ) : (
             <Receipt className="size-5" />
           )}
         </div>
-        <p className="text-sm font-semibold text-zinc-900">
+        <p className="text-sm font-semibold text-foreground">
           {isNoCuenta ? "No hay cuenta para cobrar" : "No se puede cobrar"}
         </p>
-        <p className="max-w-xs text-xs text-zinc-500">
+        <p className="max-w-xs text-xs text-muted-foreground">
           {isNoCuenta
             ? "Esta mesa no tiene un pedido activo. Cargá items primero."
             : (error ?? "No se pudo iniciar el cobro.")}
@@ -2975,7 +2967,7 @@ function CobroPanelEmptyState({
           {isNoCuenta ? (
             <Link
               href={`/${slug}/admin/mesa/${tableId}/pedir`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
             >
               <ClipboardList className="size-3.5" />
               Cargar pedido
@@ -2983,19 +2975,15 @@ function CobroPanelEmptyState({
           ) : (
             <Link
               href={`/${slug}/admin/operacion?tab=caja`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
             >
               <Receipt className="size-3.5" />
               Ir a caja
             </Link>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-200"
-          >
+          <Button type="button" variant="outline" size="lg" onClick={onClose}>
             Volver
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -3245,14 +3233,16 @@ function TableDetail({
             })()}
           </div>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
           onClick={onClose}
-          className="hover:bg-muted/60 flex-shrink-0 rounded-full p-1.5 text-zinc-500"
           aria-label="Cerrar detalle"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -3264,20 +3254,20 @@ function TableDetail({
               "flex items-center gap-2 rounded-xl p-3 text-sm",
               reservation
                 ? "border border-indigo-100 bg-indigo-50/60"
-                : "bg-zinc-50",
+                : "bg-muted/50",
             )}
           >
             <Users
               className={cn(
                 "h-4 w-4 flex-shrink-0",
-                reservation ? "text-indigo-600" : "text-zinc-500",
+                reservation ? "text-indigo-600" : "text-muted-foreground",
               )}
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold text-zinc-900">
+              <p className="truncate font-semibold text-foreground">
                 {partyName}
                 {partySize != null && (
-                  <span className="ml-1.5 text-xs font-normal text-zinc-500 tabular-nums">
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">
                     · {partySize}p
                   </span>
                 )}
@@ -3291,7 +3281,7 @@ function TableDetail({
           </div>
         )}
         {reservation?.notes && (
-          <p className="-mt-1 max-w-prose px-1 text-xs text-zinc-600 italic">
+          <p className="-mt-1 max-w-prose px-1 text-xs text-foreground/70 italic">
             “{reservation.notes}”
           </p>
         )}
@@ -3314,19 +3304,19 @@ function TableDetail({
             grande entre header y footer, ponemos info útil + hint a la
             acción primaria. */}
         {status === "libre" && !order && !reservation && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/60 px-6 py-10 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-white ring-1 ring-zinc-200">
-              <Users className="size-5 text-zinc-400" />
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-card ring-1 ring-border">
+              <Users className="size-5 text-muted-foreground/70" />
             </div>
-            <p className="mt-3 text-sm font-semibold text-zinc-900">
+            <p className="mt-3 text-sm font-semibold text-foreground">
               Mesa disponible
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {table.seats} {table.seats === 1 ? "silla" : "sillas"}
             </p>
-            <p className="mt-3 max-w-[18rem] text-xs text-zinc-500">
+            <p className="mt-3 max-w-[18rem] text-xs text-muted-foreground">
               Tocá{" "}
-              <span className="font-semibold text-zinc-700">
+              <span className="font-semibold text-foreground/80">
                 Sentar walk-in
               </span>{" "}
               para abrir la mesa con un comensal que llegó sin reserva.
@@ -3344,9 +3334,6 @@ function TableDetail({
           sin volver al mouse. */}
       <div ref={primaryRef} className="border-border/60 border-t p-3">
         {(() => {
-          // Mismo estilo que el drawer del mozo: h-14 rounded-2xl con shadow.
-          const primaryClass =
-            "flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60";
           // El primario se enfoca solo al abrir el detalle: el chip cuenta que
           // con Enter alcanza (spec 075, FR-021).
           const enterHint = (
@@ -3354,10 +3341,6 @@ function TableDetail({
               ↵
             </kbd>
           );
-          // Cobrar pasa por el flujo de cuenta (propina/descuento/dividir →
-          // cobro), igual que el mozo. Un solo botón primario, naranja.
-          const primaryAmberClass =
-            "flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 text-base font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60";
 
           // ── Acción primaria: depende del estado Y de si hay items cargados.
           //    libre → Sentar walk-in/reserva · pidio_cuenta u ocupada c/items
@@ -3365,51 +3348,59 @@ function TableDetail({
           let primary: React.ReactNode = null;
           if (canWalkIn && reservation) {
             primary = (
-              <button
+              <Button
                 type="button"
+                size="xl"
+                className="w-full"
                 onClick={onSentarReserva}
                 // El único primario que conserva el candado: sienta de verdad
                 // —crea la orden y ocupa la mesa— y dos taps son dos veces.
                 // Los otros tres sólo abren un panel.
                 disabled={pending}
-                className={primaryClass}
               >
                 <UserCheck className="h-5 w-5" />
                 Sentar reserva
                 {enterHint}
-              </button>
+              </Button>
             );
           } else if (canWalkIn) {
             primary = (
-              <button type="button" onClick={onWalkIn} className={primaryClass}>
+              <Button
+                type="button"
+                size="xl"
+                className="w-full"
+                onClick={onWalkIn}
+              >
                 <UserPlus className="h-5 w-5" />
                 Sentar walk-in
                 {enterHint}
-              </button>
+              </Button>
             );
           } else if (canShowCuenta && (status === "pidio_cuenta" || hasItems)) {
             primary = (
-              <button
+              <Button
                 type="button"
+                size="xl"
+                className="w-full"
                 onClick={onPedirCuenta}
-                className={primaryAmberClass}
               >
                 <Receipt className="h-5 w-5" />
                 Cobrar
                 {enterHint}
-              </button>
+              </Button>
             );
           } else if (canPedir) {
             primary = (
-              <button
+              <Button
                 type="button"
+                size="xl"
+                className="w-full"
                 onClick={() => onCargarPedido()}
-                className={primaryClass}
               >
                 <ClipboardList className="h-5 w-5" />
                 Cargar pedido
                 {enterHint}
-              </button>
+              </Button>
             );
           }
 

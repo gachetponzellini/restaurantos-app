@@ -204,13 +204,13 @@ export function CobrarDesktopClient({
           className="rounded-2xl p-5"
           style={{ background: "var(--brand-soft, #F4F4F5)" }}
         >
-          <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-600 uppercase">
+          <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-foreground/70 uppercase">
             {allPaid ? "Cobrado" : "Falta cobrar"}
           </p>
-          <p className="mt-1 text-4xl font-bold tracking-tight text-zinc-900 tabular-nums">
+          <p className="mt-1 text-4xl font-bold tracking-tight text-foreground tabular-nums">
             {formatCurrency(allPaid ? total : totalPending)}
           </p>
-          <p className="mt-1 text-xs text-zinc-600">
+          <p className="mt-1 text-xs text-foreground/70">
             de {formatCurrency(total)} total
             {totalPaid > 0 && !allPaid && (
               <> · ya cobrado {formatCurrency(totalPaid)}</>
@@ -232,7 +232,7 @@ export function CobrarDesktopClient({
         {/* Selector de caja si hay >1 */}
         {init.cajas.length > 1 && (
           <Surface padding="compact">
-            <Label className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+            <Label className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
               Caja para registrar el cobro
             </Label>
             <Select value={cajaId} onValueChange={(v) => v && setCajaId(v)}>
@@ -258,7 +258,7 @@ export function CobrarDesktopClient({
               estaría invitando a un callejón. */}
         {!orderClosed && (
           <section className="space-y-2.5">
-            <p className="px-1 text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+            <p className="px-1 text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
               {splitsActivos.length === 1
                 ? "Pago único"
                 : `${splitsActivos.length} sub-cuentas`}
@@ -304,14 +304,10 @@ export function CobrarDesktopClient({
                   : "La mesa se va a marcar para limpiar."}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={goHome}
-              className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
-            >
+            <Button type="button" size="sm" onClick={goHome}>
               Volver al salón
               <ArrowRight className="size-3.5" />
-            </button>
+            </Button>
           </section>
         )}
 
@@ -394,14 +390,16 @@ export function CobrarDesktopClient({
             </p>
           </div>
           <AyudaChip slug={slug} tema="cobrar" />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="flex-shrink-0"
             onClick={onClose}
-            className="hover:bg-muted/60 flex-shrink-0 rounded-full p-1.5 text-zinc-500"
             aria-label="Cerrar cobro"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </header>
         <div className="flex-1 overflow-y-auto p-4">{body}</div>
       </div>
@@ -474,14 +472,14 @@ function SplitRow({
       onClick={onSelect}
       disabled={done || cancelled}
       className={cn(
-        "flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left ring-1 transition",
+        "flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left ring-1 transition",
         cancelled
-          ? "cursor-not-allowed opacity-50 ring-zinc-200/70"
+          ? "cursor-not-allowed opacity-50 ring-border/70"
           : done
             ? "cursor-default bg-emerald-50/40 ring-emerald-200"
             : isActive
-              ? "ring-2 ring-zinc-900"
-              : "ring-zinc-200/70 hover:ring-zinc-300",
+              ? "ring-2 ring-primary"
+              : "ring-border/70 hover:ring-foreground/20",
       )}
     >
       <div
@@ -490,8 +488,8 @@ function SplitRow({
           done
             ? "bg-emerald-500 text-white"
             : cancelled
-              ? "bg-zinc-100 text-zinc-400"
-              : "bg-zinc-100 text-zinc-700",
+              ? "bg-muted text-muted-foreground/70"
+              : "bg-muted text-foreground/80",
         )}
       >
         {done ? (
@@ -503,25 +501,25 @@ function SplitRow({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-zinc-900">
+        <p className="text-sm font-semibold text-foreground">
           {split.split_index === 0
             ? "Mesa completa"
             : `Sub-cuenta ${split.split_index}`}
-          <span className="ml-1 text-xs font-normal text-zinc-500 tabular-nums">
+          <span className="ml-1 text-xs font-normal text-muted-foreground tabular-nums">
             · {formatCurrency(split.expected_amount_cents)}
           </span>
         </p>
         {!done && !cancelled && split.paid_amount_cents > 0 && (
           <>
-            <p className="mt-0.5 text-xs text-zinc-500 tabular-nums">
+            <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
               Pagado {formatCurrency(split.paid_amount_cents)} · falta{" "}
-              <span className="font-semibold text-zinc-900">
+              <span className="font-semibold text-foreground">
                 {formatCurrency(remaining)}
               </span>
             </p>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100">
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-zinc-900 transition-all"
+                className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -530,13 +528,13 @@ function SplitRow({
         {done && (
           <p className="mt-0.5 text-xs font-medium text-emerald-700">Cobrado</p>
         )}
-        {cancelled && <p className="mt-0.5 text-xs text-zinc-500">Cancelado</p>}
+        {cancelled && <p className="mt-0.5 text-xs text-muted-foreground">Cancelado</p>}
       </div>
       {!done && !cancelled && (
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold",
-            isActive ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-700",
+            isActive ? "bg-primary text-white" : "bg-muted text-foreground/80",
           )}
         >
           {isActive ? "Cobrando" : "Cobrar"}
@@ -589,27 +587,23 @@ function CobrarSplitPanel({
     <Surface padding="compact" className="space-y-4">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-zinc-500 uppercase">
+          <p className="text-[0.6rem] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
             {split.split_index === 0
               ? "Pago único"
               : `Sub-cuenta ${split.split_index}`}
           </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900 tabular-nums">
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground tabular-nums">
             {formatCurrency(remaining)}
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-xs font-semibold text-zinc-500 transition hover:text-zinc-900"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onClear}>
           Cerrar
-        </button>
+        </Button>
       </header>
 
       {/* spec 156 · D1 — colapsado en Factura B por defecto: es el 95 % de los
           cobros y no puede costar un tap de más en el camino caliente (D2). */}
-      <div className="border-t border-zinc-100 pt-3">
+      <div className="border-t border-border/60 pt-3">
         <ComprobanteFields
           slug={slug}
           value={comprobante}
@@ -718,17 +712,17 @@ function EmptyPanel({ allPaid }: { allPaid: boolean }) {
       padding="compact"
       className="flex h-full flex-col items-center justify-center gap-2 text-center"
     >
-      <div className="flex size-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
+      <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         {allPaid ? (
           <CheckCircle2 className="size-5" />
         ) : (
           <Banknote className="size-5" />
         )}
       </div>
-      <p className="text-sm font-semibold text-zinc-900">
+      <p className="text-sm font-semibold text-foreground">
         {allPaid ? "Mesa cobrada" : "Elegí una sub-cuenta"}
       </p>
-      <p className="max-w-xs text-xs text-zinc-500">
+      <p className="max-w-xs text-xs text-muted-foreground">
         {allPaid
           ? "Todos los pagos quedaron registrados. Podés volver al salón."
           : "Tocá una fila a la izquierda para registrar el pago."}
@@ -765,14 +759,15 @@ function AnularCobroSection({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="destructive"
+        className="w-full @xl:w-auto"
         onClick={() => setOpen(true)}
-        className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100 @xl:w-auto"
       >
         <Trash2 className="size-3.5" />
         Anular cobro
-      </button>
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -789,7 +784,7 @@ function AnularCobroSection({
               nota de crédito— y después volvé a anular el cobro.
             </p>
           ) : (
-            <p className="-mt-2 text-sm text-zinc-600">
+            <p className="-mt-2 text-sm text-foreground/70">
               Los pagos cobrados se marcan como reembolsados (auditoría) y la
               mesa vuelve al plano como estaba, con todos sus ítems.
             </p>

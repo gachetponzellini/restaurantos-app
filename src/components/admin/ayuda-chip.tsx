@@ -34,7 +34,7 @@ export function AyudaChip({ slug, tema }: { slug: string; tema: string }) {
           : "Cómo se usa esta pantalla"
       }
       title="Cómo se usa esta pantalla"
-      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
     >
       <CircleHelp className="size-[22px]" strokeWidth={1.75} />
       {pendiente && (

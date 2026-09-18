@@ -60,8 +60,8 @@ function EfectivoPorCanal({ pendiente }: { pendiente: RendicionMozoPendiente }) 
     <ul className="mt-2 space-y-1">
       {CANALES.filter((c) => pendiente.por_canal?.[c]).map((c) => (
         <li key={c} className="flex items-baseline justify-between gap-2 text-xs">
-          <span className="text-zinc-600">{CANAL_LABEL[c]}</span>
-          <span className="font-semibold tabular-nums text-zinc-800">
+          <span className="text-foreground/70">{CANAL_LABEL[c]}</span>
+          <span className="font-semibold tabular-nums text-foreground/90">
             {formatCurrency(pendiente.por_canal[c]!.efectivo_cents)}
           </span>
         </li>
@@ -168,30 +168,32 @@ export function RendicionMozosTab({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+        <p className="text-[0.6rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
           Rendición de mozos · pendientes del turno
         </p>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
           onClick={() => void refetchRendicion()}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
           aria-label="Refrescar"
         >
           <RefreshCw className="size-3.5" />
-        </button>
+        </Button>
       </div>
 
       {conPagos.length === 0 && sinPagos.length === 0 && (
         <Surface padding="default">
           <div className="mx-auto flex max-w-md flex-col items-center gap-5 py-6 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-zinc-100">
-              <User className="size-7 text-zinc-400" />
+            <div className="flex size-14 items-center justify-center rounded-full bg-muted">
+              <User className="size-7 text-muted-foreground/70" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold tracking-tight text-zinc-900">
+              <h3 className="text-xl font-semibold tracking-tight text-foreground">
                 Sin mozos activos
               </h3>
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-1 text-sm text-foreground/70">
                 No hay mozos/encargados con pagos pendientes de rendir.
               </p>
             </div>
@@ -213,14 +215,14 @@ export function RendicionMozosTab({
 
       {sinPagos.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium text-zinc-400">
+          <p className="mb-2 text-xs font-medium text-muted-foreground/70">
             Sin cobros en este turno
           </p>
           <div className="flex flex-wrap gap-2">
             {sinPagos.map((p) => (
               <span
                 key={p.mozo_id}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm text-zinc-500 ring-1 ring-zinc-200/70"
+                className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm text-muted-foreground ring-1 ring-border/70"
               >
                 <User className="size-3.5" />
                 {p.mozo_name}
@@ -232,29 +234,29 @@ export function RendicionMozosTab({
 
       {historial.length > 0 && (
         <div>
-          <p className="mb-3 text-[0.6rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+          <p className="mb-3 text-[0.6rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Últimas rendiciones
           </p>
-          <div className="overflow-hidden rounded-lg ring-1 ring-zinc-200/70">
+          <div className="overflow-hidden rounded-lg ring-1 ring-border/70">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-zinc-100 bg-zinc-50/60">
-                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                <tr className="border-b border-border/60 bg-muted/30">
+                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Mozo
                   </th>
-                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Esperado
                   </th>
-                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Entregado
                   </th>
-                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                  <th className="px-3 py-2 text-right text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Dif.
                   </th>
-                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Registrado por
                   </th>
-                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+                  <th className="px-3 py-2 text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Hora
                   </th>
                   {/* Spec 178 — el papel del mozo, a pedido. Sin rótulo: el
@@ -262,18 +264,18 @@ export function RendicionMozosTab({
                   <th className="px-3 py-2" aria-label="Imprimir" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100">
+              <tbody className="divide-y divide-border/60">
                 {historial.map((r) => {
                   const diff = r.difference_cents;
                   return (
                     <tr key={r.id}>
-                      <td className="px-3 py-2 font-medium text-zinc-900">
+                      <td className="px-3 py-2 font-medium text-foreground">
                         {r.mozo_name}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-700 tabular-nums">
+                      <td className="px-3 py-2 text-right text-foreground/80 tabular-nums">
                         {formatCurrency(r.expected_cash_cents)}
                       </td>
-                      <td className="px-3 py-2 text-right text-zinc-700 tabular-nums">
+                      <td className="px-3 py-2 text-right text-foreground/80 tabular-nums">
                         {formatCurrency(r.delivered_cash_cents)}
                       </td>
                       <td
@@ -290,10 +292,10 @@ export function RendicionMozosTab({
                           ? "OK"
                           : `${diff > 0 ? "+" : ""}${formatCurrency(diff)}`}
                       </td>
-                      <td className="px-3 py-2 text-zinc-600">
+                      <td className="px-3 py-2 text-foreground/70">
                         {r.registered_by_name ?? "—"}
                       </td>
-                      <td className="px-3 py-2 text-zinc-500 tabular-nums">
+                      <td className="px-3 py-2 text-muted-foreground tabular-nums">
                         {new Date(r.created_at).toLocaleTimeString("es-AR", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -362,7 +364,7 @@ function OtrosCobrosInformativo({
 
   return (
     <div className={className}>
-      <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+      <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
         Otros cobros · informativo
       </p>
       <ul className="mt-1.5 space-y-1">
@@ -371,20 +373,20 @@ function OtrosCobrosInformativo({
             key={method}
             className="flex items-baseline justify-between gap-2 text-xs"
           >
-            <span className="inline-flex items-baseline gap-1.5 text-zinc-600">
+            <span className="inline-flex items-baseline gap-1.5 text-foreground/70">
               <span
                 className="inline-block size-2 shrink-0 translate-y-px rounded-full"
                 style={{ background: METHOD_COLOR[method] }}
               />
               {METHOD_LABEL[method]}
             </span>
-            <span className="tabular-nums text-zinc-700">
+            <span className="tabular-nums text-foreground/80">
               {formatCurrency(cents)}
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-1.5 text-[0.7rem] text-zinc-500">
+      <p className="mt-1.5 text-[0.7rem] text-muted-foreground">
         No se rinde: ya entró a la caja. Sólo se rinde el efectivo.
       </p>
     </div>
@@ -401,13 +403,13 @@ function MozoPendienteCard({
   const p = pendiente;
 
   return (
-    <article className="flex flex-col rounded-2xl bg-white ring-1 ring-zinc-200/70">
-      <header className="flex items-start justify-between gap-3 border-b border-zinc-100 p-4">
+    <article className="flex flex-col rounded-2xl bg-card ring-1 ring-border/70">
+      <header className="flex items-start justify-between gap-3 border-b border-border/60 p-4">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold tracking-tight text-zinc-900">
+          <h3 className="text-base font-semibold tracking-tight text-foreground">
             {p.mozo_name}
           </h3>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {p.pagos_count} cobro{p.pagos_count !== 1 ? "s" : ""} en el turno
           </p>
         </div>
@@ -416,12 +418,12 @@ function MozoPendienteCard({
         </span>
       </header>
 
-      <div className="border-b border-zinc-100 p-4">
+      <div className="border-b border-border/60 p-4">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-zinc-500 uppercase">
+          <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Efectivo a entregar
           </p>
-          <p className="text-xl font-bold text-zinc-900 tabular-nums">
+          <p className="text-xl font-bold text-foreground tabular-nums">
             {formatCurrency(p.efectivo_cents)}
           </p>
         </div>
@@ -430,7 +432,7 @@ function MozoPendienteCard({
             se le paga en esta misma rendición, del cajón. */}
         {p.total_propinas_cents > 0 && (
           <div className="mt-1 flex items-baseline justify-between gap-2">
-            <p className="text-xs text-zinc-500">Propina a pagarle</p>
+            <p className="text-xs text-muted-foreground">Propina a pagarle</p>
             <p className="text-sm text-emerald-700 tabular-nums">
               {formatCurrency(p.total_propinas_cents)}
             </p>
@@ -438,7 +440,7 @@ function MozoPendienteCard({
         )}
         <OtrosCobrosInformativo
           porMetodo={p.por_metodo}
-          className="mt-3 border-t border-dashed border-zinc-200 pt-3"
+          className="mt-3 border-t border-dashed border-border pt-3"
         />
       </div>
 
@@ -531,9 +533,9 @@ function RendirModal({
         />
         <ModalBody>
         {sinEfectivo ? (
-          <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-zinc-200/70">
+          <div className="rounded-xl bg-muted/50 p-4 ring-1 ring-border/70">
             <SectionLabel>No tiene efectivo para entregar</SectionLabel>
-            <p className="mt-1 text-sm text-zinc-600">
+            <p className="mt-1 text-sm text-foreground/70">
               Cobró todo con tarjeta, QR o transferencia — esa plata ya entró a
               la caja. Sólo queda cerrarle el período del turno.
             </p>
@@ -549,7 +551,7 @@ function RendirModal({
 
         <OtrosCobrosInformativo
           porMetodo={pendiente.por_metodo}
-          className="mt-4 rounded-xl p-4 ring-1 ring-zinc-200/70"
+          className="mt-4 rounded-xl p-4 ring-1 ring-border/70"
         />
 
         {/* Spec 177 · Parte B — que salga plata del cajón no puede ser una
@@ -584,7 +586,7 @@ function RendirModal({
                 <div key={c} className="grid gap-1.5">
                   <Label className="flex items-baseline justify-between text-sm font-medium">
                     <span>{CANAL_LABEL[c]} · efectivo que entrega</span>
-                    <span className="text-xs font-normal text-zinc-500 tabular-nums">
+                    <span className="text-xs font-normal text-muted-foreground tabular-nums">
                       debería {formatCurrency(esperado)}
                       {d !== null && d !== 0 && (
                         <span className={cn("ml-1 font-semibold", d < 0 ? "text-rose-700" : "text-amber-700")}>
@@ -595,7 +597,7 @@ function RendirModal({
                     </span>
                   </Label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold text-zinc-400">
+                    <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold text-muted-foreground/70">
                       $
                     </span>
                     <Input
@@ -624,7 +626,7 @@ function RendirModal({
         >
           <Label className="text-sm font-medium">Efectivo que entrega</Label>
           <div className="relative">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold text-zinc-400">
+            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold text-muted-foreground/70">
               $
             </span>
             <Input
@@ -690,7 +692,7 @@ function RendirModal({
               variant="outline"
               size="xl"
               onClick={() => setNoEntrego((v) => !v)}
-              className={cn(noEntrego && "text-zinc-900")}
+              className={cn(noEntrego && "text-foreground")}
             >
               {noEntrego ? "Volver a rendir" : "No entregó"}
             </Button>

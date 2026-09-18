@@ -65,16 +65,16 @@ export function ProductResultsList({
               className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${
                 esLibre
                   ? "border border-dashed border-amber-300 bg-amber-50/60 active:bg-amber-100"
-                  : "bg-white active:bg-zinc-50"
+                  : "bg-card active:bg-muted/50"
               } ${
                 isEnterTarget
                   ? "ring-1 ring-emerald-400"
                   : esLibre
                     ? ""
-                    : "ring-1 ring-zinc-200"
+                    : "ring-1 ring-border"
               }`}
             >
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                 {esLibre ? "Cargar un artículo que no existe" : p.name}
               </span>
               {esLibre ? (

@@ -98,18 +98,18 @@ export function CobrosPorMetodo({
           return (
             <li key={key}>
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="inline-flex items-baseline gap-2 text-zinc-700">
-                  <Icon className="size-3.5 shrink-0 translate-y-px text-zinc-400" />
+                <span className="inline-flex items-baseline gap-2 text-foreground/80">
+                  <Icon className="size-3.5 shrink-0 translate-y-px text-muted-foreground/70" />
                   <span className="font-medium">{label}</span>
-                  <span className="font-semibold tabular-nums text-zinc-900">
+                  <span className="font-semibold tabular-nums text-foreground">
                     {formatCurrency(amount)}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-medium tabular-nums text-zinc-400">
+                <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground/70">
                   {pct.toFixed(0)}%
                 </span>
               </div>
-              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full"
                   style={{
@@ -123,8 +123,8 @@ export function CobrosPorMetodo({
         })}
       </ul>
       {vacios.length > 0 && (
-        <p className="mt-4 border-t border-zinc-100 pt-3 text-[0.7rem] leading-relaxed text-zinc-400">
-          <span className="font-medium text-zinc-500">Sin movimientos:</span>{" "}
+        <p className="mt-4 border-t border-border/60 pt-3 text-[0.7rem] leading-relaxed text-muted-foreground/70">
+          <span className="font-medium text-muted-foreground">Sin movimientos:</span>{" "}
           {vacios.map((m) => m.label).join(", ")}
         </p>
       )}
@@ -157,8 +157,8 @@ export function VentasPorOrigen({
   );
 
   return (
-    <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+    <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Cobrado por origen
       </p>
       <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -169,16 +169,16 @@ export function VentasPorOrigen({
           return (
             <li
               key={key}
-              className="rounded-xl bg-zinc-50 px-3.5 py-3 ring-1 ring-zinc-200/70"
+              className="rounded-xl bg-muted/50 px-3.5 py-3 ring-1 ring-border/70"
             >
-              <p className="flex items-center gap-1.5 text-xs font-medium text-zinc-600">
-                <Icon className="size-3.5 shrink-0 text-zinc-400" />
+              <p className="flex items-center gap-1.5 text-xs font-medium text-foreground/70">
+                <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
                 {label}
               </p>
-              <p className="mt-1 text-lg font-bold tracking-tight text-zinc-900 tabular-nums">
+              <p className="mt-1 text-lg font-bold tracking-tight text-foreground tabular-nums">
                 {formatCurrency(amount)}
               </p>
-              <p className="text-[0.7rem] tabular-nums text-zinc-400">
+              <p className="text-[0.7rem] tabular-nums text-muted-foreground/70">
                 {pct.toFixed(0)}% del período
               </p>
             </li>
@@ -216,13 +216,13 @@ export function VentasPorMetodo({
   const vacios = metodos.filter((m) => m.amount === 0);
 
   return (
-    <section className="rounded-2xl bg-white p-5 ring-1 ring-zinc-200/70">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+    <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Cobrado por método
       </p>
 
       {activos.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-500">Todavía no se cobró nada.</p>
+        <p className="mt-3 text-sm text-muted-foreground">Todavía no se cobró nada.</p>
       ) : (
         <ul className="mt-3 space-y-3">
           {activos.map(({ key, label, Icon, amount }) => {
@@ -231,19 +231,19 @@ export function VentasPorMetodo({
               <li key={key}>
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="inline-flex items-baseline gap-2 text-sm">
-                    <Icon className="size-3.5 shrink-0 translate-y-px text-zinc-400" />
-                    <span className="font-medium text-zinc-700">{label}</span>
+                    <Icon className="size-3.5 shrink-0 translate-y-px text-muted-foreground/70" />
+                    <span className="font-medium text-foreground/80">{label}</span>
                   </span>
                   <span className="flex shrink-0 items-baseline gap-2">
-                    <span className="text-base font-bold tracking-tight text-zinc-900 tabular-nums">
+                    <span className="text-base font-bold tracking-tight text-foreground tabular-nums">
                       {formatCurrency(amount)}
                     </span>
-                    <span className="text-xs font-medium tabular-nums text-zinc-400">
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground/70">
                       {pct.toFixed(0)}%
                     </span>
                   </span>
                 </div>
-                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -259,8 +259,8 @@ export function VentasPorMetodo({
       )}
 
       {vacios.length > 0 && activos.length > 0 && (
-        <p className="mt-3.5 border-t border-zinc-100 pt-2.5 text-[0.7rem] leading-relaxed text-zinc-400">
-          <span className="font-medium text-zinc-500">Sin movimientos:</span>{" "}
+        <p className="mt-3.5 border-t border-border/60 pt-2.5 text-[0.7rem] leading-relaxed text-muted-foreground/70">
+          <span className="font-medium text-muted-foreground">Sin movimientos:</span>{" "}
           {vacios.map((m) => m.label).join(", ")}
         </p>
       )}

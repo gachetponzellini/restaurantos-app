@@ -51,15 +51,15 @@ export function PageHeader({
 }) {
   const titleCls =
     size === "compact"
-      ? "mt-1 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl"
-      : "mt-2 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-5xl";
+      ? "mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
+      : "mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-5xl";
 
   return (
     <header className="space-y-3">
       {back ? (
         <Link
           href={back.href}
-          className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 transition hover:text-zinc-900"
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" strokeWidth={2} />
           {back.label ?? "Volver"}
@@ -68,13 +68,13 @@ export function PageHeader({
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div className="min-w-0">
           {eyebrow ? (
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               {eyebrow}
             </p>
           ) : null}
           <h1 className={titleCls}>{title}</h1>
           {description ? (
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600">
+            <p className="mt-2 max-w-2xl text-sm text-foreground/70">
               {description}
             </p>
           ) : null}
@@ -102,11 +102,11 @@ export function Surface({
       {...rest}
       className={cn(
         "rounded-2xl",
-        tone === "default" && "bg-white ring-1 ring-zinc-200/70",
+        tone === "default" && "bg-card ring-1 ring-border/70",
         tone === "subtle" &&
-          "bg-zinc-50/70 ring-1 ring-zinc-200/60 backdrop-blur-sm",
+          "bg-muted/35 ring-1 ring-border/60 backdrop-blur-sm",
         tone === "accent" &&
-          "bg-zinc-900 text-zinc-50 ring-1 ring-zinc-900",
+          "bg-primary text-primary-foreground ring-1 ring-primary",
         padding === "default" && "p-6",
         padding === "compact" && "p-5",
         padding === "flush" && "p-0",
@@ -138,7 +138,7 @@ export function SurfaceHeader({
           <p
             className={cn(
               "text-[0.65rem] font-semibold uppercase tracking-[0.14em]",
-              tone === "accent" ? "text-zinc-400" : "text-zinc-500",
+              tone === "accent" ? "text-muted-foreground/70" : "text-muted-foreground",
             )}
           >
             {eyebrow}
@@ -147,7 +147,7 @@ export function SurfaceHeader({
         <h2
           className={cn(
             "mt-1 text-xl font-semibold tracking-tight",
-            tone === "accent" ? "text-zinc-50" : "text-zinc-900",
+            tone === "accent" ? "text-primary-foreground" : "text-foreground",
           )}
         >
           {title}
@@ -156,7 +156,7 @@ export function SurfaceHeader({
           <p
             className={cn(
               "mt-1 max-w-xl text-sm",
-              tone === "accent" ? "text-zinc-400" : "text-zinc-600",
+              tone === "accent" ? "text-muted-foreground/70" : "text-foreground/70",
             )}
           >
             {description}
@@ -171,13 +171,13 @@ export function SurfaceHeader({
 export function SectionDivider({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="h-px flex-1 bg-zinc-200/70" />
+      <span className="h-px flex-1 bg-border/70" />
       {label ? (
-        <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+        <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {label}
         </span>
       ) : null}
-      <span className="h-px flex-1 bg-zinc-200/70" />
+      <span className="h-px flex-1 bg-border/70" />
     </div>
   );
 }
