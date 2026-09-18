@@ -1237,121 +1237,28 @@ export async function anularCobro(
     );
   }
 
-  // spec 092 · H-08 — **reabrir primero, refundar después.**
+  // #355 — reabrir, reembolsar, auditar, devolver la propina del excedente,
+  // borrar lo pendiente y recalcular sub-cuentas y lo pagado: todo en
+  // `anular_cobro_tx`, en una transacción. Eran seis escrituras sueltas —un
+  // fallo en el medio dejaba la cuenta a medio anular— y no revertían el
+  // excedente, así que al volver a cobrar se cobraba la propina fantasma.
   //
-  // El orden estaba al revés: se refundaban los pagos, se borraban los
-  // pendientes, se reseteaban los splits, y recién al final se reabría la orden
-  // — sin `.select()` y **sin capturar el error**. Si alguien había sentado
-  // gente nueva en esa mesa, ese UPDATE violaba el índice único parcial
-  // `orders_one_open_per_table` y no hacía nada, pero la action devolvía
-  // `actionOk` igual. Resultado: «Cobro anulado», la cuenta seguía cerrada **y
-  // paga**, con todos sus pagos reembolsados. La plata desaparecía del arqueo y
-  // ya no se podía re-cobrar (`iniciarCobro` → «La orden ya está cerrada»).
-  //
-  // Reabriendo primero, si la reapertura falla no se toca un solo peso.
-  if (order.lifecycle_status === "closed") {
-    const { data: reopened, error: reopenErr } = await service
-      .from("orders")
-      .update({
-        lifecycle_status: "open",
-        closed_at: null,
-        total_paid_cents: 0,
-        // La contracara de `closeOrderIfFullyPaid`: si la orden vuelve a estar
-        // abierta, no está paga.
-        payment_status: "pending",
-        // spec 091 — y vuelve al eje de producción que tenía antes de cobrarse.
-        status: "preparing",
-      })
-      .eq("id", orderId)
-      .select("id");
-    if (reopenErr || ((reopened ?? []) as { id: string }[]).length === 0) {
-      console.error("anularCobro · reapertura", reopenErr);
+  // Reabrir sigue yendo primero (spec 092 · H-08), ahora adentro: si la mesa ya
+  // tiene otra cuenta abierta, la transacción entera se revierte.
+  const { error: anularErr } = await service.rpc("anular_cobro_tx", {
+    p_order_id: orderId,
+    p_business_id: business.id,
+    p_by_user_id: ctx.userId,
+    p_reason: motivo.trim(),
+  });
+  if (anularErr) {
+    if (anularErr.message.includes("TABLE_HAS_OPEN_ORDER")) {
       return actionError(
         "No pudimos reabrir la cuenta: la mesa ya tiene otra cuenta abierta. Anulá esa primero.",
       );
     }
-  }
-
-  // Marcar payments paid como refunded (no borrar para auditoría).
-  const { data: refundados } = await service
-    .from("payments")
-    .update({
-      payment_status: "refunded",
-      refunded_at: new Date().toISOString(),
-      refunded_reason: motivo.trim(),
-    })
-    .eq("order_id", orderId)
-    .eq("payment_status", "paid")
-    .select("id, caja_id, amount_cents");
-
-  // spec 098 · H-35 — el rastro. Hasta acá anular un cobro no dejaba **nada**
-  // en `caja_audit_log` (grep vacío) y `payments` no tiene `refunded_by`, así
-  // que la plata desaparecía del arqueo sin que quedara quién la sacó. Es el
-  // mismo libro donde ya escriben las correcciones de línea, así que el
-  // encargado lo lee en el lugar donde ya mira.
-  const filas = (
-    (refundados ?? []) as Array<{
-      id: string;
-      caja_id: string | null;
-      amount_cents: number;
-    }>
-  ).map((p) => ({
-    business_id: business.id,
-    caja_id: p.caja_id,
-    entity_type: "payment",
-    entity_id: p.id,
-    field: "payment_status",
-    from_value: "paid",
-    to_value: "refunded",
-    by_user_id: ctx.userId,
-    reason: motivo.trim(),
-  }));
-  if (filas.length > 0) {
-    const { error: auditErr } = await service
-      .from("caja_audit_log")
-      .insert(filas);
-    // El audit no bloquea la anulación, pero su ausencia sí se loguea fuerte:
-    // un reembolso sin rastro es justo lo que esta spec vino a arreglar.
-    if (auditErr) console.error("anularCobro · caja_audit_log", auditErr);
-  }
-
-  // Borrar payments pending (MP en curso, etc).
-  await service
-    .from("payments")
-    .delete()
-    .eq("order_id", orderId)
-    .eq("payment_status", "pending");
-
-  // Reset splits — pero NO resucitar los cancelados (spec 36 · R-C4). Un split
-  // ya `cancelled` (via cancelarSplit, que redistribuyó su expected a los
-  // activos) volvía a `pending` con su expected intacto → total esperado
-  // inflado y la order no cerraba al re-cobrar.
-  await service
-    .from("order_splits")
-    .update({ paid_amount_cents: 0, status: "pending" })
-    .eq("order_id", orderId)
-    .neq("status", "cancelled");
-
-  // (La reapertura de la orden se movió arriba — ver H-08.)
-
-  // issue #188 — la cuenta que sigue abierta también quedó en cero.
-  //
-  // El reset de `total_paid_cents` vivía sólo adentro de la rama de reapertura,
-  // así que anular el cobro **parcial** de una sub-cuenta reembolsaba los pagos
-  // y reseteaba los splits pero dejaba la orden diciendo que ya había cobrado
-  // esa plata. El panel de cobro se salvaba porque recalcula, pero el ticket de
-  // cuenta lo lee crudo (`cuenta-ticket.ts`) e imprimía "Pagado / RESTA" sobre
-  // una mesa que no pagó un peso, y el guard de "en efectivo no se cobra de
-  // menos" comparaba contra un resto de menos.
-  //
-  // Acá se refundaron **todos** los pagos de la orden, así que el cero es el
-  // número correcto en las dos ramas.
-  if (order.lifecycle_status !== "closed") {
-    const { error: resetErr } = await service
-      .from("orders")
-      .update({ total_paid_cents: 0, payment_status: "pending" })
-      .eq("id", orderId);
-    if (resetErr) console.error("anularCobro · reset total_paid", resetErr);
+    console.error("anularCobro · anular_cobro_tx", anularErr);
+    return actionError(`No se pudo anular el cobro: ${anularErr.message}`);
   }
 
   // spec 100 — la mesa vuelve al plano tal como estaba, con sus ítems.
