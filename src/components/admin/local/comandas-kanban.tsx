@@ -101,6 +101,10 @@ type Column = {
   ring: string;
   countBg: string;
   countText: string;
+  /** Color del botón principal de la card: en cocina el color de la columna
+   *  se lee de lejos (Empezar ámbar, Entregar celeste). Excepción pedida por
+   *  Juan a la spec 205 (un solo color de CTA). */
+  buttonClass: string;
   emptyHint: string;
   /** Aclaración chica bajo el título. Hoy sólo la usa Entregadas, para que el
    *  encargado sepa por qué las cards se van solas (spec 082). */
@@ -115,6 +119,7 @@ const COLUMNS: Column[] = [
     ring: "ring-amber-500/30",
     countBg: "bg-amber-50",
     countText: "text-amber-800",
+    buttonClass: "bg-amber-500 hover:bg-amber-600 text-white",
     emptyHint: "Sin comandas pendientes",
   },
   {
@@ -124,6 +129,7 @@ const COLUMNS: Column[] = [
     ring: "ring-sky-500/30",
     countBg: "bg-sky-50",
     countText: "text-sky-800",
+    buttonClass: "bg-sky-500 hover:bg-sky-600 text-white",
     emptyHint: "Cocina libre",
   },
   {
@@ -133,6 +139,7 @@ const COLUMNS: Column[] = [
     ring: "ring-emerald-500/30",
     countBg: "bg-emerald-50",
     countText: "text-emerald-800",
+    buttonClass: "bg-emerald-500 hover:bg-emerald-600 text-white",
     emptyHint: "Sin entregas recientes",
     note: `Últimos ${ENTREGADAS_VISIBLE_MINUTES} min`,
   },
@@ -655,6 +662,7 @@ export function ComandasKanban({
                       stationStyleById.get(c.station_id) ?? FALLBACK
                     }
                     columnRing={col.ring}
+                    buttonClass={col.buttonClass}
                     mozoName={
                       c.mozo_id ? (mozoNameById.get(c.mozo_id) ?? null) : null
                     }
@@ -799,6 +807,7 @@ function ComandaCard({
   comanda,
   stationStyle,
   columnRing,
+  buttonClass,
   mozoName,
   onEmpezar,
   onEntregar,
@@ -814,6 +823,7 @@ function ComandaCard({
   comanda: LocalComanda;
   stationStyle: (typeof SECTOR_PALETTE)[number];
   columnRing: string;
+  buttonClass: string;
   mozoName: string | null;
   onEmpezar: (id: string) => void;
   onEntregar: (id: string) => void;
@@ -1011,7 +1021,7 @@ function ComandaCard({
             <Button
               type="button"
               size="lg"
-              className="flex-1"
+              className={`flex-1 ${buttonClass}`}
               onClick={() => onEmpezar(comanda.id)}
             >
               <Play className="size-3.5" strokeWidth={2.5} />
@@ -1022,7 +1032,7 @@ function ComandaCard({
             <Button
               type="button"
               size="lg"
-              className="flex-1"
+              className={`flex-1 ${buttonClass}`}
               onClick={() => onEntregar(comanda.id)}
             >
               <Check className="size-3.5" strokeWidth={2.5} />

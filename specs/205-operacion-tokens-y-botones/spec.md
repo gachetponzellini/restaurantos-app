@@ -51,6 +51,9 @@ fondo sólido o borde, y dispara algo) pasa a `<Button>` con variante y tamaño 
 - Tamaños: `xl` (h-11) CTA táctil principal; `lg` (h-9) acciones de barra; `default` (h-8)
   acciones chicas.
 
+**Excepción (Juan, 2026-09-18):** en **Comandas** el botón principal de la card conserva
+el color de su columna (Empezar ámbar, Entregar celeste): en cocina se lee de lejos.
+
 **No** se convierten las superficies interactivas: filas de lista, tarjetas de mesa,
 tiles de producto, chips de filtro, controles segmentados, el teclado numérico. Son
 componentes propios, no botones.
