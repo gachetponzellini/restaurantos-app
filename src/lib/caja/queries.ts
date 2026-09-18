@@ -18,6 +18,7 @@ import {
   origenDeDeliveryType,
 } from "./ventas-por-origen";
 import { encadenarPeriodos, ventanaDelCorte } from "./historial-cortes";
+import { saldoCents, tieneSaldoPendiente } from "@/lib/billing/saldo-pendiente";
 import type {
   Caja,
   CajaConEstado,
@@ -27,6 +28,7 @@ import type {
   CajaMovimientoKind,
   CajaUserAssignment,
   CorreccionLog,
+  CuentaConSaldo,
   LibroEntry,
   LibroFiltros,
   LibroTotales,
@@ -1950,4 +1952,50 @@ async function contarSalonPorLiberar(
       .length,
     mozos_asignados: rows.filter((t) => t.mozo_id !== null).length,
   };
+}
+
+/**
+ * Cuentas con saldo pendiente para el aviso de la Caja — issue #339.
+ *
+ * El filtro grueso va en la query (abiertas con algo cobrado, cerradas que no
+ * figuran pagadas) y el fino en `tieneSaldoPendiente`, la misma regla que usa
+ * el cobro. Ventana de 30 días: una cuenta cerrada con saldo no se arregla sola
+ * y tiene que seguir viéndose hasta que alguien la cobre.
+ */
+export async function getCuentasConSaldo(
+  businessId: string,
+): Promise<CuentaConSaldo[]> {
+  const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await db()
+    .from("orders")
+    .select(
+      "id, order_number, daily_number, table_id, lifecycle_status, status, total_cents, total_paid_cents, created_at, tables!orders_table_id_fkey(label)",
+    )
+    .eq("business_id", businessId)
+    .neq("status", "cancelled")
+    .gte("created_at", desde)
+    .or(
+      "and(lifecycle_status.eq.open,total_paid_cents.gt.0),and(lifecycle_status.eq.closed,payment_status.neq.paid)",
+    )
+    .order("created_at", { ascending: true });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[])
+    .map((o) => ({
+      ...o,
+      total_cents: Number(o.total_cents),
+      total_paid_cents: Number(o.total_paid_cents),
+    }))
+    .filter((o) => tieneSaldoPendiente(o))
+    .map((o) => ({
+      orderId: o.id,
+      orderNumber: o.order_number,
+      dailyNumber: o.daily_number ?? null,
+      tableId: o.table_id ?? null,
+      tableLabel: o.tables?.label ?? null,
+      totalCents: o.total_cents,
+      paidCents: o.total_paid_cents,
+      saldoCents: saldoCents(o),
+      cerrada: o.lifecycle_status === "closed",
+    }));
 }

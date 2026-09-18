@@ -33,6 +33,9 @@ export type AdminOrder = {
    *  es sólo eso, una nota: el «para cuándo» tiene sus dos campos. */
   kitchen_notes: string | null;
   items: { product_name: string; quantity: number }[];
+  /** La mesa de una orden de salón (issue #339). Sólo la trae el historial:
+   *  el board de pedidos no lista órdenes de mesa. */
+  table_label?: string | null;
 };
 
 /**
@@ -250,7 +253,7 @@ export async function getOrdersList(
   let query = supabase
     .from("orders")
     .select(
-      "id, order_number, daily_number, created_at, customer_name, customer_phone, delivery_type, total_cents, status, payment_method, payment_status, cancelled_reason, scheduled_at, kitchen_at, kitchen_notes, order_items(product_name, quantity, is_combo_component)",
+      "id, order_number, daily_number, created_at, customer_name, customer_phone, delivery_type, total_cents, status, payment_method, payment_status, cancelled_reason, scheduled_at, kitchen_at, kitchen_notes, order_items(product_name, quantity, is_combo_component), tables!orders_table_id_fkey(label)",
       { count: "exact" },
     )
     .eq("business_id", businessId);
@@ -310,6 +313,7 @@ export async function getOrdersList(
         product_name: i.product_name,
         quantity: i.quantity,
       })),
+    table_label: o.tables?.label ?? null,
   }));
 
   const total = count ?? 0;

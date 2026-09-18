@@ -388,3 +388,21 @@ export type CajaUserAssignment = {
   user_id: string;
   created_at: string;
 };
+
+/**
+ * Una cuenta a la que le falta plata (issue #339): abierta con cobro parcial,
+ * o cerrada con saldo porque se anularon líneas después de cerrarla.
+ */
+export type CuentaConSaldo = {
+  orderId: string;
+  /** Correlativo global: con él se busca el pedido en el historial. */
+  orderNumber: number;
+  dailyNumber: number | null;
+  tableId: string | null;
+  tableLabel: string | null;
+  totalCents: number;
+  paidCents: number;
+  saldoCents: number;
+  /** Cerrada: la mesa ya está libre, se cobra desde el pedido. */
+  cerrada: boolean;
+};

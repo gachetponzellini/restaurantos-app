@@ -357,11 +357,12 @@ function CajaPanel({
   refetchAlMontar: boolean;
   onServerData: (d: CajaData) => void;
 }) {
-  const { cajas } = use(promise);
+  const { cajas, cuentasConSaldo } = use(promise);
   return (
     <CajaAdminBoard
       slug={slug}
       cajas={cajas}
+      cuentasConSaldo={cuentasConSaldo}
       cajaPedida={cajaPedida}
       active={active}
       refetchAlMontar={refetchAlMontar}

@@ -19,6 +19,7 @@ import {
   getCajasConEstado,
   getCajasForBusiness,
   getCajaUserAssignments,
+  getCuentasConSaldo,
   getRendicionesHistorial,
   getRendicionesPendientesTodosLosMozos,
 } from "@/lib/caja/queries";
@@ -28,6 +29,7 @@ import type { Caja } from "@/lib/caja/types";
 import type {
   CajaConEstado,
   CajaUserAssignment,
+  CuentaConSaldo,
   MozoRendicion,
   RendicionMozoPendiente,
 } from "@/lib/caja/types";
@@ -98,7 +100,11 @@ export type PedidosData = {
   deliveryFeeCents: number;
 };
 
-export type CajaData = { cajas: CajaConEstado[] };
+export type CajaData = {
+  cajas: CajaConEstado[];
+  /** Issue #339 — mesas con cobro parcial y cuentas cerradas con saldo. */
+  cuentasConSaldo: CuentaConSaldo[];
+};
 
 export type RendicionData = {
   rendicionPendientes: RendicionMozoPendiente[];
@@ -306,7 +312,11 @@ export async function loadPedidos(
 }
 
 export async function loadCaja(businessId: string): Promise<CajaData> {
-  return { cajas: await getCajasConEstado(businessId) };
+  const [cajas, cuentasConSaldo] = await Promise.all([
+    getCajasConEstado(businessId),
+    getCuentasConSaldo(businessId),
+  ]);
+  return { cajas, cuentasConSaldo };
 }
 
 export async function loadCuentas(businessId: string): Promise<CuentasData> {

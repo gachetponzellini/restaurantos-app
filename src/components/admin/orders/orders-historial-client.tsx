@@ -13,6 +13,7 @@ import {
   Search,
   ShoppingBag,
   Tag,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ import type {
   OrderListRange,
   OrderListResult,
 } from "@/lib/admin/orders-query";
+import { orderTitle } from "@/lib/admin/order-title";
 import { formatCurrency } from "@/lib/currency";
 import type { OrderStatus } from "@/lib/orders/status";
 import { STATUS_META } from "@/lib/orders/status-meta";
@@ -332,7 +334,18 @@ function OrderRow({
   onClick: () => void;
 }) {
   const meta = STATUS_META[order.status];
-  const ChannelIcon = order.delivery_type === "delivery" ? Bike : ShoppingBag;
+  const ChannelIcon =
+    order.delivery_type === "delivery"
+      ? Bike
+      : order.delivery_type === "dine_in"
+        ? UtensilsCrossed
+        : ShoppingBag;
+  const channelLabel =
+    order.delivery_type === "delivery"
+      ? "Delivery"
+      : order.delivery_type === "dine_in"
+        ? "Salón"
+        : "Retiro";
   const dateLabel = formatInTimeZone(order.created_at, timezone, "d MMM · HH:mm");
   const itemsCount = order.items.reduce((a, i) => a + i.quantity, 0);
 
@@ -349,7 +362,7 @@ function OrderRow({
 
         <div className="min-w-0 flex-1">
           <p className="text-zinc-900 truncate text-sm font-semibold">
-            {order.customer_name || "Sin nombre"}
+            {orderTitle(order)}
           </p>
           <p className="text-zinc-500 truncate text-xs tabular-nums">
             {dateLabel} · {itemsCount} {itemsCount === 1 ? "ítem" : "ítems"}
@@ -359,7 +372,7 @@ function OrderRow({
         <ChannelIcon
           className="text-zinc-400 size-4 shrink-0"
           strokeWidth={1.75}
-          aria-label={order.delivery_type === "delivery" ? "Delivery" : "Retiro"}
+          aria-label={channelLabel}
         />
 
         <span

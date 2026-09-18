@@ -32,6 +32,7 @@ import { formatInvoiceNumber, tipoLabel } from "@/lib/afip/format";
 import type { TipoComprobante } from "@/lib/afip/types";
 
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
+import { admiteCobro } from "./saldo-pendiente";
 import {
   destinoPorDefecto,
   excedenteRequiereConfirmacion,
@@ -446,7 +447,9 @@ export async function iniciarCobro(
   if (order.status === "cancelled") {
     return actionError("El pedido está cancelado — no se puede cobrar.");
   }
-  if (order.lifecycle_status !== "open") {
+  // #339 — una cuenta cerrada con saldo (se anularon líneas después de
+  // cerrarla) se cobra desde el pedido. Cerrada y saldada, no.
+  if (!admiteCobro(order)) {
     return actionError("La orden ya está cerrada.");
   }
 
@@ -578,7 +581,9 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
   if (order.status === "cancelled") {
     return actionError("El pedido está cancelado — no se puede cobrar.");
   }
-  if (order.lifecycle_status !== "open") {
+  // #339 — una cuenta cerrada con saldo (se anularon líneas después de
+  // cerrarla) se cobra desde el pedido. Cerrada y saldada, no.
+  if (!admiteCobro(order)) {
     return actionError("La orden ya está cerrada.");
   }
 
@@ -800,7 +805,12 @@ export async function registrarPago(input: RegistrarPagoInput): Promise<
   // sólo se usa. La coherencia fiscal la sigue validando `emitInvoiceCore`.
   let orderClosed = false;
   let comprobante: AutoEmitResult | undefined;
-  if (row.fully_paid && !row.idempotent) {
+  if (order.lifecycle_status === "closed") {
+    // #339 — el saldo de una cuenta ya cerrada: la RPC la marca pagada. No se
+    // re-cierra ni se factura de nuevo — el comprobante salió (o no) al cerrar,
+    // y si falta se emite desde Facturación.
+    orderClosed = row.fully_paid;
+  } else if (row.fully_paid && !row.idempotent) {
     const r = await closeOrderIfFullyPaid(
       service,
       order.id,

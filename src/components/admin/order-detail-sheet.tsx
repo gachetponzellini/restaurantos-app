@@ -11,6 +11,7 @@ import {
   Printer,
   Receipt,
   ShoppingBag,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/modal";
 import { SectionLabel } from "@/components/ui/section-label";
 import { Textarea } from "@/components/ui/textarea";
+import { orderTitle } from "@/lib/admin/order-title";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import { formatCurrency } from "@/lib/currency";
 import { entregaLabel } from "@/lib/orders/entrega";
@@ -42,6 +44,7 @@ import { EditarItemsModal } from "@/components/shared/editar-items-modal";
 
 import { CargarPedidoSheet } from "./cargar-pedido-sheet";
 import { CobrarPedidoSheet } from "./cobrar-pedido-sheet";
+import { PagosDeOrden } from "./pagos-de-orden";
 
 type Detail = {
   delivery_address: string | null;
@@ -360,7 +363,12 @@ export function OrderDetailSheet({
     });
   };
 
-  const ChannelIcon = order.delivery_type === "delivery" ? Bike : ShoppingBag;
+  const ChannelIcon =
+    order.delivery_type === "delivery"
+      ? Bike
+      : order.delivery_type === "dine_in"
+        ? UtensilsCrossed
+        : ShoppingBag;
   // Para cuándo es (#192). En el detalle convive con el «hace tanto» del
   // encabezado —acá hay lugar para las dos— pero se lee primero.
   const entrega = entregaLabel(order, timezone);
@@ -402,7 +410,7 @@ export function OrderDetailSheet({
     <Modal open={open} onOpenChange={onOpenChange}>
       <PanelContent size="md">
         <ModalHeader
-          title={`#${order.daily_number} · ${order.customer_name}`}
+          title={`#${order.daily_number} · ${orderTitle(order)}`}
           description={`${formatInTimeZone(order.created_at, timezone, "HH:mm")} · hace ${formatRelativeTime(elapsedMin)}`}
           actions={
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider">
@@ -430,7 +438,11 @@ export function OrderDetailSheet({
               </a>
               <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium">
                 <ChannelIcon className="size-3.5" />
-                {order.delivery_type === "delivery" ? "Delivery" : "Retiro"}
+                {order.delivery_type === "delivery"
+                  ? "Delivery"
+                  : order.delivery_type === "dine_in"
+                    ? "Salón"
+                    : "Retiro"}
               </span>
               <PaymentChip
                 method={order.payment_method}
@@ -576,6 +588,8 @@ export function OrderDetailSheet({
               </dl>
             )}
           </section>
+
+          <PagosDeOrden slug={slug} orderId={order.id} timezone={timezone} />
 
           {detail && detail.history.length > 0 && (
             <section className="border-border/60 border-t px-5 py-4">

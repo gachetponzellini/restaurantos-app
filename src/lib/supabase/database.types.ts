@@ -3118,6 +3118,7 @@ export type Database = {
           card_brand: string | null;
           created_at: string;
           credit_customer_id: string | null;
+          extra_tip_cents: number;
           id: string;
           last_four: string | null;
           method: string;
@@ -3144,6 +3145,7 @@ export type Database = {
           card_brand?: string | null;
           created_at?: string;
           credit_customer_id?: string | null;
+          extra_tip_cents?: number;
           id?: string;
           last_four?: string | null;
           method: string;
@@ -3170,6 +3172,7 @@ export type Database = {
           card_brand?: string | null;
           created_at?: string;
           credit_customer_id?: string | null;
+          extra_tip_cents?: number;
           id?: string;
           last_four?: string | null;
           method?: string;
