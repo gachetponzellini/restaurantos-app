@@ -1,6 +1,4 @@
 import { notFound } from "next/navigation";
-import { formatInTimeZone } from "date-fns-tz";
-import { es } from "date-fns/locale";
 
 import { MenuClient } from "@/components/menu/menu-client";
 import { computeIsOpen } from "@/lib/business-hours";
@@ -22,12 +20,6 @@ export default async function MenuPage({
   // Día de la semana y fecha formateada se calculan en el server, con el TZ
   // del negocio, para que el cliente no haga drift contra el reloj local.
   const todayDow = currentDayOfWeek(business.timezone);
-  const todayLabel = formatInTimeZone(
-    new Date(),
-    business.timezone,
-    "EEEE d 'de' MMMM",
-    { locale: es },
-  );
 
   const [menu, supabase] = await Promise.all([
     getMenu(business.id, todayDow),
@@ -61,8 +53,6 @@ export default async function MenuPage({
       logoUrl={business.logo_url}
       categories={menu.categories}
       superCategories={menu.superCategories}
-      todaysMenus={menu.todaysMenus}
-      todayLabel={todayLabel}
       deliveryFeeCents={Number(business.delivery_fee_cents)}
       minOrderCents={Number(business.min_order_cents)}
       estimatedMinutes={business.estimated_delivery_minutes}

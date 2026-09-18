@@ -40,7 +40,6 @@ export default async function CartaPage({
       logoUrl={business.logo_url}
       categories={menu.categories}
       beverageSuperCategoryId={menu.beverageSuperCategoryId}
-      todaysMenus={menu.todaysMenus}
       hours={menu.hours}
       timezone={business.timezone}
       isOpenInitial={isOpen}

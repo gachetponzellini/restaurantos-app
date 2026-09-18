@@ -21,16 +21,9 @@ import {
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
 import type { ActiveOrder } from "@/lib/customers/active-orders";
 import { formatCurrency } from "@/lib/currency";
-import type {
-  MenuCategory,
-  MenuDailyMenu,
-  MenuProduct,
-  MenuSuperCategory,
-} from "@/lib/menu";
+import type { MenuCategory, MenuProduct, MenuSuperCategory } from "@/lib/menu";
 import { cartCount, cartTotal, useCart } from "@/stores/cart";
 
-import { DailyMenuSection } from "./daily-menu-section";
-import { DailyMenuSheet } from "./daily-menu-sheet";
 import { ProductCard } from "./product-card";
 import { ProductSheet } from "./product-sheet";
 
@@ -86,8 +79,6 @@ export function MenuClient({
   logoUrl,
   categories,
   superCategories,
-  todaysMenus,
-  todayLabel,
   deliveryFeeCents,
   minOrderCents,
   estimatedMinutes,
@@ -104,8 +95,6 @@ export function MenuClient({
   logoUrl: string | null;
   categories: MenuCategory[];
   superCategories: MenuSuperCategory[];
-  todaysMenus: MenuDailyMenu[];
-  todayLabel: string;
   deliveryFeeCents: number;
   minOrderCents: number;
   estimatedMinutes: number | null;
@@ -127,9 +116,6 @@ export function MenuClient({
   const [tabSwitched, setTabSwitched] = useState(false);
   const [selected, setSelected] = useState<MenuProduct | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedDailyMenu, setSelectedDailyMenu] =
-    useState<MenuDailyMenu | null>(null);
-  const [dailyMenuSheetOpen, setDailyMenuSheetOpen] = useState(false);
 
   const [isOpen, setIsOpen] = useState(isOpenInitial);
   useEffect(() => {
@@ -227,11 +213,6 @@ export function MenuClient({
   const handleSelect = (product: MenuProduct) => {
     setSelected(product);
     setSheetOpen(true);
-  };
-
-  const handleSelectDailyMenu = (menu: MenuDailyMenu) => {
-    setSelectedDailyMenu(menu);
-    setDailyMenuSheetOpen(true);
   };
 
   const initials = user
@@ -501,16 +482,6 @@ export function MenuClient({
         </div>
       )}
 
-      {/* Menú del día — sección destacada arriba del catálogo */}
-      <div className="m-rise" style={{ ["--m-delay" as string]: "140ms" }}>
-        <DailyMenuSection
-          menus={todaysMenus}
-          todayLabel={todayLabel}
-          disabled={!isOpen}
-          onSelect={handleSelectDailyMenu}
-        />
-      </div>
-
       {/* Sticky category tabs */}
       {displayTabs.length > 0 && (
         <div
@@ -776,14 +747,6 @@ export function MenuClient({
         product={selected}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-      />
-
-      <DailyMenuSheet
-        slug={slug}
-        menu={selectedDailyMenu}
-        open={dailyMenuSheetOpen}
-        onOpenChange={setDailyMenuSheetOpen}
-        disabled={!isOpen}
       />
     </div>
   );

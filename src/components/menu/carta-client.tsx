@@ -8,11 +8,7 @@ import { EASE_OUT } from "@/components/motion/presets";
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
 import type { CartaTheme } from "@/lib/carta-theme";
 import { formatCurrency } from "@/lib/currency";
-import {
-  disponibilidadTexto,
-  pasosDelMenu,
-} from "@/lib/daily-menus/carta-resumen";
-import type { MenuCategory, MenuDailyMenu, MenuProduct } from "@/lib/menu";
+import type { MenuCategory, MenuProduct } from "@/lib/menu";
 
 // Carta SOLO VISUAL (read-only) para el QR de la mesa. El comensal mira y le
 // pide al mozo: sin carrito, sin "+", sin checkout. Estructura de spec 44:
@@ -216,131 +212,6 @@ function SectionTitle({
   );
 }
 
-// El menú del día como bloque centrado dentro de un marco de línea dorada
-// finita — no como una fila de plato: el menú es el único ítem de la carta que
-// se lee de arriba a abajo (nombre → cuándo se ofrece → los pasos → precio), y
-// el marco lo separa del listado sin el relleno dorado de antes.
-//
-// Los pasos son SÓLO el nombre del grupo, apilados con un «+». Listar las
-// opciones una por una tapaba media carta: el «Menú» de golf-jcr tiene 57
-// componentes (spec 112). Qué milanesa hay se pregunta en la mesa.
-function DailyMenuCard({
-  menu,
-}: {
-  menu: MenuDailyMenu;
-}) {
-  const pasos = pasosDelMenu(menu);
-  const disponibilidad = disponibilidadTexto(menu.available_days);
-
-  return (
-    <li
-      style={{
-        listStyle: "none",
-        textAlign: "center",
-        padding: "20px 18px 18px",
-        border:
-          "1px solid color-mix(in srgb, var(--carta-gold) 55%, transparent)",
-        borderRadius: 3,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: 1.8,
-          color: "var(--carta-ink)",
-        }}
-      >
-        {menu.name}
-      </div>
-
-      {disponibilidad && (
-        <div
-          style={{
-            marginTop: 2,
-            fontSize: 12.5,
-            fontStyle: "italic",
-            color: "var(--carta-ink-2)",
-          }}
-        >
-          {disponibilidad}
-        </div>
-      )}
-
-      {pasos.length > 0 && (
-        <ul style={{ listStyle: "none", margin: "13px 0 0", padding: 0 }}>
-          {pasos.map((paso, i) => (
-            <li
-              key={`${paso}-${i}`}
-              style={{
-                fontSize: 14.5,
-                lineHeight: 1.35,
-                color: "var(--carta-ink)",
-              }}
-            >
-              {i > 0 && (
-                <span
-                  aria-hidden
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    lineHeight: 1.6,
-                    color: "var(--carta-gold)",
-                  }}
-                >
-                  +
-                </span>
-              )}
-              {paso}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div
-        style={{
-          marginTop: 13,
-          fontSize: 15.5,
-          fontWeight: 600,
-          color: "var(--carta-ink)",
-        }}
-      >
-        {formatCurrency(menu.price_cents)}
-      </div>
-    </li>
-  );
-}
-
-function DailyMenu({
-  theme,
-  menus,
-}: {
-  theme: CartaTheme;
-  menus: MenuDailyMenu[];
-}) {
-  if (menus.length === 0) return null;
-
-  return (
-    <section>
-      <SectionTitle theme={theme}>Menú del día</SectionTitle>
-      <ul
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-          margin: "10px 0 0",
-          padding: 0,
-        }}
-      >
-        {menus.map((m) => (
-          <DailyMenuCard key={m.id} menu={m} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 // Cover a pantalla: fondo del negocio + su marca + label + ornamento + cue de
 // scroll hacia el menú. Cada pieza es opcional y su ausencia cambia el layout,
 // no deja un hueco (ver `resolveCartaTheme`).
@@ -531,7 +402,6 @@ export function CartaClient({
   theme,
   categories,
   beverageSuperCategoryId,
-  todaysMenus,
   hours,
   timezone,
   isOpenInitial,
@@ -543,7 +413,6 @@ export function CartaClient({
   logoUrl: string | null;
   categories: MenuCategory[];
   beverageSuperCategoryId: string | null;
-  todaysMenus: MenuDailyMenu[];
   hours: BusinessHour[];
   timezone: string;
   isOpenInitial: boolean;
@@ -640,10 +509,6 @@ export function CartaClient({
             {isOpen ? "Abierto ahora" : "Cerrado"}
           </span>
         </div>
-
-        <Reveal>
-          <DailyMenu theme={theme} menus={todaysMenus} />
-        </Reveal>
 
         {sections.map((s) => (
           <Reveal as="section" key={s.key}>
