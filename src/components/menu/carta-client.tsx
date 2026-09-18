@@ -2,11 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import * as m from "motion/react-m";
 
+import { EASE_OUT } from "@/components/motion/presets";
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
 import type { CartaTheme } from "@/lib/carta-theme";
 import { formatCurrency } from "@/lib/currency";
-import { disponibilidadTexto, pasosDelMenu } from "@/lib/daily-menus/carta-resumen";
+import {
+  disponibilidadTexto,
+  pasosDelMenu,
+} from "@/lib/daily-menus/carta-resumen";
 import type { MenuCategory, MenuDailyMenu, MenuProduct } from "@/lib/menu";
 
 // Carta SOLO VISUAL (read-only) para el QR de la mesa. El comensal mira y le
@@ -55,7 +60,35 @@ function buildDisplayTabs(
 // Cenefa del cliente. Sin ornamento no se dibuja nada — ni el hueco: la carta
 // de KCC no tiene flourish y un espacio vacío bajo el título se lee como un
 // error de maquetación, no como aire.
-function Ornament({ src, width = 104 }: { src: string | null; width?: number }) {
+// Cada sección de la carta aparece al entrar en pantalla, como quien da vuelta
+// la hoja: sube apenas y se funde. Una sola vez — volver a subir no re-anima.
+function Reveal({
+  as = "div",
+  children,
+}: {
+  as?: "div" | "section";
+  children: React.ReactNode;
+}) {
+  const Tag = as === "section" ? m.section : m.div;
+  return (
+    <Tag
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+      transition={{ duration: 0.7, ease: EASE_OUT }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+function Ornament({
+  src,
+  width = 104,
+}: {
+  src: string | null;
+  width?: number;
+}) {
   if (!src) return null;
   return (
     <Image
@@ -75,12 +108,19 @@ function Ornament({ src, width = 104 }: { src: string | null; width?: number }) 
 function ProductRow({ product }: { product: MenuProduct }) {
   const soldOut = !product.is_available;
   return (
-    <li style={{ listStyle: "none", padding: "11px 0", opacity: soldOut ? 0.5 : 1 }}>
+    <li
+      style={{
+        listStyle: "none",
+        padding: "11px 0",
+        opacity: soldOut ? 0.5 : 1,
+      }}
+    >
       {/* Nombre ······ Precio */}
       <div style={{ display: "flex", alignItems: "flex-end" }}>
         <span
           style={{
-            fontWeight: "var(--carta-item-weight)" as React.CSSProperties["fontWeight"],
+            fontWeight:
+              "var(--carta-item-weight)" as React.CSSProperties["fontWeight"],
             fontSize: 15.5,
             lineHeight: 1.25,
             color: "var(--carta-ink)",
@@ -100,7 +140,8 @@ function ProductRow({ product }: { product: MenuProduct }) {
         />
         <span
           style={{
-            fontWeight: "var(--carta-item-weight)" as React.CSSProperties["fontWeight"],
+            fontWeight:
+              "var(--carta-item-weight)" as React.CSSProperties["fontWeight"],
             fontSize: 15.5,
             color: "var(--carta-ink)",
             whiteSpace: "nowrap",
@@ -131,7 +172,8 @@ function ProductRow({ product }: { product: MenuProduct }) {
             fontSize: 10.5,
             padding: "2px 7px",
             borderRadius: 4,
-            background: "color-mix(in srgb, var(--carta-gold) 16%, transparent)",
+            background:
+              "color-mix(in srgb, var(--carta-gold) 16%, transparent)",
             color: "var(--carta-ink-2)",
             fontWeight: 600,
             textTransform: "uppercase",
@@ -164,7 +206,9 @@ function SectionTitle({
         {children}
       </h2>
       {theme.ornament_url && (
-        <div style={{ marginTop: 6, display: "flex", justifyContent: "center" }}>
+        <div
+          style={{ marginTop: 6, display: "flex", justifyContent: "center" }}
+        >
           <Ornament src={theme.ornament_url} width={104} />
         </div>
       )}
@@ -285,7 +329,13 @@ function DailyMenuCard({
   );
 }
 
-function DailyMenu({ theme, menus }: { theme: CartaTheme; menus: MenuDailyMenu[] }) {
+function DailyMenu({
+  theme,
+  menus,
+}: {
+  theme: CartaTheme;
+  menus: MenuDailyMenu[];
+}) {
   const regular = menus.filter((m) => !m.is_suggestion);
   const suggestions = menus.filter((m) => m.is_suggestion);
   const ordenados = [...regular, ...suggestions];
@@ -385,7 +435,16 @@ function Cover({
       }}
     >
       {theme.figure_url ? (
-        <div style={{ position: "relative", width: 210, maxWidth: "72%", aspectRatio: "177 / 254" }}>
+        <div
+          className="m-rise"
+          style={{
+            ["--m-delay" as string]: "80ms",
+            position: "relative",
+            width: 210,
+            maxWidth: "72%",
+            aspectRatio: "177 / 254",
+          }}
+        >
           <Image
             src={theme.figure_url}
             alt=""
@@ -399,12 +458,23 @@ function Cover({
           {wordmark}
         </div>
       ) : (
-        <div style={{ width: 300, maxWidth: "82%" }}>{wordmark}</div>
+        <div
+          className="m-rise"
+          style={{
+            ["--m-delay" as string]: "80ms",
+            width: 300,
+            maxWidth: "82%",
+          }}
+        >
+          {wordmark}
+        </div>
       )}
 
       {theme.label && (
         <div
+          className="m-rise"
           style={{
+            ["--m-delay" as string]: "260ms",
             marginTop: 34,
             fontWeight: 500,
             letterSpacing: "0.3em",
@@ -415,7 +485,10 @@ function Cover({
         </div>
       )}
       {theme.ornament_url && (
-        <div style={{ marginTop: 16 }}>
+        <div
+          className="m-rise"
+          style={{ ["--m-delay" as string]: "360ms", marginTop: 16 }}
+        >
           <Ornament src={theme.ornament_url} width={116} />
         </div>
       )}
@@ -424,7 +497,9 @@ function Cover({
           propio transform (translateY), así que el centrado NO puede depender
           de translateX o se pisan. */}
       <div
+        className="m-rise"
         style={{
+          ["--m-delay" as string]: "700ms",
           position: "absolute",
           bottom: 34,
           left: 0,
@@ -449,8 +524,20 @@ function Cover({
             animation: "carta-bob 2.4s ease-in-out infinite",
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </a>
       </div>
@@ -499,7 +586,11 @@ export function CartaClient({
     for (const tab of displayTabs) {
       if (tab.subcategories) {
         for (const sub of tab.subcategories) {
-          out.push({ key: `${tab.id}:${sub.name}`, name: sub.name, products: sub.products });
+          out.push({
+            key: `${tab.id}:${sub.name}`,
+            name: sub.name,
+            products: sub.products,
+          });
         }
       } else {
         out.push({ key: tab.id, name: tab.name, products: tab.products });
@@ -570,17 +661,19 @@ export function CartaClient({
           </span>
         </div>
 
-        <DailyMenu theme={theme} menus={todaysMenus} />
+        <Reveal>
+          <DailyMenu theme={theme} menus={todaysMenus} />
+        </Reveal>
 
         {sections.map((s) => (
-          <section key={s.key}>
+          <Reveal as="section" key={s.key}>
             <SectionTitle theme={theme}>{s.name}</SectionTitle>
             <ul style={{ margin: 0, padding: 0 }}>
               {s.products.map((p) => (
                 <ProductRow key={p.id} product={p} />
               ))}
             </ul>
-          </section>
+          </Reveal>
         ))}
 
         {sections.length === 0 && (

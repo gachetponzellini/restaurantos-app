@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 
 import { I, ImageTile } from "@/components/delivery/primitives";
+import { AnimatedValue } from "@/components/motion/animated-value";
+import { EASE_IN, EASE_OUT } from "@/components/motion/presets";
 import { formatCurrency } from "@/lib/currency";
 import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
-import {
-  cartItemSubtotal,
-  cartTotal,
-  useCart,
-} from "@/stores/cart";
+import { cartItemSubtotal, cartTotal, useCart } from "@/stores/cart";
 
 export function CartPageClient({
   slug,
@@ -88,12 +88,15 @@ export function CartPageClient({
           >
             Mi pedido
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{businessName}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+            {businessName}
+          </div>
         </div>
       </div>
 
       {isEmpty ? (
         <div
+          className="m-rise"
           style={{
             flex: 1,
             display: "flex",
@@ -159,149 +162,188 @@ export function CartPageClient({
         </div>
       ) : (
         <>
-          <div style={{ flex: 1 }}>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  padding: "14px 16px",
-                  borderBottom: "1px solid var(--hairline)",
-                }}
-              >
-                {it.image_url && (
-                  <ImageTile
-                    src={it.image_url}
-                    alt={it.product_name}
-                    tone="#D9C9A8"
-                    sizes="56px"
-                    style={{ width: 56, height: 56, flexShrink: 0 }}
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
+          <div
+            className="m-rise"
+            style={{ flex: 1, ["--m-delay" as string]: "60ms" }}
+          >
+            {/* Quitar un ítem lo pliega en vez de hacerlo desaparecer: el resto
+                de la lista sube acompañando, no salta. */}
+            <AnimatePresence initial={false}>
+              {items.map((it) => (
+                <m.div
+                  key={it.id}
+                  exit={{
+                    opacity: 0,
+                    height: 0,
+                    paddingTop: 0,
+                    paddingBottom: 0,
+                    transition: {
+                      opacity: { duration: 0.14, ease: EASE_IN },
+                      default: { duration: 0.3, ease: EASE_OUT },
+                    },
+                  }}
+                  style={{
+                    overflow: "hidden",
+                    display: "flex",
+                    gap: 12,
+                    padding: "14px 16px",
+                    borderBottom: "1px solid var(--hairline)",
+                  }}
+                >
+                  {it.image_url && (
+                    <ImageTile
+                      src={it.image_url}
+                      alt={it.product_name}
+                      tone="#D9C9A8"
+                      sizes="56px"
+                      style={{ width: 56, height: 56, flexShrink: 0 }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div
-                      style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
                     >
-                      {it.product_name}
-                    </div>
-                    {it.kind === "daily_menu" && (
-                      <span
+                      <div
                         style={{
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: 0.5,
-                          padding: "1px 6px",
-                          borderRadius: 4,
-                          background: "#FFF0CF",
-                          color: "#8A5E18",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--ink)",
                         }}
                       >
-                        Menú del día
-                      </span>
+                        {it.product_name}
+                      </div>
+                      {it.kind === "daily_menu" && (
+                        <span
+                          style={{
+                            fontSize: 9.5,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: "#FFF0CF",
+                            color: "#8A5E18",
+                          }}
+                        >
+                          Menú del día
+                        </span>
+                      )}
+                    </div>
+                    {it.kind === "daily_menu" && it.components_snapshot && (
+                      <div
+                        style={{
+                          fontSize: 11.5,
+                          color: "var(--ink-3)",
+                          marginTop: 2,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {it.components_snapshot.map((c) => c.label).join(" · ")}
+                      </div>
                     )}
-                  </div>
-                  {it.kind === "daily_menu" && it.components_snapshot && (
+                    {it.modifiers.length > 0 && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--ink-3)",
+                          marginTop: 2,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.4,
+                        }}
+                      >
+                        {it.modifiers.map((m) => m.name).join(" · ")}
+                      </div>
+                    )}
                     <div
                       style={{
-                        fontSize: 11.5,
+                        fontSize: 12,
                         color: "var(--ink-3)",
                         marginTop: 2,
-                        lineHeight: 1.4,
                       }}
                     >
-                      {it.components_snapshot.map((c) => c.label).join(" · ")}
+                      {formatCurrency(
+                        it.unit_price_cents +
+                          it.modifiers.reduce(
+                            (a, m) => a + m.price_delta_cents,
+                            0,
+                          ),
+                      )}{" "}
+                      c/u
                     </div>
-                  )}
-                  {it.modifiers.length > 0 && (
                     <div
                       style={{
-                        fontSize: 11,
-                        color: "var(--ink-3)",
-                        marginTop: 2,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.4,
+                        display: "flex",
+                        alignItems: "center",
+                        marginTop: 8,
+                        height: 30,
+                        border: "1px solid var(--hairline-2)",
+                        borderRadius: 99,
+                        width: "fit-content",
+                        background: "#fff",
                       }}
                     >
-                      {it.modifiers.map((m) => m.name).join(" · ")}
+                      <button
+                        onClick={() => updateQuantity(it.id, it.quantity - 1)}
+                        aria-label="Menos"
+                        style={{
+                          width: 32,
+                          height: 28,
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {I.minus("var(--ink)", 14)}
+                      </button>
+                      <span
+                        style={{
+                          minWidth: 18,
+                          textAlign: "center",
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <AnimatedValue value={it.quantity} />
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(it.id, it.quantity + 1)}
+                        aria-label="Más"
+                        style={{
+                          width: 32,
+                          height: 28,
+                          border: "none",
+                          background: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {I.plus("var(--ink)", 14)}
+                      </button>
                     </div>
-                  )}
-                  <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
-                    {formatCurrency(
-                      it.unit_price_cents +
-                        it.modifiers.reduce((a, m) => a + m.price_delta_cents, 0),
-                    )}{" "}
-                    c/u
                   </div>
                   <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      marginTop: 8,
-                      height: 30,
-                      border: "1px solid var(--hairline-2)",
-                      borderRadius: 99,
-                      width: "fit-content",
-                      background: "#fff",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--ink)",
                     }}
                   >
-                    <button
-                      onClick={() => updateQuantity(it.id, it.quantity - 1)}
-                      aria-label="Menos"
-                      style={{
-                        width: 32,
-                        height: 28,
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {I.minus("var(--ink)", 14)}
-                    </button>
-                    <span
-                      style={{
-                        minWidth: 18,
-                        textAlign: "center",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {it.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity(it.id, it.quantity + 1)}
-                      aria-label="Más"
-                      style={{
-                        width: 32,
-                        height: 28,
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {I.plus("var(--ink)", 14)}
-                    </button>
+                    <AnimatedValue value={cartItemSubtotal(it)}>
+                      {formatCurrency(cartItemSubtotal(it))}
+                    </AnimatedValue>
                   </div>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                  {formatCurrency(cartItemSubtotal(it))}
-                </div>
-              </div>
-            ))}
+                </m.div>
+              ))}
+            </AnimatePresence>
 
             <Link
               href={`/${slug}/menu`}
@@ -339,7 +381,11 @@ export function CartPageClient({
               <Row label="Subtotal" value={formatCurrency(subtotal)} />
               <Row
                 label="Envío (delivery)"
-                value={deliveryFeeCents > 0 ? formatCurrency(deliveryFeeCents) : "Bonificado"}
+                value={
+                  deliveryFeeCents > 0
+                    ? formatCurrency(deliveryFeeCents)
+                    : "Bonificado"
+                }
                 muted
               />
               <div
@@ -365,12 +411,17 @@ export function CartPageClient({
                   borderTop: "1px solid var(--hairline)",
                 }}
               >
-                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
+                <span
+                  style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}
+                >
                   Total
                 </span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+                <AnimatedValue
+                  value={total}
+                  style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}
+                >
                   {formatCurrency(total)}
-                </span>
+                </AnimatedValue>
               </div>
             </div>
 
@@ -422,6 +473,7 @@ export function CartPageClient({
             }}
           >
             <Link
+              className="m-press"
               href={underMin ? "#" : `/${slug}/checkout`}
               onClick={(e) => underMin && e.preventDefault()}
               aria-disabled={underMin}
@@ -443,11 +495,11 @@ export function CartPageClient({
               }}
             >
               <span>
-                {underMin
-                  ? `Faltan ${formatCurrency(missing)}`
-                  : "Ir a pagar"}
+                {underMin ? `Faltan ${formatCurrency(missing)}` : "Ir a pagar"}
               </span>
-              <span>{formatCurrency(total)}</span>
+              <AnimatedValue value={total}>
+                {formatCurrency(total)}
+              </AnimatedValue>
             </Link>
           </div>
         </>

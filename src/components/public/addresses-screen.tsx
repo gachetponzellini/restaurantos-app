@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { toast } from "sonner";
 
 import { I } from "@/components/delivery/primitives";
+import { BottomSheet } from "@/components/motion/bottom-sheet";
+import { EASE_IN, springSnappy } from "@/components/motion/presets";
 import { deleteSavedAddress } from "@/lib/customers/addresses-actions";
 import type { SavedAddress } from "@/lib/customers/addresses";
 import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
@@ -20,6 +24,9 @@ export function AddressesScreen({
   // Spec 194 — en un negocio que reparte por lote, acá se guardan lotes.
   const entrega = copyDeEntrega(slug);
   const [confirming, setConfirming] = useState<SavedAddress | null>(null);
+  // La calle sigue visible mientras el sheet se va (confirming ya es null).
+  const lastStreet = useRef("");
+  if (confirming) lastStreet.current = confirming.street;
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -70,26 +77,36 @@ export function AddressesScreen({
                 gap: 8,
               }}
             >
-              {addresses.map((a) => (
-                <AddressRow
-                  key={a.id}
-                  address={a}
-                  onDelete={() => setConfirming(a)}
-                />
-              ))}
+              {/* La borrada se va de costado y las de abajo suben a ocupar
+                  su lugar. */}
+              <AnimatePresence initial={false} mode="popLayout">
+                {addresses.map((a) => (
+                  <m.div
+                    key={a.id}
+                    layout
+                    exit={{
+                      opacity: 0,
+                      x: -28,
+                      transition: { duration: 0.2, ease: EASE_IN },
+                    }}
+                    transition={springSnappy}
+                  >
+                    <AddressRow address={a} onDelete={() => setConfirming(a)} />
+                  </m.div>
+                ))}
+              </AnimatePresence>
             </div>
           </>
         )}
       </div>
 
-      {confirming && (
-        <ConfirmDialog
-          street={confirming.street}
-          pending={pending}
-          onCancel={() => setConfirming(null)}
-          onConfirm={() => handleDelete(confirming)}
-        />
-      )}
+      <ConfirmDialog
+        open={confirming !== null}
+        street={lastStreet.current}
+        pending={pending}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => confirming && handleDelete(confirming)}
+      />
     </div>
   );
 }
@@ -245,11 +262,10 @@ function EmptyState({ porLote }: { porLote: boolean }) {
       >
         {I.pin("var(--ink-3)", 24)}
       </span>
-      <div
-        className="d-display"
-        style={{ fontSize: 22, color: "var(--ink)" }}
-      >
-        {porLote ? "Todavía no guardaste lotes" : "Todavía no guardaste direcciones"}
+      <div className="d-display" style={{ fontSize: 22, color: "var(--ink)" }}>
+        {porLote
+          ? "Todavía no guardaste lotes"
+          : "Todavía no guardaste direcciones"}
       </div>
       <div style={{ fontSize: 13, color: "var(--ink-3)", maxWidth: 320 }}>
         {porLote ? "Tus lotes aparecen" : "Tus direcciones aparecen"} acá
@@ -260,97 +276,80 @@ function EmptyState({ porLote }: { porLote: boolean }) {
 }
 
 function ConfirmDialog({
+  open,
   street,
   pending,
   onCancel,
   onConfirm,
 }: {
+  open: boolean;
   street: string;
   pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   return (
-    <div
+    <BottomSheet
+      open={open}
+      onClose={onCancel}
+      canClose={!pending}
+      zIndex={50}
       role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-      }}
-      onClick={onCancel}
+      panelStyle={{ padding: "4px 20px 28px" }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        className="d-display"
+        style={{ fontSize: 22, color: "var(--ink)", marginBottom: 6 }}
+      >
+        Borrar dirección
+      </div>
+      <div
         style={{
-          width: "100%",
-          maxWidth: 520,
-          background: "var(--bg)",
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
-          padding: "22px 20px 28px",
-          animation: "d-sheet-up 220ms ease-out",
+          fontSize: 13,
+          color: "var(--ink-2)",
+          marginBottom: 20,
+          lineHeight: 1.4,
         }}
       >
-        <div
-          className="d-display"
-          style={{ fontSize: 22, color: "var(--ink)", marginBottom: 6 }}
-        >
-          Borrar dirección
-        </div>
-        <div
+        Vas a borrar <strong style={{ color: "var(--ink)" }}>{street}</strong>.
+        Si pedís de nuevo a esa dirección, se guarda otra vez sola.
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          onClick={onCancel}
+          disabled={pending}
           style={{
-            fontSize: 13,
-            color: "var(--ink-2)",
-            marginBottom: 20,
-            lineHeight: 1.4,
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            border: "1px solid var(--hairline-2)",
+            background: "#fff",
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--ink)",
+            cursor: pending ? "wait" : "pointer",
           }}
         >
-          Vas a borrar <strong style={{ color: "var(--ink)" }}>{street}</strong>.
-          Si pedís de nuevo a esa dirección, se guarda otra vez sola.
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            onClick={onCancel}
-            disabled={pending}
-            style={{
-              flex: 1,
-              height: 48,
-              borderRadius: 12,
-              border: "1px solid var(--hairline-2)",
-              background: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "var(--ink)",
-              cursor: pending ? "wait" : "pointer",
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={pending}
-            style={{
-              flex: 1,
-              height: 48,
-              borderRadius: 12,
-              border: "none",
-              background: pending ? "#C7BBA6" : "#B94A2A",
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: pending ? "wait" : "pointer",
-            }}
-          >
-            {pending ? "Borrando…" : "Borrar"}
-          </button>
-        </div>
+          Cancelar
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={pending}
+          style={{
+            flex: 1,
+            height: 48,
+            borderRadius: 12,
+            border: "none",
+            background: pending ? "#C7BBA6" : "#B94A2A",
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: pending ? "wait" : "pointer",
+          }}
+        >
+          {pending ? "Borrando…" : "Borrar"}
+        </button>
       </div>
-    </div>
+    </BottomSheet>
   );
 }

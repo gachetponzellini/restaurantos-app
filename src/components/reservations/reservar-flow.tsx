@@ -4,9 +4,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { toast } from "sonner";
 
 import { I, ImageTile } from "@/components/delivery/primitives";
+import { AnimatedValue } from "@/components/motion/animated-value";
+import { EASE_DRAWER, EASE_IN } from "@/components/motion/presets";
 import { GuestPolicyNotice } from "@/components/reservations/guest-policy-notice";
 import {
   fetchAvailability,
@@ -67,7 +71,8 @@ function maxDate(days: number): string {
 }
 
 function buildDateStrip(min: string, maxDays: number) {
-  const out: { iso: string; weekday: string; day: number; month: string }[] = [];
+  const out: { iso: string; weekday: string; day: number; month: string }[] =
+    [];
   const [y, m, d] = min.split("-").map(Number);
   for (let i = 0; i < Math.min(maxDays + 1, 14); i++) {
     const dt = new Date(Date.UTC(y, m - 1, d + i));
@@ -164,7 +169,10 @@ export function ReservarFlow({
   const [service, setService] = useState<string>("");
   const [arrivalTime, setArrivalTime] = useState<string>("");
   // Spec 077: veredicto de cupo del servicio (null = todavía sin consultar).
-  const [flexAvail, setFlexAvail] = useState<{ available: boolean; reason?: string } | null>(null);
+  const [flexAvail, setFlexAvail] = useState<{
+    available: boolean;
+    reason?: string;
+  } | null>(null);
   const [loadingFlex, setLoadingFlex] = useState(false);
   // Se incrementa tras un rechazo del server para re-consultar el cupo.
   const [availReloadKey, setAvailReloadKey] = useState(0);
@@ -196,7 +204,9 @@ export function ReservarFlow({
     if (!isFlexible) return [];
     const [y, m, d] = date.split("-").map(Number);
     const dow = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
-    const applicable = services.filter((s) => s.day_of_week == null || s.day_of_week === dow);
+    const applicable = services.filter(
+      (s) => s.day_of_week == null || s.day_of_week === dow,
+    );
     return Array.from(new Set(applicable.map((s) => s.name)));
   }, [isFlexible, services, date]);
 
@@ -217,7 +227,10 @@ export function ReservarFlow({
   const arrivalOptions = useMemo(
     () =>
       selectedServiceRow
-        ? arrivalSlots(selectedServiceRow.opens_at, selectedServiceRow.closes_at)
+        ? arrivalSlots(
+            selectedServiceRow.opens_at,
+            selectedServiceRow.closes_at,
+          )
         : [],
     [selectedServiceRow],
   );
@@ -323,7 +336,10 @@ export function ReservarFlow({
   useEffect(() => {
     if (!selectedSlot) return;
     const id = window.setTimeout(() => {
-      detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      detailsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }, 120);
     return () => window.clearTimeout(id);
   }, [selectedSlot]);
@@ -345,7 +361,9 @@ export function ReservarFlow({
       const q = isFlexible
         ? `date=${date}&party=${partySize}&service=${encodeURIComponent(service)}`
         : `date=${date}&party=${partySize}&slot=${selectedSlot!.slot}`;
-      router.push(`/${slug}/login?next=${encodeURIComponent(`/${slug}/reservar?${q}`)}`);
+      router.push(
+        `/${slug}/login?next=${encodeURIComponent(`/${slug}/reservar?${q}`)}`,
+      );
       return;
     }
 
@@ -393,7 +411,8 @@ export function ReservarFlow({
 
   const grouped = slots ? groupSlotsByService(slots) : null;
   // Spec 077 — servicio sin lugar: ni horarios ni formulario ni CTA.
-  const servicioSinLugar = isFlexible && flexAvail !== null && !flexAvail.available;
+  const servicioSinLugar =
+    isFlexible && flexAvail !== null && !flexAvail.available;
   const selectionDone =
     !isLargeGroup &&
     (isFlexible ? service.length > 0 && !servicioSinLugar : !!selectedSlot);
@@ -405,7 +424,8 @@ export function ReservarFlow({
       })
     : null;
   const hasFooter = selectionDone || !!largeGroupHref;
-  const ctaDisabled = submitting || (isFlexible && (!arrivalTime || servicioSinLugar));
+  const ctaDisabled =
+    submitting || (isFlexible && (!arrivalTime || servicioSinLugar));
   const initials = getInitial(user);
   const firstName = getFirstName(user);
 
@@ -422,8 +442,9 @@ export function ReservarFlow({
       }}
     >
       {/* ── Hero (mirrors menu-client) ─────────────────────────────────── */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", overflow: "hidden" }}>
         <ImageTile
+          className="m-settle"
           src={coverImageUrl}
           alt={businessName}
           tone="#C9B792"
@@ -488,7 +509,9 @@ export function ReservarFlow({
             >
               {initials}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}>
+            <span
+              style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}
+            >
               {firstName}
             </span>
           </Link>
@@ -594,7 +617,9 @@ export function ReservarFlow({
         >
           {tagline ? (
             <>
-              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>{tagline}</span>
+              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                {tagline}
+              </span>
               <span style={{ color: "var(--hairline-2)" }}>·</span>
             </>
           ) : null}
@@ -621,7 +646,7 @@ export function ReservarFlow({
       </div>
 
       {/* Section: ¿Cuándo? */}
-      <Section label="¿Cuándo?">
+      <Section label="¿Cuándo?" delay={60}>
         <div
           className="no-scrollbar"
           style={{
@@ -724,7 +749,7 @@ export function ReservarFlow({
       </Section>
 
       {/* Section: ¿Cuántos? */}
-      <Section label="¿Cuántos son?">
+      <Section label="¿Cuántos son?" delay={110}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {/* Un escalón por encima del máximo para poder decir "somos más":
               ahí el flujo se corta y pasa a WhatsApp. */}
@@ -754,7 +779,7 @@ export function ReservarFlow({
 
       {/* Section: Salón (solo si hay más de uno) */}
       {multiSalon && !isLargeGroup ? (
-        <Section label="Salón">
+        <Section label="Salón" delay={160}>
           <div
             style={{
               display: "flex",
@@ -794,7 +819,7 @@ export function ReservarFlow({
 
       {/* Section: Servicio (flexible) / Horarios (estricto) */}
       {isLargeGroup ? null : isFlexible ? (
-        <Section label={`Servicio — ${formatLongDate(date)}`}>
+        <Section label={`Servicio — ${formatLongDate(date)}`} delay={210}>
           {multiSalon && !salonId ? (
             <PickSalonHint />
           ) : serviceNames.length === 0 ? (
@@ -818,7 +843,9 @@ export function ReservarFlow({
                         borderRadius: 12,
                         border: active ? "none" : "1px solid var(--hairline-2)",
                         background: active ? "var(--primary)" : "var(--bg)",
-                        color: active ? "var(--primary-foreground)" : "var(--ink)",
+                        color: active
+                          ? "var(--primary-foreground)"
+                          : "var(--ink)",
                         fontSize: 14,
                         fontWeight: 600,
                         cursor: "pointer",
@@ -834,15 +861,27 @@ export function ReservarFlow({
               {/* Spec 080 — clubes: cuántos invitados entran por socio y cómo
                   se registran. Va atado al servicio (en el Golf, sólo la cena);
                   en negocios sin política no renderiza nada. */}
-              <GuestPolicyNotice slug={slug} phone={businessPhone} service={service} />
+              <GuestPolicyNotice
+                slug={slug}
+                phone={businessPhone}
+                service={service}
+              />
 
               {loadingFlex ? (
                 <SlotsSkeleton />
               ) : servicioSinLugar ? (
                 <FullService reason={flexAvail?.reason} />
               ) : shownArrivalOptions.length > 0 ? (
-                <div>
-                  <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 8 }}>Horario</div>
+                <div className="m-rise">
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--ink-2)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Horario
+                  </div>
                   <div
                     style={{
                       display: "grid",
@@ -860,9 +899,13 @@ export function ReservarFlow({
                           style={{
                             height: 44,
                             borderRadius: 10,
-                            border: active ? "none" : "1px solid var(--hairline-2)",
+                            border: active
+                              ? "none"
+                              : "1px solid var(--hairline-2)",
                             background: active ? "var(--primary)" : "var(--bg)",
-                            color: active ? "var(--primary-foreground)" : "var(--ink)",
+                            color: active
+                              ? "var(--primary-foreground)"
+                              : "var(--ink)",
                             fontSize: 14,
                             fontWeight: 600,
                             cursor: "pointer",
@@ -876,12 +919,11 @@ export function ReservarFlow({
                   </div>
                 </div>
               ) : null}
-
             </div>
           )}
         </Section>
       ) : (
-        <Section label={`Horarios — ${formatLongDate(date)}`}>
+        <Section label={`Horarios — ${formatLongDate(date)}`} delay={210}>
           {multiSalon && !salonId ? (
             <PickSalonHint />
           ) : loadingSlots ? (
@@ -889,7 +931,10 @@ export function ReservarFlow({
           ) : slots && slots.length === 0 ? (
             <EmptySlots />
           ) : grouped ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              className="m-rise"
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
               {grouped.lunch.length > 0 && (
                 <SlotGroup
                   label="Almuerzo"
@@ -942,7 +987,9 @@ export function ReservarFlow({
               />
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            <div
+              style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}
+            >
               Iniciá sesión para confirmar la reserva. Guardamos tus datos para
               que el local pueda contactarte si hace falta.
             </div>
@@ -951,111 +998,122 @@ export function ReservarFlow({
       ) : null}
 
       {/* Sticky bottom CTA */}
-      {hasFooter ? (
-        <div
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 30,
-            background: "var(--bg)",
-            borderTop: "1px solid var(--hairline)",
-            paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          }}
-        >
-          <div
+      {/* Aparece desde abajo cuando ya hay algo para confirmar. */}
+      <AnimatePresence>
+        {hasFooter ? (
+          <m.div
+            key="reservar-footer"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%", transition: { duration: 0.2, ease: EASE_IN } }}
+            transition={{ duration: 0.46, ease: EASE_DRAWER }}
             style={{
-              maxWidth: 520,
-              margin: "0 auto",
-              padding: "10px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 30,
+              background: "var(--bg)",
+              borderTop: "1px solid var(--hairline)",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
             }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--ink-3)",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {formatLongDate(date)}
-                {isLargeGroup ? "" : ` · ${partySize}p`}
+            <div
+              style={{
+                maxWidth: 520,
+                margin: "0 auto",
+                padding: "10px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--ink-3)",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {formatLongDate(date)}
+                  {isLargeGroup ? "" : ` · ${partySize}p`}
+                </div>
+                <div
+                  className="d-display"
+                  style={{ fontSize: 20, lineHeight: 1.1, color: "var(--ink)" }}
+                >
+                  {(() => {
+                    const resumen = isLargeGroup
+                      ? `Más de ${settings.max_party_size}`
+                      : isFlexible
+                        ? arrivalTime
+                          ? `${service} · ${arrivalTime} hs`
+                          : service
+                        : `${selectedSlot!.slot} hs`;
+                    return <AnimatedValue value={resumen} />;
+                  })()}
+                </div>
               </div>
-              <div
-                className="d-display"
-                style={{ fontSize: 20, lineHeight: 1.1, color: "var(--ink)" }}
-              >
-                {isLargeGroup
-                  ? `Más de ${settings.max_party_size}`
-                  : isFlexible
-                    ? arrivalTime
-                      ? `${service} · ${arrivalTime} hs`
-                      : service
-                    : `${selectedSlot!.slot} hs`}
-              </div>
-            </div>
-            {isLargeGroup ? (
-              <a
-                href={largeGroupHref!}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  height: 48,
-                  padding: "0 22px",
-                  borderRadius: 12,
-                  background: "var(--primary)",
-                  color: "var(--primary-foreground)",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  letterSpacing: -0.1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  whiteSpace: "nowrap",
-                  textDecoration: "none",
-                }}
-              >
-                {I.whatsapp("currentColor", 18)} Hablar por WhatsApp
-              </a>
-            ) : (
-              <button
-                type="button"
-                onClick={onConfirm}
-                disabled={ctaDisabled}
-                style={{
-                  height: 48,
-                  padding: "0 22px",
-                  borderRadius: 12,
-                  background: "var(--primary)",
-                  color: "var(--primary-foreground)",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  letterSpacing: -0.1,
-                  border: "none",
-                  cursor: ctaDisabled ? "default" : "pointer",
-                  opacity: ctaDisabled ? 0.6 : 1,
-                  transition: "opacity 200ms",
-                  whiteSpace: "nowrap",
-                  fontFamily: "inherit",
-                }}
-              >
-                {/* Spec 131 — el cliente pide; confirma el local. El botón no
+              {isLargeGroup ? (
+                <a
+                  href={largeGroupHref!}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    height: 48,
+                    padding: "0 22px",
+                    borderRadius: 12,
+                    background: "var(--primary)",
+                    color: "var(--primary-foreground)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    letterSpacing: -0.1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    whiteSpace: "nowrap",
+                    textDecoration: "none",
+                  }}
+                >
+                  {I.whatsapp("currentColor", 18)} Hablar por WhatsApp
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="m-press"
+                  onClick={onConfirm}
+                  disabled={ctaDisabled}
+                  style={{
+                    height: 48,
+                    padding: "0 22px",
+                    borderRadius: 12,
+                    background: "var(--primary)",
+                    color: "var(--primary-foreground)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    letterSpacing: -0.1,
+                    border: "none",
+                    cursor: ctaDisabled ? "default" : "pointer",
+                    opacity: ctaDisabled ? 0.6 : 1,
+                    whiteSpace: "nowrap",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {/* Spec 131 — el cliente pide; confirma el local. El botón no
                     promete lo que todavía no pasó. */}
-                {user.isLoggedIn
-                  ? submitting
-                    ? "Enviando…"
-                    : "Pedir reserva"
-                  : "Ingresar y pedir reserva"}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : null}
+                  {user.isLoggedIn
+                    ? submitting
+                      ? "Enviando…"
+                      : "Pedir reserva"
+                    : "Ingresar y pedir reserva"}
+                </button>
+              )}
+            </div>
+          </m.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1097,8 +1155,16 @@ function LargeGroupNotice({
       >
         Grupo grande
       </div>
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-        Para más de <strong style={{ color: "var(--ink)" }}>{maxPartySize} personas</strong>{" "}
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: "var(--ink-2)",
+        }}
+      >
+        Para más de{" "}
+        <strong style={{ color: "var(--ink)" }}>{maxPartySize} personas</strong>{" "}
         armamos la mesa a mano. Escribinos y lo coordinamos.
       </p>
       {href ? (
@@ -1133,15 +1199,20 @@ function Section({
   label,
   children,
   refEl,
+  delay = 0,
 }: {
   label: string;
   children: React.ReactNode;
   refEl?: React.RefObject<HTMLDivElement | null>;
+  /** ms de retraso de la entrada, para escalonar las secciones iniciales. */
+  delay?: number;
 }) {
   return (
     <div
       ref={refEl}
+      className="m-rise"
       style={{
+        ["--m-delay" as string]: `${delay}ms`,
         padding: "16px 16px 18px",
         borderBottom: "1px solid var(--hairline)",
       }}

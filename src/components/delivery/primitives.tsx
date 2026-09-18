@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { FadeImage } from "@/components/motion/fade-image";
 
 export function ImageTile({
   src,
@@ -25,11 +25,13 @@ export function ImageTile({
         borderRadius: radius,
         position: "relative",
         overflow: "hidden",
+        // Fondo neutro mientras baja la foto (el FadeImage entra fundido).
+        background: src ? "var(--hairline)" : undefined,
         ...style,
       }}
     >
       {src && (
-        <Image
+        <FadeImage
           src={src}
           alt={alt ?? ""}
           fill

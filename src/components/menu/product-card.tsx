@@ -1,4 +1,10 @@
+"use client";
+
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
+
 import { I, ImageTile } from "@/components/delivery/primitives";
+import { EASE_OUT, springPop, staggerDelay } from "@/components/motion/presets";
 import { formatCurrency } from "@/lib/currency";
 import type { MenuProduct } from "@/lib/menu";
 
@@ -7,19 +13,33 @@ export function ProductCard({
   cartQty,
   disabled,
   onSelect,
+  index = 0,
+  animateIn = false,
 }: {
   product: MenuProduct;
   cartQty: number;
   disabled?: boolean;
   onSelect: (product: MenuProduct) => void;
+  /** Posición en la lista, para escalonar la entrada. */
+  index?: number;
+  /** Entrar animada (al cambiar de categoría). La primera carga no anima acá. */
+  animateIn?: boolean;
 }) {
   const soldOut = !product.is_available;
   const interactive = !soldOut && !disabled;
   return (
-    <button
+    <m.button
       type="button"
+      className="m-tap-row"
       onClick={() => interactive && onSelect(product)}
       disabled={!interactive}
+      initial={animateIn ? { opacity: 0, y: 8 } : false}
+      animate={{ opacity: soldOut ? 0.55 : 1, y: 0 }}
+      transition={{
+        duration: 0.36,
+        ease: EASE_OUT,
+        delay: staggerDelay(index),
+      }}
       style={{
         width: "100%",
         display: "flex",
@@ -30,7 +50,6 @@ export function ProductCard({
         borderBottom: "1px solid var(--hairline)",
         cursor: interactive ? "pointer" : "not-allowed",
         textAlign: "left",
-        opacity: soldOut ? 0.55 : 1,
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -111,17 +130,33 @@ export function ProductCard({
                 justifyContent: "center",
               }}
             >
-              {cartQty > 0 ? (
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
-                  {cartQty}
-                </span>
-              ) : (
-                I.plus("var(--ink)", 16)
-              )}
+              {/* Al sumar al pedido el «+» se convierte en la cantidad con un
+                  pop: la confirmación de que el plato quedó cargado. */}
+              <AnimatePresence mode="popLayout" initial={false}>
+                <m.span
+                  key={cartQty > 0 ? `qty-${cartQty}` : "plus"}
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{
+                    scale: 0.4,
+                    opacity: 0,
+                    transition: { duration: 0.12 },
+                  }}
+                  transition={springPop}
+                  style={{
+                    display: "flex",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {cartQty > 0 ? cartQty : I.plus("var(--ink)", 16)}
+                </m.span>
+              </AnimatePresence>
             </div>
           )}
         </div>
       )}
-    </button>
+    </m.button>
   );
 }

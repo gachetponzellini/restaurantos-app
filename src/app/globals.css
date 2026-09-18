@@ -219,6 +219,79 @@
   stroke-linejoin: var(--icon-linejoin, round);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Movimiento de la parte pública (issue #336)
+   Lo interactivo lo anima Motion (src/components/motion). Acá queda
+   sólo la entrada inicial: es CSS para que lo que manda el server se
+   pinte animado sin esperar a que hidrate el JS.
+   Las curvas son las mismas que motion/presets.ts.
+   ───────────────────────────────────────────────────────────── */
+.delivery-theme {
+  --m-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes m-page-in {
+  from { opacity: 0; }
+}
+@keyframes m-rise {
+  from { opacity: 0; transform: translateY(10px); }
+}
+@keyframes m-settle {
+  from { opacity: 0; transform: scale(1.06); }
+}
+
+/* Sólo opacidad (ver template.tsx de (public)). */
+.m-page {
+  animation: m-page-in 320ms var(--m-ease-out) backwards;
+}
+/* Bloque que entra subiendo. `--m-delay` escalona los bloques de una
+   pantalla. Fill `backwards`: al terminar no queda ningún transform
+   colgado que rompa un sticky/fixed de adentro. */
+.m-rise {
+  animation: m-rise 560ms var(--m-ease-out) var(--m-delay, 0ms) backwards;
+}
+/* Foto de portada que se asienta: entra apenas agrandada y se acomoda. */
+.m-settle {
+  animation: m-settle 1100ms var(--m-ease-out) backwards;
+}
+
+/* Feedback al tocar una fila (card de producto): tinte, no escala — una
+   fila de ancho completo que se achica se ve rara. */
+.delivery-theme .m-tap-row {
+  transition: background-color 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.delivery-theme .m-tap-row:active:not(:disabled) {
+  background-color: color-mix(in oklch, var(--ink) 4%, transparent);
+}
+
+/* Botón principal que cede apenas bajo el dedo. */
+.delivery-theme .m-press {
+  transition: transform 160ms var(--m-ease-out), background-color 200ms ease,
+    opacity 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.delivery-theme .m-press:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delivery-theme .m-press:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: none;
+  }
+  .m-rise,
+  .m-settle {
+    animation-name: m-page-in;
+  }
+}
+
+/* El ancla de la portada de la carta ("ver la carta") baja deslizando. */
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.carta-theme) {
+    scroll-behavior: smooth;
+  }
+}
+
 @keyframes d-sheet-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }

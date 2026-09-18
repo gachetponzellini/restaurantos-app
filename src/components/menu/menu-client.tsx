@@ -3,8 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 
 import { ActiveOrderBanner } from "@/components/menu/active-order-banner";
+import { AnimatedValue } from "@/components/motion/animated-value";
+import {
+  EASE_DRAWER,
+  EASE_IN,
+  springSnappy,
+} from "@/components/motion/presets";
 import { I, ImageTile, StatusDot } from "@/components/delivery/primitives";
 import {
   minutosEstimados,
@@ -113,6 +121,10 @@ export function MenuClient({
   );
 
   const [active, setActive] = useState(displayTabs[0]?.id ?? "");
+  // La primera pintura de productos viene del server y entra por CSS; el
+  // escalonado de Motion arranca recién cuando el cliente cambia de categoría
+  // (si no, el SSR mandaría las cards invisibles hasta hidratar).
+  const [tabSwitched, setTabSwitched] = useState(false);
   const [selected, setSelected] = useState<MenuProduct | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedDailyMenu, setSelectedDailyMenu] =
@@ -163,19 +175,41 @@ export function MenuClient({
     };
   }, [displayTabs]);
 
+  // Al elegir una categoría semi-tapada, la barra se corre para mostrarla
+  // entera (y deja ver la siguiente): el cliente no tiene que acomodarla.
+  useEffect(() => {
+    if (!tabSwitched) return;
+    const el = tabsRef.current?.querySelector<HTMLElement>(
+      `[data-tab-id="${CSS.escape(active)}"]`,
+    );
+    el?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }, [active, tabSwitched]);
+
+  const selectTab = (id: string) => {
+    setTabSwitched(true);
+    setActive(id);
+  };
+
   const items = useCart(slug, (s) => s.items);
   const count = cartCount(items);
   const total = cartTotal(items);
 
   const cartByProduct = useMemo(() => {
-    const m = new Map<string, number>();
+    const byProduct = new Map<string, number>();
     for (const it of items) {
       // Sólo los ítems-producto suman al badge "qty en cart" del listado de
       // productos. Los menús del día llevan su propio contador aparte.
       if (it.kind === "daily_menu" || !it.product_id) continue;
-      m.set(it.product_id, (m.get(it.product_id) ?? 0) + it.quantity);
+      byProduct.set(
+        it.product_id,
+        (byProduct.get(it.product_id) ?? 0) + it.quantity,
+      );
     }
-    return m;
+    return byProduct;
   }, [items]);
 
   const fee = deliveryFeeCents;
@@ -185,7 +219,9 @@ export function MenuClient({
   // clavado. Si el header promete 40 min y el checkout 1 h, el cliente ya
   // desconfía antes de pedir.
   const eta = ventanaEstimadaLabel(
-    minutosEstimados("delivery", { estimated_delivery_minutes: estimatedMinutes }),
+    minutosEstimados("delivery", {
+      estimated_delivery_minutes: estimatedMinutes,
+    }),
   );
 
   const handleSelect = (product: MenuProduct) => {
@@ -228,8 +264,9 @@ export function MenuClient({
       />
 
       {/* Hero */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", overflow: "hidden" }}>
         <ImageTile
+          className="m-settle"
           src={coverImageUrl}
           alt={businessName}
           tone="#C9B792"
@@ -241,7 +278,9 @@ export function MenuClient({
         {user ? (
           <Link
             href={`/${slug}/perfil`}
+            className="m-rise"
             style={{
+              ["--m-delay" as string]: "240ms",
               position: "absolute",
               top: 20,
               right: 16,
@@ -273,14 +312,18 @@ export function MenuClient({
             >
               {initials || "?"}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}>
+            <span
+              style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.1 }}
+            >
               {firstName}
             </span>
           </Link>
         ) : (
           <Link
             href={`/${slug}/login?next=${encodeURIComponent(`/${slug}/menu`)}`}
+            className="m-rise"
             style={{
+              ["--m-delay" as string]: "240ms",
               position: "absolute",
               top: 20,
               right: 16,
@@ -304,7 +347,9 @@ export function MenuClient({
 
       {/* Tenant info */}
       <div
+        className="m-rise"
         style={{
+          ["--m-delay" as string]: "60ms",
           padding: "16px 16px 12px",
           borderBottom: "1px solid var(--hairline)",
         }}
@@ -360,7 +405,9 @@ export function MenuClient({
         >
           {tagline && (
             <>
-              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>{tagline}</span>
+              <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                {tagline}
+              </span>
               <span style={{ color: "var(--hairline-2)" }}>·</span>
             </>
           )}
@@ -411,15 +458,21 @@ export function MenuClient({
               flexWrap: "wrap",
             }}
           >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span
+              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
               {I.clock("var(--ink-3)", 13)} {eta}
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span
+              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
               {I.moto("var(--ink-3)", 14)}{" "}
               {fee > 0 ? `Envío ${formatCurrency(fee)}` : "Envío bonificado"}
             </span>
             {min > 0 && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <span
+                style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+              >
                 Mín. {formatCurrency(min)}
               </span>
             )}
@@ -429,7 +482,9 @@ export function MenuClient({
 
       {!isOpen && (
         <div
+          className="m-rise"
           style={{
+            ["--m-delay" as string]: "120ms",
             margin: "12px 16px",
             padding: "12px 14px",
             borderRadius: 10,
@@ -447,17 +502,21 @@ export function MenuClient({
       )}
 
       {/* Menú del día — sección destacada arriba del catálogo */}
-      <DailyMenuSection
-        menus={todaysMenus}
-        todayLabel={todayLabel}
-        disabled={!isOpen}
-        onSelect={handleSelectDailyMenu}
-      />
+      <div className="m-rise" style={{ ["--m-delay" as string]: "140ms" }}>
+        <DailyMenuSection
+          menus={todaysMenus}
+          todayLabel={todayLabel}
+          disabled={!isOpen}
+          onSelect={handleSelectDailyMenu}
+        />
+      </div>
 
       {/* Sticky category tabs */}
       {displayTabs.length > 0 && (
         <div
+          className="m-rise"
           style={{
+            ["--m-delay" as string]: "180ms",
             position: "sticky",
             top: 0,
             zIndex: 4,
@@ -486,16 +545,16 @@ export function MenuClient({
               return (
                 <button
                   key={t.id}
-                  onClick={() => setActive(t.id)}
+                  data-tab-id={t.id}
+                  onClick={() => selectTab(t.id)}
                   style={{
+                    position: "relative",
                     flexShrink: 0,
-                    padding: "12px 0 10px",
+                    padding: "12px 0 12px",
                     background: "none",
                     border: "none",
-                    borderBottom: isActive
-                      ? "2px solid var(--ink)"
-                      : "2px solid transparent",
                     color: isActive ? "var(--ink)" : "var(--ink-3)",
+                    transition: "color 200ms ease",
                     fontSize: 14,
                     fontWeight: isActive ? 600 : 500,
                     cursor: "pointer",
@@ -503,6 +562,24 @@ export function MenuClient({
                   }}
                 >
                   {t.name}
+                  {/* El subrayado se desliza de la categoría anterior a la
+                      nueva en vez de saltar. */}
+                  {isActive && (
+                    <m.span
+                      layoutId="menu-tab-underline"
+                      transition={springSnappy}
+                      aria-hidden
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: 2,
+                        borderRadius: 2,
+                        background: "var(--ink)",
+                      }}
+                    />
+                  )}
                 </button>
               );
             })}
@@ -541,7 +618,8 @@ export function MenuClient({
               alignItems: "center",
               justifyContent: "flex-end",
               paddingRight: 2,
-              background: "linear-gradient(to left, var(--bg) 45%, transparent)",
+              background:
+                "linear-gradient(to left, var(--bg) 45%, transparent)",
               opacity: tabsOverflow.right ? 1 : 0,
               transition: "opacity 160ms ease",
               pointerEvents: "none",
@@ -552,41 +630,59 @@ export function MenuClient({
         </div>
       )}
 
-      {/* Products */}
-      <div>
+      {/* Products — se re-montan al cambiar de categoría para escalonar la
+          entrada de la nueva lista. */}
+      <div
+        key={activeTab?.id}
+        className={tabSwitched ? undefined : "m-rise"}
+        style={{ ["--m-delay" as string]: "220ms" }}
+      >
         {activeTab?.subcategories
-          ? activeTab.subcategories.map((sub) => (
-              <div key={sub.name}>
-                <div
-                  style={{
-                    padding: "14px 16px 6px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--ink-2)",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.4,
-                  }}
-                >
-                  {sub.name}
-                </div>
-                {sub.products.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    cartQty={cartByProduct.get(p.id) ?? 0}
-                    disabled={!isOpen}
-                    onSelect={handleSelect}
-                  />
-                ))}
-              </div>
-            ))
-          : activeTab?.products.map((p) => (
+          ? (() => {
+              let index = 0;
+              return activeTab.subcategories.map((sub) => {
+                const headerIndex = index;
+                return (
+                  <div key={sub.name}>
+                    <m.div
+                      initial={tabSwitched ? { opacity: 0 } : false}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: Math.min(headerIndex, 8) * 0.028 }}
+                      style={{
+                        padding: "14px 16px 6px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--ink-2)",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      {sub.name}
+                    </m.div>
+                    {sub.products.map((p) => (
+                      <ProductCard
+                        key={p.id}
+                        product={p}
+                        cartQty={cartByProduct.get(p.id) ?? 0}
+                        disabled={!isOpen}
+                        onSelect={handleSelect}
+                        index={index++}
+                        animateIn={tabSwitched}
+                      />
+                    ))}
+                  </div>
+                );
+              });
+            })()
+          : activeTab?.products.map((p, i) => (
               <ProductCard
                 key={p.id}
                 product={p}
                 cartQty={cartByProduct.get(p.id) ?? 0}
                 disabled={!isOpen}
                 onSelect={handleSelect}
+                index={i}
+                animateIn={tabSwitched}
               />
             ))}
         {activeTab?.products.length === 0 && (
@@ -604,59 +700,76 @@ export function MenuClient({
       </div>
 
       {/* Sticky cart pill */}
-      {count > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            left: 12,
-            right: 12,
-            bottom: 20,
-            zIndex: 20,
-            maxWidth: 496,
-            margin: "0 auto",
-          }}
-        >
-          <Link
-            href={`/${slug}/carrito`}
+      <AnimatePresence>
+        {count > 0 && (
+          <m.div
+            key="cart-pill"
+            initial={{ y: 96, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{
+              y: 96,
+              opacity: 0,
+              transition: { duration: 0.2, ease: EASE_IN },
+            }}
+            transition={{ duration: 0.5, ease: EASE_DRAWER }}
+            whileTap={{ scale: 0.98 }}
             style={{
-              width: "100%",
-              height: 56,
-              borderRadius: 14,
-              background: "var(--accent)",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 18px 0 14px",
-              textDecoration: "none",
+              position: "fixed",
+              left: 12,
+              right: 12,
+              bottom: 20,
+              zIndex: 20,
+              maxWidth: 496,
+              margin: "0 auto",
             }}
           >
-            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  background: "rgba(255,255,255,0.18)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
+            <Link
+              href={`/${slug}/carrito`}
+              style={{
+                width: "100%",
+                height: 56,
+                borderRadius: 14,
+                background: "var(--accent)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0 18px 0 14px",
+                textDecoration: "none",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.18)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  <AnimatedValue value={count} />
+                </span>
+                <span
+                  style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.1 }}
+                >
+                  Ver mi pedido
+                </span>
+              </span>
+              <AnimatedValue
+                value={total}
+                style={{ fontSize: 15, fontWeight: 600 }}
               >
-                {count}
-              </span>
-              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.1 }}>
-                Ver mi pedido
-              </span>
-            </span>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>
-              {formatCurrency(total)}
-            </span>
-          </Link>
-        </div>
-      )}
+                {formatCurrency(total)}
+              </AnimatedValue>
+            </Link>
+          </m.div>
+        )}
+      </AnimatePresence>
 
       <ProductSheet
         slug={slug}
