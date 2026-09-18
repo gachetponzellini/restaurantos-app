@@ -11,7 +11,7 @@ const EMPTY_METODO: Record<PaymentMethod, number> = {
   mp_qr: 0,
   transfer: 0,
   other: 0,
-  cuenta_corriente: 0,
+  mp_manual: 0,  cuenta_corriente: 0,
 };
 
 function baseData(overrides: Partial<ShiftSummaryData> = {}): ShiftSummaryData {

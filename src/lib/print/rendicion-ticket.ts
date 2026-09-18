@@ -54,6 +54,7 @@ const METODOS: Array<[string, string]> = [
   ["mp_qr", "QR"],
   ["mp_link", "Link de pago"],
   ["transfer", "Transferencia"],
+  ["mp_manual", "Mercado Pago"],
   ["cuenta_corriente", "Cuenta corriente"],
   ["other", "Otro"],
 ];

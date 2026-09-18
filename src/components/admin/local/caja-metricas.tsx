@@ -17,6 +17,7 @@ import {
   Truck,
   UtensilsCrossed,
   Wallet,
+  Smartphone,
 } from "lucide-react";
 
 import type { PaymentMethod, VentaOrigen } from "@/lib/caja/types";
@@ -28,6 +29,7 @@ export const METHOD_LABEL: Record<PaymentMethod, string> = {
   mp_link: "MercadoPago link",
   card_manual: "Tarjeta",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
   other: "Otro",
   cuenta_corriente: "Cuenta corriente",
 };
@@ -46,6 +48,7 @@ export const METHOD_COLOR: Record<PaymentMethod, string> = {
   mp_link: "#71717A",
   card_manual: "#A1A1AA",
   transfer: "#C4C4C8",
+  mp_manual: "#71717A",
   other: "#D4D4D8",
   cuenta_corriente: "Cuenta corriente",
 };
@@ -57,6 +60,7 @@ export function methodIcon(method: PaymentMethod) {
     case "mp_link": return Link2;
     case "card_manual": return CreditCard;
     case "transfer": return Wallet;
+    case "mp_manual": return Smartphone;
     default: return MoreHorizontal;
   }
 }
@@ -70,6 +74,7 @@ const COBRO_METHOD_ORDER: PaymentMethod[] = [
   "mp_link",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ];
 

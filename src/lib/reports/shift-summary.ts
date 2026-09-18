@@ -20,6 +20,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   mp_link: "Mercado Pago (link)",
   mp_qr: "Mercado Pago (QR)",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
   other: "Otro",
   cuenta_corriente: "Cuenta corriente",
 };
@@ -30,6 +31,7 @@ const METHOD_ORDER: PaymentMethod[] = [
   "mp_qr",
   "mp_link",
   "transfer",
+  "mp_manual",
   "other",
 ];
 

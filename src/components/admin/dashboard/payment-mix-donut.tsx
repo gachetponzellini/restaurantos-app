@@ -15,6 +15,7 @@ const METHOD_META: Record<
   mp_link: { label: "Link de pago", color: "#6366f1", dot: "bg-indigo-500" },
   card_manual: { label: "Tarjeta (POS)", color: "#f59e0b", dot: "bg-amber-500" },
   transfer: { label: "Transferencia", color: "#0ea5e9", dot: "bg-sky-500" },
+  mp_manual: { label: "Mercado Pago", color: "#8b5cf6", dot: "bg-violet-500" },
   other: { label: "Otros", color: "#a1a1aa", dot: "bg-zinc-400" },
 };
 
@@ -24,6 +25,7 @@ const ORDER: PaymentMethodKey[] = [
   "mp_link",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ];
 

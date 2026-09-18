@@ -629,6 +629,7 @@ const METODO_PAPEL: { key: PaymentMethod; label: string }[] = [
   { key: "mp_link", label: "MercadoPago link" },
   { key: "card_manual", label: "Tarjeta" },
   { key: "transfer", label: "Transferencia" },
+  { key: "mp_manual", label: "Mercado Pago" },
   { key: "other", label: "Otro" },
 ];
 
@@ -723,7 +724,7 @@ export async function registrarIngreso(
 // ── Configuración de métodos de pago ──────────────────────────────
 
 const VALID_METHODS: PaymentMethod[] = [
-  "cash", "card_manual", "mp_link", "mp_qr", "transfer", "other",
+  "cash", "card_manual", "mp_link", "mp_qr", "mp_manual", "transfer", "other",
 ];
 
 export async function upsertPaymentMethodConfig(

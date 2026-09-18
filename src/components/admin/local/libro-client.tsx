@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   QrCode,
   Wallet,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,6 +61,7 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
   mp_link: "MercadoPago link",
   card_manual: "Tarjeta",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
   other: "Otro",
   cuenta_corriente: "Cuenta corriente",
 };
@@ -68,6 +70,7 @@ const METODOS: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Efectivo" },
   { value: "card_manual", label: "Tarjeta" },
   { value: "transfer", label: "Transferencia" },
+  { value: "mp_manual", label: "Mercado Pago" },
   { value: "other", label: "Otro" },
 ];
 
@@ -110,6 +113,8 @@ function iconoDe(entry: LibroEntry) {
       return CreditCard;
     case "transfer":
       return Wallet;
+      case "mp_manual":
+      return Smartphone;
     default:
       return MoreHorizontal;
   }

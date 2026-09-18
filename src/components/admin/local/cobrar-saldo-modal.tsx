@@ -34,6 +34,7 @@ const METODOS_DE_COBRANZA = [
   "cash",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ] as const;
 

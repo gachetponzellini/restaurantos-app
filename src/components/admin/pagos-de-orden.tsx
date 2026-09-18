@@ -15,6 +15,7 @@ const METODO: Record<string, string> = {
   cash: "Efectivo",
   card_manual: "Tarjeta",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
   mp_qr: "MercadoPago QR",
   mp_link: "MercadoPago link",
   other: "Otro",

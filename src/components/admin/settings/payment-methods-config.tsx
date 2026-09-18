@@ -9,6 +9,7 @@ import {
   Link2,
   ArrowRightLeft,
   CircleEllipsis,
+  Smartphone,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ const METHOD_META: {
   { method: "mp_link", defaultLabel: "MP Link", icon: <Link2 className="size-4" /> },
   { method: "mp_qr", defaultLabel: "MP QR", icon: <QrCode className="size-4" /> },
   { method: "transfer", defaultLabel: "Transferencia", icon: <ArrowRightLeft className="size-4" /> },
+  { method: "mp_manual", defaultLabel: "Mercado Pago", icon: <Smartphone className="size-4" /> },
   { method: "other", defaultLabel: "Otro", icon: <CircleEllipsis className="size-4" /> },
 ];
 

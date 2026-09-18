@@ -7,6 +7,7 @@ import {
   Link as LinkIcon,
   MoreHorizontal,
   QrCode,
+  Smartphone,
   Wallet,
 } from "lucide-react";
 
@@ -54,6 +55,9 @@ export const METHODS: Array<{
     icon: LinkIcon,
   },
   { value: "mp_qr", label: "QR Mercado Pago", corto: "QR MP", icon: QrCode },
+  // #350 — MP cobrado por fuera (la app o el QR fijo del local): sólo se
+  // registra, como la tarjeta manual. No es `isMpMethod`: no abre ningún flujo.
+  { value: "mp_manual", label: "Mercado Pago", corto: "MP", icon: Smartphone },
   {
     value: "transfer",
     label: "Transferencia",
@@ -90,6 +94,10 @@ export function metodosOfrecidos(opts: {
   return METHODS.filter((m) => {
     if (opts.allowedMethods && !opts.allowedMethods.includes(m.value))
       return false;
+    // #350 — Link y QR de MP ocultos por ahora: el local cobra MP por fuera y
+    // lo registra con `mp_manual`. El flujo sigue en el código; volver a
+    // mostrarlos es borrar este renglón.
+    if (isMpMethod(m.value)) return false;
     if (isMpMethod(m.value) && !opts.mp) return false;
     // Sin la prop no hay fiado: el rol no puede, o el negocio no lo usa.
     if (m.value === "cuenta_corriente" && !opts.cuentaCorriente) return false;

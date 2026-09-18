@@ -315,9 +315,18 @@ describe("<CobroForm /> — las reglas de dinero, una sola vez", () => {
     expect(new Set(ids).size).toBe(1);
   });
 
-  it("sin capacidad MP no ofrece MP", () => {
+  it("sin capacidad MP no ofrece Link ni QR de MP", () => {
     setup();
-    expect(screen.queryByRole("button", { name: /mercado pago/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /link mercado pago/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /qr mercado pago/i })).toBeNull();
+  });
+
+  // #350 — Link y QR ocultos aunque el negocio tenga MP; queda el que sólo registra.
+  it("con capacidad MP ofrece sólo «Mercado Pago» (registro), sin link ni QR", () => {
+    setup({ mp: { start: vi.fn(), onConfirmed: vi.fn() } });
+    expect(screen.getByRole("button", { name: /^\d?\s?mercado pago$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /link mercado pago/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /qr mercado pago/i })).toBeNull();
   });
 
   it("allowedMethods filtra los métodos ofrecidos", () => {

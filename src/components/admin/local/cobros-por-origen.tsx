@@ -41,6 +41,7 @@ const METHOD_ORDER: PaymentMethod[] = [
   "mp_link",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ];
 

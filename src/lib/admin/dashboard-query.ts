@@ -430,6 +430,7 @@ export type PaymentMethodKey =
   | "mp_link"
   | "mp_qr"
   | "transfer"
+  | "mp_manual"
   | "other";
 
 export type PaymentMix = {
@@ -455,6 +456,7 @@ const EMPTY_MIX: Record<
   mp_link: { count: 0, amountCents: 0 },
   mp_qr: { count: 0, amountCents: 0 },
   transfer: { count: 0, amountCents: 0 },
+  mp_manual: { count: 0, amountCents: 0 },
   other: { count: 0, amountCents: 0 },
 };
 

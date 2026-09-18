@@ -15,6 +15,7 @@ export const METODOS_MANUALES = [
   "cash",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ] as const satisfies readonly PaymentMethod[];
 

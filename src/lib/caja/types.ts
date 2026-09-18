@@ -147,6 +147,8 @@ export type PaymentMethod =
   | "mp_link"
   | "mp_qr"
   | "transfer"
+  /** Mercado Pago cobrado por fuera (app/QR del local): sólo se registra, no abre ningún flujo de MP. */
+  | "mp_manual"
   | "other"
   /**
    * Fiado (spec 141). Cierra el ticket como cualquier otro método —la mesa se

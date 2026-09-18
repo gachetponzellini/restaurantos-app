@@ -112,6 +112,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   mp: "Mercado Pago",
   card_manual: "Tarjeta",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
 };
 
 /**

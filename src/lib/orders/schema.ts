@@ -257,6 +257,7 @@ export const VentaMostradorInput = z.object({
     "cash",
     "card_manual",
     "transfer",
+    "mp_manual",
     "other",
     // spec 141 — el mostrador también fía: es justo donde el socio dice
     // «ponelo en mi cuenta», sin mesa de por medio.

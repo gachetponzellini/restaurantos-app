@@ -59,17 +59,18 @@ const registrar = () =>
   screen.getByRole("button", { name: /registrar pago/i }) as HTMLButtonElement;
 
 describe("<CobrarSaldoModal /> — el selector es el mismo de las otras pantallas", () => {
-  it("ofrece los cuatro métodos que el server sabe registrar, y ninguno más", () => {
+  it("ofrece los cinco métodos que el server sabe registrar, y ninguno más", () => {
     abrir();
     expect(metodos().map((b) => b.textContent)).toEqual([
       expect.stringContaining("Efectivo"),
       expect.stringContaining("Tarjeta"),
+      expect.stringContaining("Mercado Pago"),
       expect.stringContaining("Transferencia"),
       expect.stringContaining("Otro"),
     ]);
-    // No se paga una deuda con otra deuda, y MP no pasa por acá.
+    // No se paga una deuda con otra deuda, y el flujo real de MP no pasa por acá.
     expect(screen.queryByText(/cuenta corriente/i)).toBeNull();
-    expect(screen.queryByText(/mercado pago/i)).toBeNull();
+    expect(screen.queryByText(/link mercado pago|qr mercado pago/i)).toBeNull();
   });
 
   it("los dígitos eligen método, como en el cobro de la mesa (spec 075)", async () => {

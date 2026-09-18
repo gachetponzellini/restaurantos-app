@@ -88,6 +88,7 @@ const METODOS_CON_EXCEDENTE = new Set([
   "cash",
   "card_manual",
   "transfer",
+  "mp_manual",
   "other",
 ]);
 

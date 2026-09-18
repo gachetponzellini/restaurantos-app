@@ -89,7 +89,7 @@ export async function setCuentaCorrienteHabilitada(
 export async function registrarCobranza(input: {
   customerId: string;
   amount_cents: number;
-  method: "cash" | "transfer" | "card_manual" | "other";
+  method: "cash" | "transfer" | "card_manual" | "mp_manual" | "other";
   cajaId: string | null;
   notes?: string | null;
   slug: string;

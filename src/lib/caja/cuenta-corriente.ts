@@ -98,6 +98,7 @@ export function armarLibro(
 const METODO_LABEL: Record<string, string> = {
   cash: "Efectivo",
   transfer: "Transferencia",
+  mp_manual: "Mercado Pago",
   card_manual: "Tarjeta",
   other: "Otro",
 };

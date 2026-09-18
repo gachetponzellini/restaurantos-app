@@ -36,7 +36,7 @@ const EMPTY_METODO = {
   mp_qr: 0,
   transfer: 0,
   other: 0,
-  cuenta_corriente: 0,
+  mp_manual: 0,  cuenta_corriente: 0,
 };
 
 /**
