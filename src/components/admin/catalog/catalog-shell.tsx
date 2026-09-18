@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, type ComponentType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 
@@ -24,7 +24,10 @@ import type {
 import type { AdminDailyMenu } from "@/lib/admin/daily-menu-query";
 import type { KitchenStockFull } from "@/lib/ingredients/queries";
 import type { MermaReportItem } from "@/lib/ingredients/merma";
-import type { IngredientOverview, ProductCosteo } from "@/lib/ingredients/types";
+import type {
+  IngredientOverview,
+  ProductCosteo,
+} from "@/lib/ingredients/types";
 import type { StockOverviewItem } from "@/lib/stock/queries";
 import { cn } from "@/lib/utils";
 import { catalogAttention } from "@/lib/catalog/attention";
@@ -32,6 +35,17 @@ import {
   CatalogHeaderActionProvider,
   CatalogHeaderActionSlot,
 } from "@/components/admin/catalog/ui/header-action";
+import {
+  CatalogDataProvider,
+  type CatalogData,
+} from "@/components/admin/catalog/ui/catalog-data";
+import {
+  CatalogEditorHost,
+  type CatalogEditorProps,
+  type CatalogEditorRef,
+  type CatalogEntityKind,
+} from "@/components/admin/catalog/ui/editor-host";
+import { ProductEditor } from "@/components/admin/catalog/product-editor";
 
 type Tab =
   | "productos"
@@ -149,15 +163,7 @@ function TabsInner({
   }, [costeo]);
 
   const action =
-    active === "productos" ? (
-      <BrandButton
-        href={`/${slug}/admin/catalogo/productos/nuevo`}
-        size="md"
-        leadingIcon={<Plus />}
-      >
-        Nuevo producto
-      </BrandButton>
-    ) : active === "menu-del-dia" ? (
+    active === "menu-del-dia" ? (
       <BrandButton
         href={`/${slug}/admin/menu-del-dia/nuevo`}
         size="md"
@@ -167,79 +173,123 @@ function TabsInner({
       </BrandButton>
     ) : null;
 
+  const data: CatalogData = {
+    slug,
+    businessId,
+    superCategories,
+    categories,
+    stations,
+    products,
+    menus,
+    todayDow,
+    ingredients,
+    costeo,
+    stockBebidas,
+    stockCocina,
+    stockBar,
+  };
+
   return (
-    <CatalogHeaderActionProvider>
-      <PageHeader
-        eyebrow="Gestión"
-        title="Productos e inventario"
-        description="Tu carta, insumos y costos, más el stock de bebidas y cocina. Todo lo que ofrecés y lo que tenés en el local."
-        action={
-          <div className="flex items-center gap-2">
-            <CatalogHeaderActionSlot />
-            {action}
-            <AyudaChip slug={slug} tema="catalogo" />
+    <CatalogDataProvider value={data}>
+      <CatalogEditorHost
+        editors={EDITORS}
+        labelOf={(ref) => labelOf(data, ref)}
+      >
+        <CatalogHeaderActionProvider>
+          <PageHeader
+            eyebrow="Gestión"
+            title="Productos e inventario"
+            description="Tu carta, insumos y costos, más el stock de bebidas y cocina. Todo lo que ofrecés y lo que tenés en el local."
+            action={
+              <div className="flex items-center gap-2">
+                <CatalogHeaderActionSlot />
+                {action}
+                <AyudaChip slug={slug} tema="catalogo" />
+              </div>
+            }
+          />
+
+          <CatalogTabs
+            active={active}
+            onChange={setTab}
+            counts={counts}
+            attention={attention}
+          />
+
+          <div>
+            {active === "productos" && <CatalogClient />}
+            {active === "categorias" && (
+              <CategoriasTab
+                slug={slug}
+                superCategories={superCategories}
+                stations={stations}
+                categories={categories}
+                products={products}
+              />
+            )}
+            {active === "sectores" && (
+              <SectoresTab
+                slug={slug}
+                stations={stations}
+                categories={categories}
+                products={products}
+              />
+            )}
+            {active === "menu-del-dia" && (
+              <DailyMenuList slug={slug} menus={menus} todayDow={todayDow} />
+            )}
+            {active === "insumos" && (
+              <IngredientsTab slug={slug} ingredients={ingredients} />
+            )}
+            {active === "costeo" && <CosteoTab items={costeo} />}
+            {active === "stock" && (
+              <StockTab
+                slug={slug}
+                bebidas={stockBebidas}
+                cocina={stockCocina}
+                bar={stockBar}
+                barCandidates={barCandidates}
+                costByProduct={costByProduct}
+                merma={merma}
+                mermaFrom={mermaFrom}
+                mermaTo={mermaTo}
+              />
+            )}
           </div>
-        }
-      />
-
-      <CatalogTabs
-        active={active}
-        onChange={setTab}
-        counts={counts}
-        attention={attention}
-      />
-
-      <div>
-        {active === "productos" && (
-          <CatalogClient
-            slug={slug}
-            businessId={businessId}
-            categories={categories}
-            stations={stations}
-            products={products}
-            ingredients={ingredients}
-          />
-        )}
-        {active === "categorias" && (
-          <CategoriasTab
-            slug={slug}
-            superCategories={superCategories}
-            stations={stations}
-            categories={categories}
-            products={products}
-          />
-        )}
-        {active === "sectores" && (
-          <SectoresTab
-            slug={slug}
-            stations={stations}
-            categories={categories}
-            products={products}
-          />
-        )}
-        {active === "menu-del-dia" && (
-          <DailyMenuList slug={slug} menus={menus} todayDow={todayDow} />
-        )}
-        {active === "insumos" && (
-          <IngredientsTab slug={slug} ingredients={ingredients} />
-        )}
-        {active === "costeo" && <CosteoTab items={costeo} />}
-        {active === "stock" && (
-          <StockTab
-            slug={slug}
-            bebidas={stockBebidas}
-            cocina={stockCocina}
-            bar={stockBar}
-            barCandidates={barCandidates}
-            costByProduct={costByProduct}
-            merma={merma}
-            mermaFrom={mermaFrom}
-            mermaTo={mermaTo}
-          />
-        )}
-      </div>
-    </CatalogHeaderActionProvider>
+        </CatalogHeaderActionProvider>
+      </CatalogEditorHost>
+    </CatalogDataProvider>
   );
+}
+
+/**
+ * Los editores del catálogo, por tipo de entidad (spec 205 · D6). Estático: el
+ * host los monta con la key de la entidad, y los datos los leen del contexto.
+ */
+const EDITORS: Partial<
+  Record<CatalogEntityKind, ComponentType<CatalogEditorProps>>
+> = {
+  product: ProductEditor,
+};
+
+/** Nombre de una entidad para el «Volver a X» de los editores enlazados. */
+function labelOf(d: CatalogData, ref: CatalogEditorRef): string {
+  switch (ref.kind) {
+    case "product":
+      return d.products.find((p) => p.id === ref.id)?.name ?? "producto";
+    case "category":
+      return d.categories.find((c) => c.id === ref.id)?.name ?? "categoría";
+    case "superCategory":
+      return (
+        d.superCategories.find((c) => c.id === ref.id)?.name ?? "supercategoría"
+      );
+    case "menu":
+      return d.menus.find((m) => m.id === ref.id)?.name ?? "menú";
+    case "station":
+      return d.stations.find((s) => s.id === ref.id)?.name ?? "sector";
+    case "ingredient":
+      return d.ingredients.find((i) => i.id === ref.id)?.name ?? "insumo";
+  }
 }
 
 /**
@@ -249,7 +299,12 @@ function TabsInner({
  */
 const TAB_GROUPS: {
   label: string;
-  tabs: { id: Tab; label: string; count: keyof Counts; alert?: keyof Attention }[];
+  tabs: {
+    id: Tab;
+    label: string;
+    count: keyof Counts;
+    alert?: keyof Attention;
+  }[];
 }[] = [
   {
     label: "Carta",
@@ -310,7 +365,10 @@ function CatalogTabs({
       {TAB_GROUPS.map((g, gi) => (
         <div key={g.label} className="flex items-end">
           {gi > 0 && (
-            <span aria-hidden className="mx-2 mb-2.5 h-[22px] w-px bg-zinc-200" />
+            <span
+              aria-hidden
+              className="mx-2 mb-2.5 h-[22px] w-px bg-zinc-200"
+            />
           )}
           <div role="group" aria-label={g.label} className="flex flex-col">
             <span

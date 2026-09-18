@@ -31,7 +31,13 @@ const insumo = (stockStatus: "ok" | "low" | "out", isActive = true) =>
 describe("catalogAttention — badges de las tabs (spec 205 · D6)", () => {
   it("costeo cuenta sólo los platos con receta que pierden plata", () => {
     const r = catalogAttention({
-      costeo: [costeo(-100), costeo(-1), costeo(0), costeo(500), costeo(-50, false)],
+      costeo: [
+        costeo(-100),
+        costeo(-1),
+        costeo(0),
+        costeo(500),
+        costeo(-50, false),
+      ],
       stockBebidas: [],
       stockBar: [],
       ingredients: [],
@@ -44,7 +50,12 @@ describe("catalogAttention — badges de las tabs (spec 205 · D6)", () => {
       costeo: [],
       stockBebidas: [],
       stockBar: [],
-      ingredients: [insumo("ok"), insumo("low"), insumo("out"), insumo("low", false)],
+      ingredients: [
+        insumo("ok"),
+        insumo("low"),
+        insumo("out"),
+        insumo("low", false),
+      ],
     });
     expect(r.insumos).toBe(2);
   });
@@ -61,7 +72,12 @@ describe("catalogAttention — badges de las tabs (spec 205 · D6)", () => {
 
   it("sin nada que atender, todo en cero", () => {
     expect(
-      catalogAttention({ costeo: [], stockBebidas: [], stockBar: [], ingredients: [] }),
+      catalogAttention({
+        costeo: [],
+        stockBebidas: [],
+        stockBar: [],
+        ingredients: [],
+      }),
     ).toEqual({ costeo: 0, insumos: 0, stock: 0 });
   });
 });

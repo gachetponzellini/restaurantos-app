@@ -1,4 +1,7 @@
-import type { IngredientOverview, ProductCosteo } from "@/lib/ingredients/types";
+import type {
+  IngredientOverview,
+  ProductCosteo,
+} from "@/lib/ingredients/types";
 import type { StockOverviewItem } from "@/lib/stock/queries";
 
 /**

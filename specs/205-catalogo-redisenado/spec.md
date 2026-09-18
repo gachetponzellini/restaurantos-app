@@ -49,7 +49,7 @@ Relevamiento en vivo (`/demo/admin/catalogo`, como Sofía, 398 productos):
 - Filas de ~52px en una tabla: miniatura 34px · nombre + descripción en una línea ·
   **Comanda** (sector efectivo, con «+ 2ª/3ª» si tiene; «Sin comanda» si `sin_comanda`)
   · **Precio** · **Food cost %** (de `getCosteoOverview`, ya se trae en la página; color
-  por umbral ≤30 / ≤40 / >40; «sin receta» si no hay) · **switch Disponible**.
+  por umbral ≤35 / ≤50 / >50 — los mismos de la receta, `lib/catalog/food-cost.ts`; «sin receta» si no hay) · **switch Disponible**.
 - Agrupada por categoría con header pegajoso (nombre + cantidad), en el orden de la carta.
 - Pills de estado en la fila: `Agotado` (`!is_available`), `Fuera de la carta online`
   (`!show_online`), `De baja` (`!is_active`, fila atenuada, switch deshabilitado),
@@ -209,21 +209,21 @@ Se implementa por fases, una PR por fase; cada una deja el catálogo usable.
 - [x] Lógica del editor: `lib/catalog/editor-nav.ts` (‹ › en la lista filtrada, pila «Volver»).
 - [x] Tabs agrupadas + badges de atención (`lib/catalog/attention.ts`) + slot de acción
       en el header (`CatalogHeaderAction`, portal).
-- [ ] `EntityEditor` visual (header ‹ ›, índice con scroll-spy, footer, guard) — **espera a
-      que la 204 commitee `components/ui/modal.tsx`**.
+- [x] `EntityEditor` (header ‹ ›, índice con scroll-spy, footer, guard, «Volver») +
+      `CatalogEditorHost` (un editor abierto a la vez, en el shell) + `CatalogDataProvider`.
 
 **Fase 1 · Productos**
 
-- [ ] `ProductTable` (filas, grupos, pills, columnas) + reemplazo de `ProductRow`.
-- [ ] Rail de categorías + barra móvil; control segmentado con conteos (incl. «Ocultos»).
-- [ ] Navegación por teclado en la lista (`/`, ↑↓, Enter) — test.
-- [ ] Switch de disponibilidad en la fila (optimista + rollback) — test.
-- [ ] Food cost por fila desde `costeo` (sin query nueva).
-- [ ] `ProductDialog` sobre `modal.tsx` 204: header con ‹ ›, índice con scroll-spy,
-      secciones; `ProductForm` partido en secciones sin tocar schema.
-- [ ] Guardar sin cerrar + guard de cambios sin guardar (cerrar / ‹ › / Esc) — test.
-- [ ] «Nuevo producto» en el modal.
-- [ ] Mobile: hoja desde abajo, tabs de secciones.
+- [x] `ProductTable` (filas, grupos, pills, columnas) + reemplazo de `ProductRow`.
+- [x] Rail de categorías + barra móvil; control segmentado con conteos (incl. «Ocultos»).
+- [x] Navegación por teclado en la lista (`/`, ↑↓, Enter) — test.
+- [x] Switch de disponibilidad en la fila (optimista + rollback) — test.
+- [x] Food cost por fila desde `costeo` (sin query nueva).
+- [x] `ProductEditor` sobre `EntityEditor`; campos en `product-fields.tsx`, compartidos con
+      `ProductForm` (la página) sin tocar schema.
+- [x] Guardar sin cerrar + guard de cambios sin guardar (cerrar / ‹ › / Esc) — test.
+- [x] «Nuevo producto» en el modal.
+- [x] Mobile: hoja desde abajo, tabs de secciones.
 
 **Fase 2 · Carta**: Categorías + supercategorías (D7), Menú del día (D8).
 **Fase 3 · Cocina**: Sectores (D9).

@@ -73,7 +73,10 @@ type Props<T> = {
   className?: string;
 };
 
-type Section<T> = { group: CatalogGroup | null; items: { row: T; index: number }[] };
+type Section<T> = {
+  group: CatalogGroup | null;
+  items: { row: T; index: number }[];
+};
 
 /** Ignora el click si viene de un control dentro de la fila. */
 function fromControl(target: EventTarget | null, row: HTMLElement) {
@@ -151,7 +154,7 @@ export function CatalogTable<T>({
         onOpen(rows[Number(i)], Number(i));
       }}
       className={cn(
-        "bg-card overflow-clip rounded-2xl border border-zinc-200/80",
+        "bg-card overflow-clip rounded-2xl border border-zinc-200/80 text-sm",
         className,
       )}
     >
@@ -172,7 +175,9 @@ export function CatalogTable<T>({
               <div
                 key={c.key}
                 role="columnheader"
-                className={cn(c.align === "end" && "justify-self-end text-right")}
+                className={cn(
+                  c.align === "end" && "justify-self-end text-right",
+                )}
               >
                 {c.header}
               </div>
@@ -229,7 +234,12 @@ export function CatalogTable<T>({
                             href={href(row)}
                             tabIndex={-1}
                             onClick={(e) => {
-                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+                              if (
+                                e.metaKey ||
+                                e.ctrlKey ||
+                                e.shiftKey ||
+                                e.altKey
+                              )
                                 return;
                               e.preventDefault();
                               onOpen(row, index);
@@ -291,11 +301,14 @@ function GroupHeader({
   const cls =
     "sticky top-[var(--catalog-sticky-top,0px)] z-[1] flex w-full items-center justify-between gap-3 border-b border-zinc-200/80 bg-zinc-100/95 px-3.5 py-1.5 text-left text-[12.5px] font-semibold text-zinc-800 backdrop-blur-sm";
   return group.onClick ? (
-    <button type="button" onClick={group.onClick} className={cn(cls, "hover:bg-zinc-200/70")}>
+    <button
+      type="button"
+      onClick={group.onClick}
+      className={cn(cls, "hover:bg-zinc-200/70")}
+    >
       {inner}
     </button>
   ) : (
     <div className={cls}>{inner}</div>
   );
 }
-

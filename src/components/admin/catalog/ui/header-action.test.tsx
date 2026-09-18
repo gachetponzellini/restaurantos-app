@@ -22,7 +22,9 @@ describe("CatalogHeaderAction — la acción de la tab va al header (spec 205 ·
       </CatalogHeaderActionProvider>,
     );
     expect(
-      within(screen.getByTestId("header")).getByRole("button", { name: "Nueva categoría" }),
+      within(screen.getByTestId("header")).getByRole("button", {
+        name: "Nueva categoría",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -32,6 +34,8 @@ describe("CatalogHeaderAction — la acción de la tab va al header (spec 205 ·
         <button type="button">Nuevo sector</button>
       </CatalogHeaderAction>,
     );
-    expect(screen.getByRole("button", { name: "Nuevo sector" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Nuevo sector" }),
+    ).toBeInTheDocument();
   });
 });

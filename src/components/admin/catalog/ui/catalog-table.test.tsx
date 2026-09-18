@@ -6,7 +6,14 @@ import { createRef } from "react";
 import { CatalogTable, type CatalogTableHandle } from "./catalog-table";
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...rest}>
       {children}
     </a>
@@ -21,7 +28,9 @@ const rows: Row[] = [
   { id: "3", name: "Coca-Cola", cat: "Gaseosas", price: 3400 },
 ];
 
-function setup(props: Partial<React.ComponentProps<typeof CatalogTable<Row>>> = {}) {
+function setup(
+  props: Partial<React.ComponentProps<typeof CatalogTable<Row>>> = {},
+) {
   const onOpen = vi.fn();
   const ref = createRef<CatalogTableHandle>();
   render(
@@ -33,8 +42,19 @@ function setup(props: Partial<React.ComponentProps<typeof CatalogTable<Row>>> = 
       rowLabel={(r) => r.name}
       group={(r) => ({ key: r.cat, label: r.cat })}
       columns={[
-        { key: "name", header: "Producto", width: "minmax(0,1fr)", cell: (r) => r.name },
-        { key: "price", header: "Precio", width: "88px", align: "end", cell: (r) => `$${r.price}` },
+        {
+          key: "name",
+          header: "Producto",
+          width: "minmax(0,1fr)",
+          cell: (r) => r.name,
+        },
+        {
+          key: "price",
+          header: "Precio",
+          width: "88px",
+          align: "end",
+          cell: (r) => `$${r.price}`,
+        },
         {
           key: "sw",
           header: "Disponible",
@@ -61,7 +81,9 @@ describe("CatalogTable (spec 205 · D1/D2)", () => {
     const aguas = screen.getByRole("rowgroup", { name: "Aguas" });
     expect(within(aguas).getByText("2")).toBeInTheDocument();
     expect(within(aguas).getAllByRole("row")).toHaveLength(2);
-    expect(screen.getByRole("rowgroup", { name: "Gaseosas" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("rowgroup", { name: "Gaseosas" }),
+    ).toBeInTheDocument();
   });
 
   it("click en la fila abre", async () => {

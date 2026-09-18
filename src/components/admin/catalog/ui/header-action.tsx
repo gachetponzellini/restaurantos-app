@@ -13,11 +13,18 @@ import { createPortal } from "react-dom";
  * sólo presta el lugar. Por eso es un portal y no una prop que suba.
  */
 
-type Ctx = { target: HTMLElement | null; setTarget: (el: HTMLElement | null) => void };
+type Ctx = {
+  target: HTMLElement | null;
+  setTarget: (el: HTMLElement | null) => void;
+};
 
 const HeaderActionContext = createContext<Ctx | null>(null);
 
-export function CatalogHeaderActionProvider({ children }: { children: ReactNode }) {
+export function CatalogHeaderActionProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   return (
     <HeaderActionContext.Provider value={{ target, setTarget }}>
