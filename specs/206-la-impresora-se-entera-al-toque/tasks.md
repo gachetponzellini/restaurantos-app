@@ -80,3 +80,18 @@ función, con el OK de Juan.
       y golf con el config nuevo.
 - [ ] Una semana después: p90/max de `print_jobs` e invocaciones de Vercel
       contra el objetivo del spec. Anotarlo en «Lo medido después».
+
+## Pendiente post-deploy (2026-09-18)
+
+- [x] Migración 0114 + Edge Function en prod; agente 2026-09-18.2 publicado.
+- [x] Local: aviso → pull en 0,16 s; contrato idéntico byte a byte; RLS del
+      canal (propio sí, ajeno no).
+- [ ] Reinstalar el "Agente principal" de kcc y el de golf.
+- [ ] Rotar/borrar la key → borrar el usuario de Auth del agente (hoy queda
+      vivo: sólo puede escuchar avisos vacíos de su negocio, pero hay que
+      cerrarlo).
+- [ ] Filtrar `print-agent+…` en los listados que leen `auth.users`.
+- [ ] Test de contrato automatizado (hoy se verificó a mano con curl).
+- [ ] Mirar por qué la Terminal abrió dos sesiones seguidas al arrancar
+      (18:49:08 y 18:49:16): ¿el primer join se rechazó?
+- [ ] Una semana después: p90/max de `print_jobs` e invocaciones de Vercel.

@@ -2,7 +2,20 @@
 
 **Issue:** [#341](https://github.com/gachetponzellini/RestaurantOS-app/issues/341) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 📋 propuesta v2 — esperando aprobación de Juan (2026-09-18).
+**Estado:** 🚧 **en producción parcial** (2026-09-18). Aprobada por Juan e
+implementada el mismo día, con Juan en kcc reinstalando:
+- migración `0114` y Edge Function `print-agent` publicadas en prod;
+- instalador 2026-09-18.2 publicado en el bucket;
+- la **Terminal Mozos** de kcc ya corre en modo push (logs: `/session` 200 y
+  `/pull` cada ~30 s).
+
+**Diferencia con el diseño (D2):** la función no importa un módulo
+refactorizado. Corre la ruta de Vercel **tal cual**, empaquetada con esbuild y
+con adaptadores para `next/server` y el service client
+(`src/lib/print-agent/edge/`). Da lo mismo por construcción y sin refactorizar
+2.100 líneas bajo presión. Verificado byte a byte contra la ruta en local.
+
+**Pendiente:** ver `tasks.md` § Pendiente post-deploy.
 
 **Input:**
 - La encargada, vía Juan (2026-09-18): *"se está quejando que tarda mucho en
