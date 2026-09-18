@@ -7,6 +7,10 @@ import { requireMozoActionContext } from "@/lib/mozo/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
 
+import {
+  decidirCuentaAlCobrar,
+  type CuentaAlCobrar,
+} from "./cuenta-al-cobrar";
 import { resolveCuentaPrinter } from "./cuenta-printer";
 
 type GenericClient = SupabaseClient;
@@ -25,7 +29,17 @@ type GenericClient = SupabaseClient;
 export async function imprimirCuenta(
   tableId: string,
   businessSlug: string,
-): Promise<ActionResult<{ print_job_id: string; reprint: boolean }>> {
+  /**
+   * Issue #340 — lo pide «Cobrar», no el botón. Sólo encola si es la primera
+   * cuenta de la orden, y la falta de comandera no es error: el cobro sigue.
+   */
+  opts?: { alCobrar?: boolean },
+): Promise<
+  ActionResult<
+    | { print_job_id: string; reprint: boolean }
+    | { print_job_id: null; omitida: Exclude<CuentaAlCobrar, "imprimir"> }
+  >
+> {
   const business = await getBusiness(businessSlug);
   if (!business) return actionError("Negocio no encontrado.");
 
@@ -97,11 +111,6 @@ export async function imprimirCuenta(
       business as { cuenta_printer_enabled?: boolean | null }
     ).cuenta_printer_enabled,
   });
-  if (!printer) {
-    return actionError(
-      `No hay comandera de cuentas configurada para ${floorPlan.name}. Configurala en Ajustes → Operación del local.`,
-    );
-  }
 
   // ¿Ya se imprimió antes esta cuenta? Entonces el papel sale marcado como
   // reimpresión, para que la mesa no termine con dos tickets distintos sin
@@ -111,6 +120,22 @@ export async function imprimirCuenta(
     .select("id", { count: "exact", head: true })
     .eq("order_id", orderId)
     .eq("kind", "cuenta");
+
+  if (opts?.alCobrar) {
+    const decision = decidirCuentaAlCobrar({
+      previos,
+      hayComandera: !!printer,
+    });
+    if (decision !== "imprimir") {
+      return actionOk({ print_job_id: null, omitida: decision });
+    }
+  }
+
+  if (!printer) {
+    return actionError(
+      `No hay comandera de cuentas configurada para ${floorPlan.name}. Configurala en Ajustes → Operación del local.`,
+    );
+  }
   const reprint = (previos ?? 0) > 0;
 
   const { data: inserted, error } = await service

@@ -161,7 +161,9 @@ export function CuentaClient({
       return;
     }
     toast.success(
-      r.data.reprint ? "Cuenta reimpresa." : "Cuenta enviada a la impresora.",
+      "reprint" in r.data && r.data.reprint
+        ? "Cuenta reimpresa."
+        : "Cuenta enviada a la impresora.",
     );
   };
   const [cancelarItemId, setCancelarItemId] = useState<string | null>(null);
@@ -211,6 +213,22 @@ export function CuentaClient({
           toast.error(r.error);
           return;
         }
+      }
+      // Issue #340 — Cobrar imprime la cuenta la primera vez (el ticket de
+      // control de MaxiRest), así la encargada no aprieta «Imprimir cuenta»
+      // antes. Va DESPUÉS de la propina/descuento para que el papel salga con
+      // los números finales. Nada de acá frena el cobro: la server action ya
+      // omite la segunda vez, y sin comandera o con error sólo se avisa.
+      const impresa = await imprimirCuenta(tableId, slug, { alCobrar: true });
+      if (!impresa.ok) {
+        toast.warning(`No salió la cuenta: ${impresa.error}`);
+      } else if (impresa.data.print_job_id) {
+        toast.success("Cuenta enviada a la impresora.");
+      } else if (
+        "omitida" in impresa.data &&
+        impresa.data.omitida === "sin_comandera"
+      ) {
+        toast.warning("No hay comandera de cuentas: la cuenta no se imprimió.");
       }
       if (embedded) onCobrar?.();
       else router.push(cobrarTarget);
