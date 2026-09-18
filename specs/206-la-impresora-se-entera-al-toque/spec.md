@@ -1,241 +1,268 @@
-# 206 · La impresora se entera al toque
+# 206 · La impresora se entera al toque — y habla con Supabase, no con Vercel
 
 **Issue:** [#341](https://github.com/gachetponzellini/RestaurantOS-app/issues/341) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 📋 propuesta — esperando aprobación de Juan (2026-09-18).
+**Estado:** 📋 propuesta v2 — esperando aprobación de Juan (2026-09-18).
 
-**Input:** la encargada, vía Juan (2026-09-18): *"se está quejando que tarda
-mucho en imprimir, capaz habría que pensar en un cambio de implementación del
-print agent, otra tecnología u otra arquitectura"*. Juan eligió la opción B del
-[análisis](../../../../wiki/analyses/print-agent-latencia.md): push.
+**Input:**
+- La encargada, vía Juan (2026-09-18): *"se está quejando que tarda mucho en
+  imprimir"*. Juan eligió la opción B del
+  [análisis](../../../../wiki/analyses/print-agent-latencia.md): push.
+- Juan, mismo día: *"cambiar la lógica del print agent para que sea con supa en
+  vez de a través de vercel"*. La v1 de este spec seguía pidiendo el ticket a
+  Vercel; esta versión **saca a Vercel del camino del agente**.
 
-**Depende de:** [`183`](../183-el-agente-que-pregunta-cada-segundo/spec.md) (la
-retención, `next_poll_ms`, el latido adentro del pull),
-[`124`](../124-print-agents-por-alcance/spec.md) (varios agentes por negocio,
-alcance por impresora), [`051`](../051-print-agent-render-server/spec.md) (el
-server arma el ticket; el agente es un relay),
-[`046`](../046-print-agent-autoinstalador/spec.md) (key por agente, instalador).
+**Depende de:** [`183`](../183-el-agente-que-pregunta-cada-segundo/spec.md)
+(retención, `next_poll_ms`, latido en el pull),
+[`124`](../124-print-agents-por-alcance/spec.md) (alcance por impresora),
+[`051`](../051-print-agent-render-server/spec.md) (el server arma el ticket),
+[`181`](../181-el-control-sale-por-la-terminal/spec.md) +
+[#342](https://github.com/gachetponzellini/RestaurantOS-app/issues/342) (la
+comandera de quien pidió), [`046`](../046-print-agent-autoinstalador/spec.md)
+(key por agente, instalador).
 
 ---
 
 ## Por qué
 
-El agente **pregunta**. Aunque la 183 lo volvió barato (retención de 25 s), un
-papel que aparece mientras el agente duerme entre dos retenciones espera ese
-sueño completo. Medido en `print_jobs`, de emitido a impreso, en los últimos
-10 días:
+Hay dos problemas, y la misma forma los causa.
+
+**1. La cola de latencia.** El agente *pregunta*. Un papel que aparece mientras
+el agente duerme entre dos retenciones espera ese sueño completo. En
+`print_jobs`, de emitido a impreso, últimos 10 días:
 
 | local | papel | n | p50 | p90 | max |
 |---|---|---|---|---|---|
 | kcc | cuenta | 16 | 2,2 s | 11,2 s | 28,6 s |
 | kcc | control | 11 | 5,8 s | 51,1 s | 68,9 s |
 
-La mediana está bien. **La cola es la queja:** kcc, 2026-09-18, la cuenta se
-pide a las 14:16:11, no sale, se vuelve a pedir a las 14:16:23 y las dos salen
-juntas a las 14:16:40.
+Caso: kcc, 2026-09-18. La cuenta se pide a las 14:16:11, no sale, se vuelve a
+pedir a las 14:16:23 y las dos salen juntas a las 14:16:40.
 
-Las cuatro causas están en el análisis. Ninguna es la red: la base
-(`us-east-1`) y Vercel (`iad1`) están pegadas. Es la **forma**: preguntar tiene
-un hueco, y achicarlo cuesta requests. Que la base **avise** no tiene hueco.
+**2. El agente vive en Vercel.** El 70% de la factura de Vercel era el
+print-agent (#304). La 183 la bajó un 90%, pero cada agente sigue siendo una
+function de Vercel retenida 25 s, dos veces por minuto, todo el día. Y "ojo que
+ahí está gastando todavía" (Discord, 2026-09-17). El agente es un proceso de
+máquina a máquina que sólo lee y escribe en la base: **no tiene por qué pasar
+por el deploy de Next**.
 
-## La idea en una línea
-
-Cuando aparece algo para imprimir, Postgres manda un aviso por **Supabase
-Realtime** a un canal del negocio. El agente está escuchando por websocket y, al
-recibirlo, hace **el mismo GET de hoy**. El long-poll queda como red de
-seguridad.
+## La idea
 
 ```
-insert print_job / comanda_items ──trigger──▶ realtime.send('print-agent:<biz>')
-                                                     │  (~100–300 ms)
-                                   agente (websocket) ◀┘
-                                        │ GET /api/print-agent?wait_ms=0   (igual que hoy)
-                                        ▼
-                                     imprime ── report (sin bloquear el siguiente)
+server action (Vercel, como hoy) ── insert print_job / comanda_items
+                                             │ trigger
+                                             ▼
+                          realtime.send('print-agent:<biz>')   ← Supabase
+                                             │ ~100–300 ms
+                     agente (websocket, Realtime) ◀┘
+                                             │ POST  functions/v1/print-agent/pull   ← Supabase Edge Function
+                                             ▼                 (x-region: us-east-1, pegada a la base)
+                                          imprime ── POST functions/v1/print-agent/ack   (sin bloquear el siguiente)
 ```
 
-El aviso **no lleva datos**: sólo dice «hay algo». El ticket lo sigue armando
-el server (051), con el alcance del agente (124) y su key. Eso es lo que hace
-que el canal no pueda filtrar nada de otro negocio, ni del mismo.
+**El agente habla sólo con Supabase:** Realtime para enterarse y una **Edge
+Function** para pedir y confirmar. El armado del ticket (051), el alcance (124)
+y la comandera de quien pidió (181/#342) son **el mismo código de hoy**, movido
+a un módulo que no depende de Next y lo usan las dos puertas. Vercel sólo sigue
+atendiendo a los `.exe` viejos hasta que se reinstalen.
 
 ---
 
 ## Decisiones
 
-### D1 · El aviso sale de la base, por Broadcast — no Postgres Changes
+### D1 · El agente habla con una Edge Function de Supabase, no con Vercel
 
-Un trigger llama a `realtime.send(payload, 'trabajo', 'print-agent:<business_id>', true)`.
+Endpoints de la Edge Function `print-agent`:
+- `POST /pull`: equivale al GET de hoy, con `wait_ms=0` siempre.
+- `POST /ack`: equivale al POST de hoy (`ok` / `failed`).
+- `POST /session`: credenciales de Realtime (D3).
 
-- **Broadcast y no Postgres Changes:** Postgres Changes evalúa la RLS de la
-  tabla por cada suscriptor y cada fila, y el agente no es un usuario con
-  permisos sobre `print_jobs`/`comandas`. Además es lo que Supabase recomienda
-  para escala. Broadcast desde la base sólo necesita una policy sobre
-  `realtime.messages`.
-- **Canal por negocio, no por agente:** los triggers no saben qué impresora
-  alcanza cada agente. Eso lo resuelve el GET (124). Con dos agentes (kcc), un
-  aviso despierta a los dos y cada uno se lleva lo suyo. Es el mismo trade-off
-  que ya acepta la sonda de la retención.
-- `realtime.send` ya existe en la base cloud (verificado 2026-09-18). El
-  mensaje sale **al commit** de la transacción que hizo el insert.
+Todas se autentican con la **misma key `pak_live_…`** del agente, contra
+`print_agent_credentials`, con el service role que la función ya tiene en su
+entorno.
 
-**Qué dispara el aviso** (statement-level, un aviso por sentencia y no por fila):
+- **Región `us-east-1`, siempre.** Por defecto una Edge Function corre en la
+  región más cercana a quien llama. Para Argentina es São Paulo, y el pull hace
+  varias queries a una base en `us-east-1`: cada una cruzaría el continente. El
+  agente manda `x-region: us-east-1` (verificado en la doc de Supabase,
+  «Regional Invocations»). Latencia esperada: la de hoy contra `iad1`, que está
+  al lado de la base.
+- **Sin retención.** La retención de la 183 existía para que *preguntar* fuera
+  barato. Con push, el pull es inmediato y la función vive milisegundos.
+- **Costo:** con un latido cada 30 s por agente, ~90k invocaciones por agente
+  por mes; con 3 agentes, ~260k. La cuota incluida del plan es muy superior
+  (confirmar en la tarea 0 contra el plan contratado). En Vercel, en cambio, se
+  paga CPU y memoria por cada retención.
+
+**Descartado:**
+- **Que el agente lea las tablas directo (RPC/PostgREST) y arme el ticket él.**
+  Es lo que la 051 vino a sacar. Cada cambio de formato de un papel
+  obligaría a recompilar y reinstalar el `.exe` en cada local.
+- **Armar el ticket en SQL.** Son seis familias de papeles con ESC/POS: no.
+- **Renderizar el ticket al encolar y guardarlo en la fila.** Obliga a tocar
+  todos los lugares que crean comandas y papeles (`enviarComanda`, el ruteo, el
+  cron, el webhook de MP, la caja). Además, la cuenta tiene que salir con los
+  números del momento en que se imprime.
+
+### D2 · El armado sale de la ruta de Next a un módulo compartido
+
+`src/app/api/print-agent/route.ts` (2.100 líneas) hoy mezcla tres cosas: HTTP de
+Next, retención y armado. El armado y la confirmación pasan a
+`src/lib/print-agent/pull.ts` y `ack.ts`: funciones que reciben un
+`SupabaseClient` y devuelven datos, **sin `next/*`, sin `server-only` y sin
+`@/lib/supabase/service`**. Las dos puertas las llaman:
+
+- la ruta de Next (los `.exe` viejos): queda con la retención y el `NextResponse`;
+- la Edge Function (los nuevos): un `index.ts` fino con auth, región y JSON.
+
+Lo que el armado importa hoy es TypeScript puro: `lib/print/*` (`ticket`,
+`*-ticket`, `agent-scope`, `cuenta-printer`, `fiscal-printer`),
+`orders/entrega-por-lote`, `afip/{types,condicion-iva}`, `mozo/mozo-short-name`
+y `business-hours`, que usa `date-fns-tz`, disponible como `npm:` en Deno.
+**Un solo armado, dos puertas: nada se duplica.**
+
+**Cómo llega el código a la función (tarea 0, spike).** La doc de Supabase
+recomienda un `deno.json` por función y no dice si el bundle de deploy sigue
+imports relativos fuera de `supabase/functions/`. Si los sigue: import map
+`"@/": "../../../src/"`. Si no: un script (`pnpm print-agent:sync`) copia los
+módulos a `supabase/functions/_shared/print/`, y un test de CI falla si la
+copia difiere del original. **Nunca se editan a mano dos copias.**
+
+**El aviso de fallo** (`notifyPrintFailed` → notificación + WhatsApp) arrastra
+el outbox de WhatsApp y su proveedor: no se porta. Cuando el agente reporta
+`failed` (spec 33, después del umbral), la función marca `print_failed_at` y le
+pasa el aviso a la ruta de Vercel que ya lo hace, **server a server**. Es el
+único viaje a Vercel que queda, y sólo cuando falla una impresión.
+
+### D3 · El aviso: Broadcast desde la base, con un usuario de auth por agente
+
+(Igual que la v1.)
+
+**El trigger** llama a `realtime.send(payload, 'trabajo', 'print-agent:<business_id>', true)`.
+El aviso **no lleva datos**. Es statement-level (un aviso por sentencia) y
+envuelto en `exception when others` para que nunca tumbe el insert:
 
 | tabla | cuándo | por qué ahí |
 |---|---|---|
-| `comanda_items` | `AFTER INSERT` | **No en `comandas`.** `enviarComanda` crea la comanda y sus ítems en dos viajes; el GET descarta la comanda sin ítems (`route.ts`, «comanda a medio crear», golf 2026-08-04 mesa R4). Avisar en el insert de `comandas` despertaría al agente para nada y la comanda esperaría al próximo aviso. |
-| `comandas` | `AFTER UPDATE` cuando `reprint_requested_at` cambia a no-nulo, o `status` pasa a `pendiente` | reimpresión (`comandas/reprint.ts`), anulación (`cancel-order.ts`) |
+| `comanda_items` | `AFTER INSERT` | **No en `comandas`:** `enviarComanda` crea la comanda y sus ítems en dos viajes, y el pull descarta la comanda sin ítems (golf 2026-08-04, mesa R4) |
+| `comandas` | `AFTER UPDATE` cuando `reprint_requested_at` cambia a no-nulo, o `status` pasa a `pendiente` | reimpresión, anulación |
 | `print_jobs` | `AFTER INSERT` | cuenta, control, cierre, rendición, factura, prueba |
-| `print_jobs` | `AFTER UPDATE` cuando `reprint_requested_at` cambia a no-nulo, o `status` pasa a `pendiente` | reimpresión de cierre/rendición (`caja/*-print-actions.ts`), de cuenta y de factura |
+| `print_jobs` | `AFTER UPDATE` cuando `reprint_requested_at` cambia a no-nulo, o `status` pasa a `pendiente` | reimpresiones de caja, cuenta y factura |
 
-El trigger **nunca** puede tumbar el insert: el `realtime.send` va envuelto en
-`exception when others then null` (con `raise warning`). Una cuenta que no se
-avisa sale por la red de seguridad (D3). Una cuenta que no se guarda es un bug
-de caja.
+**Auth de Realtime.** Los canales privados autorizan con el JWT de la conexión.
+El proyecto firma con **ES256** y la clave privada la guarda Supabase, así que
+no podemos firmar un JWT propio. Entonces:
 
-### D2 · Cómo se autentica el agente: un usuario de auth por agente
+- Cada credencial de agente tiene un **usuario de Supabase Auth** propio, sin
+  membresías, con `app_metadata = { print_agent_id, business_id }` y un email
+  sintético (`print-agent+<id>@agents.pedidos.com.ar`).
+- `POST /session` le abre una sesión con `generateLink` + `verifyOtp`, sin
+  mandar ningún mail.
+- El agente refresca solo contra `/auth/v1/token`.
+- Policy `select` en `realtime.messages`:
+  `realtime.topic() = 'print-agent:' || (auth.jwt()->'app_metadata'->>'business_id')`.
+  No hay policy de `insert`.
+- Rotar la key o borrar el agente borra ese usuario y cierra sus sesiones.
 
-Los canales privados de Realtime autorizan con la RLS de `realtime.messages` y
-el **JWT** de la conexión. El agente hoy sólo tiene su key `pak_live_…`, que es
-nuestra, no de Supabase.
+**Descartado:** un canal público con nombre secreto. Cualquiera con el nombre
+podría escuchar cuándo imprime el local y mandar avisos falsos.
 
-**No se puede firmar un JWT propio:** el proyecto firma con **ES256** (JWKS
-verificado 2026-09-18) y la clave privada la guarda Supabase. No hay
-`SUPABASE_JWT_SECRET` que usar. Importar una clave propia al proyecto es un
-cambio de config de auth en prod: descartado.
+### D4 · Sin canal, el agente sigue imprimiendo
 
-**Decisión:** cada credencial de agente tiene un **usuario de Supabase Auth**
-propio, sin membresías, sin contraseña y con
-`app_metadata = { print_agent_id, business_id }` (`app_metadata` lo escribe sólo
-el service role; el usuario no lo puede cambiar).
-
-- `POST /api/print-agent/realtime` (autenticado con la key, igual que el GET)
-  crea el usuario si no existe y abre una sesión con
-  `auth.admin.generateLink({ type: 'magiclink' })` + `verifyOtp`. Es la misma
-  mecánica que `scripts/magic-link.mjs` y la invitación de empleados. **No se
-  manda ningún mail.** Devuelve
-  `{ realtime_url, publishable_key, access_token, refresh_token, expires_at, topic }`.
-- El agente **refresca solo** contra `/auth/v1/token?grant_type=refresh_token`
-  antes de que venza (1 h) y le pasa el token nuevo al canal (`access_token`).
-  Sólo vuelve a pedirle al server si reinicia o si el refresh falla. Así queda
-  una sesión por agente, no una por hora.
-- **Policy** sobre `realtime.messages` (`select`, rol `authenticated`):
-  `realtime.topic() = 'print-agent:' || (auth.jwt() -> 'app_metadata' ->> 'business_id')`.
-  Nadie tiene policy de `insert`: sólo la base (el trigger, como owner) publica.
-- Rotar la key (`rotatePrintAgentKey`) o borrar el agente **cierra sus sesiones**
-  (`auth.admin.signOut` / borrar el usuario). Si no, un agente dado de baja
-  seguiría escuchando hasta que venza el refresh.
-- Un usuario de agente **no es una persona**: no tiene membresía en ningún
-  negocio, así que toda la RLS de datos lo deja afuera. El email es sintético:
-  `print-agent+<credential_id>@agents.pedidos.com.ar`. Queda en `auth.users`, y
-  los listados de usuarios del panel de plataforma tienen que ignorarlo (ver
-  Riesgos).
-
-**Descartado:** un canal **público** con un nombre secreto (sin JWT). Es más
-simple, pero cualquiera con el nombre y la publishable key puede escuchar
-cuándo imprime el local y **publicar** avisos falsos que se traducen en
-invocaciones a Vercel. Va en contra de «multi-tenant estricto» por ahorrarse un
-endpoint.
-
-### D3 · El long-poll no se va: queda como red de seguridad y latido
-
-El websocket se cae (wifi del local, deploy de Realtime, la PC que se duerme).
-El agente no puede depender sólo de él.
-
-- **Con el canal suscripto:** el agente hace un GET con `wait_ms=0` cada
-  **30 s** (reconciliación + latido para el panel) y uno inmediato por cada
-  aviso. Sin retención: no hace falta.
-- **Sin canal** (no conectó, se cayó, el server no devolvió credenciales):
-  vuelve exactamente al loop de la 183 (GET con retención + `next_poll_ms`)
-  mientras reconecta con backoff (1 s → 30 s). **Peor caso = el de hoy.**
-- **Avisos que se pisan:** si llega un aviso con un GET en vuelo, se marca
-  «sucio» y se hace **un** GET más al terminar. Nunca dos GET en paralelo, y
-  nunca se pierde el aviso de un ítem que entró en el medio.
-- Al (re)suscribir hace un GET inmediato: lo que se emitió mientras estaba
-  caído sale ahí.
+- **Con canal:** un pull por aviso y otro cada **30 s** (reconciliación y
+  latido; el latido sigue siendo el upsert de `print_agent_status` que hoy hace
+  el GET, ahora lo hace `/pull`). Si llegan avisos con un pull en vuelo, se
+  marca «sucio» y se hace **uno** más al terminar. Al (re)conectar, pull
+  inmediato.
+- **Sin canal** (no conecta, se cae): pull cada **5 s** contra la Edge
+  Function, con reconexión con backoff (1 → 30 s). Sin retención, porque en
+  Deno no conviene tener una function colgada. Son 5 s de latencia máxima
+  mientras dure el corte.
+- **Sin Edge Function** (deploy roto, 404/5xx sostenido): vuelve al **loop de la
+  183 contra Vercel**, que sigue vivo por los `.exe` viejos. Es la red de
+  seguridad final, y queda mientras exista la ruta.
 
 El panel sigue leyendo `print_agent_status.last_seen_at`. Con un latido cada
-30 s entra holgado en `OFFLINE_THRESHOLD_MS` (138 s). No cambia.
+30 s o menos, `OFFLINE_THRESHOLD_MS` (138 s) no cambia.
 
-### D4 · Confirmar no frena el próximo papel
+### D5 · Confirmar no frena el próximo papel
 
-Hoy `tick()` hace imprimir → POST de confirmación (~0,6 s a `iad1`) → siguiente.
-Pasa a: imprimir en orden (el orden de la cola importa en cocina) y mandar la
-confirmación **sin esperarla** antes del siguiente papel, con un
-`Promise.allSettled` al final del lote. Una cuenta detrás de cuatro comandas
-deja de esperar cuatro viajes.
+Se imprime en orden y la confirmación sale **sin esperarla** antes del
+siguiente papel. Al final del lote, `allSettled`. `failState` (spec 33) no
+cambia.
 
-El reintento de fallos (spec 33, `failState`) no cambia: un papel que no
-imprimió no se confirma.
+### D6 · Config y convivencia
 
-### D5 · Qué NO se hace
+- `buildAgentConfig` suma `supabaseUrl` y `publishableKey` (que es pública) al
+  `config.json`. El `.exe` nuevo:
+  - con esos campos, corre en modo Supabase;
+  - sin ellos (un config viejo), corre en modo 183 contra `serverUrl`.
 
-- **Mover funciones de región.** La base está en `us-east-1` y Vercel en `iad1`.
-- **Mandar el ticket por el canal.** Sería más rápido (sin GET), pero sacaría el
-  armado del server (051) y el alcance (124) de su lugar. El papel viajaría por
-  un canal por negocio que ven todos los agentes de ese negocio. El GET cuesta
-  ~0,5–1 s y es donde vive la seguridad.
-- **Sacar la retención del server.** Los `.exe` viejos (golf y uno de kcc,
-  `agent_version` NULL) la siguen usando hasta que se reinstalen.
-- **Imprimir desde el navegador de la caja** (opción C del análisis).
+  Así se puede reinstalar el `.exe` antes de bajar un config nuevo sin romper
+  nada.
+- Los `.exe` viejos (golf, "Agente principal" de kcc) siguen contra Vercel hasta
+  que se reinstalen. **Retirar la ruta de Vercel** queda para una spec aparte,
+  cuando ningún agente la haya llamado en 2 semanas (se ve por
+  `x-agent-version`).
+
+### D7 · Qué NO se hace
+
+- Mandar el ticket por el canal de Realtime: el canal es por negocio y lo ven
+  todos los agentes del negocio. El alcance vive en el pull.
+- Mover Vercel de región.
+- Tocar las server actions que encolan (siguen en Vercel, como toda la app).
+- Imprimir desde el navegador.
 
 ---
 
 ## Requisitos
 
+### ADDED · Edge Function `print-agent`
+
+- **Dado** un agente con key válida, **cuando** hace `POST /pull`, **entonces**
+  recibe **los mismos papeles, byte a byte**, que le daría hoy el GET de Vercel
+  con `wait_ms=0` (mismo `content_escpos_b64`, mismo `printer_ip`, mismo
+  alcance). *Test de contrato: las dos puertas sobre el mismo fixture.*
+- **Dado** una key inválida o de otro negocio, **entonces** 401, sin leer nada.
+- **Dado** `POST /ack` con `ok`, **entonces** el papel pasa a impreso (misma
+  semántica que el POST de hoy, incluido el dedup de `failed`).
+- **Dado** `POST /ack` con `failed` pasado el umbral, **entonces**
+  `print_failed_at` queda marcado y el encargado recibe la notificación de
+  siempre.
+- **Dado** un `POST /pull`, **entonces** se registra el latido
+  (`print_agent_status`) con la versión del agente.
+- **Dado** que el agente manda `x-region: us-east-1`, **entonces** el pull de
+  un negocio con 6 papeles pendientes responde en **< 800 ms** medido desde el
+  local.
+
 ### ADDED · Aviso desde la base
 
-- **Dado** un negocio con un agente escuchando `print-agent:<biz>`, **cuando**
-  se inserta un `print_job` de ese negocio, **entonces** el agente recibe un
-  mensaje `trabajo` en menos de 1 s.
-- **Dado** `enviarComanda` creando una comanda, **cuando** se inserta la
-  comanda **sin** ítems, **entonces** no hay aviso. **Cuando** se insertan sus
-  `comanda_items`, **entonces** hay aviso y el GET que dispara trae la comanda
-  completa.
-- **Dado** una comanda impresa, **cuando** se pide su reimpresión, **entonces**
-  hay aviso.
-- **Dado** que `realtime.send` falla, **cuando** se inserta un `print_job`,
-  **entonces** el insert se guarda igual.
-- **Dado** un `print_job` del negocio A, **entonces** un agente de B no recibe
-  nada.
+- **Dado** un agente suscripto, **cuando** se inserta un `print_job` de su
+  negocio, **entonces** recibe `trabajo` en < 1 s.
+- **Dado** `enviarComanda`: la comanda sin ítems **no** avisa; al insertar sus
+  `comanda_items`, **sí** avisa, y el pull trae la comanda completa.
+- **Dado** que `realtime.send` falla, **entonces** el insert se guarda igual.
+- **Dado** el JWT del agente de A, **entonces** no puede suscribirse a
+  `print-agent:<B>`. *Probado con el JWT real, no con service role.*
+- Rotar la key cierra el canal del agente.
 
-### ADDED · Credenciales de Realtime para el agente
+### MODIFIED · Agente
 
-- **Dado** un agente con key válida, **cuando** hace `POST /api/print-agent/realtime`,
-  **entonces** recibe una sesión cuyo JWT tiene `app_metadata.business_id` = su
-  negocio, más el `topic` de su negocio.
-- **Dado** una key inválida o de otro negocio, **entonces** 401 y no se crea
-  ningún usuario.
-- **Dado** el JWT del agente de A, **cuando** se suscribe a
-  `print-agent:<B>`, **entonces** Realtime lo rechaza. *Esto se prueba con el
-  JWT real, no con el service role.*
-- **Dado** un agente cuya key se rotó, **entonces** su sesión deja de poder
-  refrescarse.
-- Pedir credenciales dos veces para el mismo agente **no** crea un segundo
-  usuario.
-
-### MODIFIED · Loop del agente
-
-- **Dado** el canal suscripto y nada que imprimir, **entonces** el agente hace
-  exactamente un GET cada ~30 s, con `wait_ms=0`.
-- **Dado** el canal suscripto, **cuando** llega un aviso, **entonces** hay un
-  GET en menos de 100 ms.
-- **Dado** un GET en vuelo, **cuando** llegan N avisos, **entonces** al
-  terminar hay exactamente **un** GET más.
-- **Dado** que el websocket se cae, **entonces** el agente vuelve al loop de la
-  183 en el acto y reintenta la conexión con backoff. Cuando reconecta, hace un
-  GET y vuelve al modo push.
-- **Dado** un server viejo que no tiene `/api/print-agent/realtime` (404),
-  **entonces** el agente corre el loop de la 183 y no reintenta más de una vez
-  cada 10 min.
-- **Dado** un lote de 5 papeles, **entonces** la impresión del 2.º no espera la
-  confirmación del 1.º.
+- Con canal y nada que imprimir: exactamente un `/pull` cada ~30 s, y **cero
+  requests a Vercel**.
+- Con canal, cuando llega un aviso: `/pull` en < 100 ms.
+- N avisos con un pull en vuelo: exactamente **un** pull más.
+- Canal caído: `/pull` cada 5 s, y al reconectar vuelve al push.
+- Edge Function caída: loop 183 contra Vercel.
+- Config sin `supabaseUrl`: loop 183 contra Vercel, igual que hoy.
+- Lote de 5: el 2.º no espera la confirmación del 1.º.
 
 ### Objetivo medible
 
-En producción (kcc y golf, una semana después de instalar el `.exe` nuevo):
-**p90 de `print_jobs` emitido→impreso ≤ 3 s y max ≤ 10 s** (hoy: 11–51 s y
-69 s). Y las invocaciones de `/api/print-agent` de un agente ocioso **no
-suben** respecto de hoy (~2 por minuto).
+Una semana después de reinstalar en kcc y golf:
+- **p90 de `print_jobs` emitido → impreso ≤ 3 s, max ≤ 10 s** (hoy: 11–51 s y
+  69 s).
+- **Invocaciones de `/api/print-agent` en Vercel: 0** de los agentes nuevos.
 
 ---
 
@@ -243,39 +270,37 @@ suben** respecto de hoy (~2 por minuto).
 
 | archivo | qué |
 |---|---|
-| `supabase/migrations/01NN_el_agente_escucha.sql` | función `notify_print_agent(business_id)`; triggers en `print_jobs`, `comandas` y `comanda_items`; policy `select` en `realtime.messages` |
-| `src/lib/print-agent/realtime.ts` (nuevo) | `abrirSesionDeAgente(credential)`: crear/buscar usuario, sesión, `topic` |
-| `src/app/api/print-agent/realtime/route.ts` (nuevo) | `POST`, auth con `autenticarAgente` |
-| `src/lib/print-agent/credentials-actions.ts` | rotar/borrar → `signOut` + borrar usuario |
-| `print-agent/agent.mjs` | cliente Realtime mínimo sobre el `WebSocket` nativo de Node 22 (join, heartbeat, `access_token`, backoff); coalescer; D4; fallback a la 183. Sin dependencias nuevas: el `.exe` sigue siendo un solo archivo |
-| `print-agent/README.md`, `print-agent/build/README.md` | modo push, cómo verificar |
-| panel de plataforma (listado de usuarios) | filtrar `print-agent+…` si aparece |
-
-El GET (`route.ts`) y la retención **no cambian**.
+| `src/lib/print-agent/pull.ts`, `ack.ts` (nuevos) | el armado y la confirmación sacados de `route.ts`, sin dependencias de Next |
+| `src/app/api/print-agent/route.ts` | queda fino: auth + retención + llamar a `pull`/`ack` |
+| `supabase/functions/print-agent/{index.ts,deno.json}` (nuevos) | `/pull`, `/ack`, `/session`; auth con la key; latido |
+| `supabase/functions/_shared/print/` + `scripts/print-agent-sync` | **sólo si el spike dice que hace falta copiar** (D2), con test de sincronía |
+| `supabase/migrations/01NN_el_agente_escucha.sql` | `notify_print_agent`, triggers, policy en `realtime.messages` |
+| `src/lib/print-agent/credentials.ts` / `-actions.ts` | `buildAgentConfig` con `supabaseUrl`/`publishableKey`; rotar/borrar → borrar el usuario de auth |
+| `print-agent/agent.mjs` | modo Supabase (Realtime mínimo sobre el `WebSocket` de Node 22, `/pull`, `/ack`, `/session`), coalescer, D5, fallbacks. Sin dependencias nuevas |
+| `print-agent/README.md`, `build/README.md` | modo Supabase, cómo verificar |
 
 ## No-objetivos
 
-- Tocar el armado de los tickets o el alcance por impresora.
-- Medir la latencia de las comandas: no tienen `printed_at`. Queda anotado. La
-  meta se mide con `print_jobs`.
-- Cambiar el instalador (`instalar.bat`): el `.exe` nuevo usa el mismo
-  `config.json`.
+- Retirar la ruta de Vercel: otra spec, cuando no la use nadie.
+- Cambiar el formato de ningún papel.
+- `printed_at` en comandas (anotado: sin eso no se mide la latencia de cocina).
 
 ## Riesgos
 
 | riesgo | mitigación |
 |---|---|
-| El `.exe` sólo se prueba en Windows real (build cross-platform → bytecode rechazado, 2026-07-24) | `build-exe.sh` con `--public`; prueba en una PC Windows antes de publicar; `print-agent.zip.backup` para volver atrás |
-| Hay que ir a los locales (golf, kcc ×2) a reinstalar | Sin reinstalar no se rompe nada: siguen en la 183. Coordinar con obejax |
-| El `WebSocket` global de Node 22 en `pkg` | Verificar al principio (tarea 0): un `.exe` de prueba que abra un socket a Realtime |
-| Usuarios de agente en `auth.users` ensucian listados o métricas | Email sintético con prefijo fijo; revisar los listados que leen `auth.users` |
-| Cuota de Realtime | 3 conexiones y un puñado de mensajes por comida: muy lejos de cualquier límite |
-| Trigger lento en inserts calientes (`comanda_items`) | Statement-level, un `realtime.send` por sentencia, sin queries adicionales salvo el `business_id` |
-| Staging = base cloud (nota de sync del CLAUDE.md) | Todo se prueba primero en la base local (`supabase start` trae Realtime). A la cloud va la migración con el OK de Juan |
+| El bundle de la Edge Function no sigue imports fuera de `supabase/functions` | Tarea 0. Plan B: copia generada más test de sincronía (D2) |
+| Deno vs Node en el armado (Buffer, `date-fns-tz`) | Tarea 0: correr el test de contrato bajo `supabase functions serve` |
+| El `.exe` sólo se prueba en Windows real | Tarea 0: spike del `WebSocket` en `pkg`; `print-agent.zip.backup` para volver |
+| Reinstalar en golf y kcc (×2) | Sin reinstalar no se rompe nada: los viejos siguen en la 183 |
+| Usuarios de agente en `auth.users` | Email con prefijo fijo; filtrar en los listados del panel de plataforma |
+| Edge Function caída | D4: cae a Vercel mientras la ruta exista |
+| Deploy de la función y la migración a prod | Con OK de Juan, vía MCP de Supabase, después de probar todo en la base local |
 
 ## Preguntas abiertas
 
-1. ¿Alcanza con canal por negocio, o golf va a tener suficientes agentes como
-   para que despertarlos a todos pese? Hoy: 1 en golf, 2 en kcc.
-2. ¿Quién va a los locales a reinstalar y cuándo? El plan asume golf y kcc
-   antes del go-live de House.
+1. ¿Canal por negocio alcanza? Hoy son 1 agente en golf y 2 en kcc, y un aviso
+   despierta a todos los del negocio.
+2. ¿Quién reinstala en los locales, y cuándo?
+3. ¿Retiramos la ruta de Vercel apenas estén los tres reinstalados, o la dejamos
+   como red de seguridad (D4) un tiempo?
