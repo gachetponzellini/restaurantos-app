@@ -20,7 +20,6 @@ import {
   loadFichaje,
   loadPedidos,
   loadCuentas,
-  loadRendicion,
   loadReservas,
   loadSalon,
 } from "./data";
@@ -101,13 +100,9 @@ export default async function LocalEnVivoPage({
         deliveryFeeCents: Number(business.delivery_fee_cents ?? 0),
       })
     : null;
-  // Caja la usa también el panel de Rendición (el corte del turno), así que se
-  // carga si el rol ve cualquiera de las dos.
-  const caja = ve("caja") || ve("rendicion") ? loadCaja(business.id) : null;
+  // #351 — la rendición de mozos vive dentro de Caja y viaja en su promesa.
+  const caja = ve("caja") ? loadCaja(business.id, service) : null;
   const cuentas = ve("cuentas") ? loadCuentas(business.id) : null;
-  const rendicion = ve("rendicion")
-    ? loadRendicion(business.id, service)
-    : null;
   const reservas = ve("reservas")
     ? loadReservas(business.id, service, {
         date: reservasDate,
@@ -133,7 +128,6 @@ export default async function LocalEnVivoPage({
       pedidos={pedidos}
       caja={caja}
       cuentas={cuentas}
-      rendicion={rendicion}
       fichaje={fichaje}
       reservas={reservas}
     />

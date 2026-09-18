@@ -107,6 +107,8 @@ function pendiente(
     tickets_cents: 0,
     por_metodo: { ...EMPTY_METODO },
     total_propinas_cents: 0,
+    propina_efectivo_cents: 0,
+    propina_a_entregar_cents: 0,
     pagos_count: 3,
     por_canal: {},
     ...over,

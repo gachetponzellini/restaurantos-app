@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
+
 import type {
   SalonOrderRef,
   SalonReservationRef,
@@ -104,6 +106,11 @@ export type CajaData = {
   cajas: CajaConEstado[];
   /** Issue #339 — mesas con cobro parcial y cuentas cerradas con saldo. */
   cuentasConSaldo: CuentaConSaldo[];
+  /**
+   * #351 — la rendición se hace desde la vista Caja (ya no hay tab propia):
+   * viaja con la caja y se refresca con el mismo refetch.
+   */
+  rendicion: RendicionData;
 };
 
 export type RendicionData = {
@@ -311,12 +318,16 @@ export async function loadPedidos(
   };
 }
 
-export async function loadCaja(businessId: string): Promise<CajaData> {
-  const [cajas, cuentasConSaldo] = await Promise.all([
+export async function loadCaja(
+  businessId: string,
+  service: SupabaseClient = createSupabaseServiceClient() as unknown as SupabaseClient,
+): Promise<CajaData> {
+  const [cajas, cuentasConSaldo, rendicion] = await Promise.all([
     getCajasConEstado(businessId),
     getCuentasConSaldo(businessId),
+    loadRendicion(businessId, service),
   ]);
-  return { cajas, cuentasConSaldo };
+  return { cajas, cuentasConSaldo, rendicion };
 }
 
 export async function loadCuentas(businessId: string): Promise<CuentasData> {

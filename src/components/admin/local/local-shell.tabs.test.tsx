@@ -33,9 +33,6 @@ vi.mock("@/components/admin/local/comandas-kanban", () => ({
 vi.mock("@/components/admin/local/caja-admin-board", () => ({
   CajaAdminBoard: () => <div data-testid="panel-caja">CAJA</div>,
 }));
-vi.mock("@/components/admin/local/rendicion-mozos-tab", () => ({
-  RendicionMozosTab: () => <div data-testid="panel-rendicion">RENDICION</div>,
-}));
 vi.mock("@/components/admin/local/fichaje-tab", () => ({
   FichajeTab: () => <div data-testid="panel-fichaje">FICHAJE</div>,
 }));
@@ -91,12 +88,15 @@ function shellProps() {
       initialOrders: [],
       marchLeadKitchenMin: 40,
     }),
-    caja: Promise.resolve({ cajas: [] }),
-    rendicion: Promise.resolve({
-      rendicionPendientes: [],
-      rendicionHistorial: [],
-      cajaAssignments: [],
-      businessMembers: [],
+    caja: Promise.resolve({
+      cajas: [],
+      cuentasConSaldo: [],
+      rendicion: {
+        rendicionPendientes: [],
+        rendicionHistorial: [],
+        cajaAssignments: [],
+        businessMembers: [],
+      },
     }),
     fichaje: Promise.resolve({ initialPresent: [], todaySummary: undefined }),
     reservas: Promise.resolve({
@@ -184,13 +184,13 @@ describe("LocalShell · tabs sin red (spec 101)", () => {
     const user = userEvent.setup();
     await shell();
 
-    expect(screen.queryByTestId("panel-rendicion")).toBeNull();
+    expect(screen.queryByTestId("panel-caja")).toBeNull();
     expect(screen.queryByTestId("panel-fichaje")).toBeNull();
 
     await clickTab(user, /Fichaje/);
     expect(screen.getByTestId("panel-fichaje")).toBeInTheDocument();
-    // Entrar a Fichaje no arrastró a Rendición.
-    expect(screen.queryByTestId("panel-rendicion")).toBeNull();
+    // Entrar a Fichaje no arrastró a Caja.
+    expect(screen.queryByTestId("panel-caja")).toBeNull();
   });
 
   it("el deep-link ?tab=caja abre en Caja sin montar el resto", async () => {
@@ -245,7 +245,6 @@ describe("LocalShell · lo que ve la terminal (spec 182)", () => {
     reservas: null,
     caja: null,
     cuentas: null,
-    rendicion: null,
     pedidos: null,
   } as unknown as Partial<React.ComponentProps<typeof LocalShell>>;
 
@@ -276,5 +275,12 @@ describe("LocalShell · lo que ve la terminal (spec 182)", () => {
 
     expect(screen.getByTestId("panel-salon")).toBeInTheDocument();
     expect(screen.queryByTestId("panel-reservas")).not.toBeInTheDocument();
+  });
+});
+
+describe("LocalShell · la rendición vive en Caja (#351)", () => {
+  it("no hay tab Rendición", async () => {
+    await shell();
+    expect(screen.queryByRole("button", { name: /^Rendición/ })).toBeNull();
   });
 });

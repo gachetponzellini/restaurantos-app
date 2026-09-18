@@ -21,6 +21,13 @@ export type RendicionResult = {
   tickets_cents: number;
   por_metodo: Record<PaymentMethod, number>;
   total_propinas_cents: number;
+  /**
+   * #351 — la parte de la propina que vino en efectivo: ya la tiene en el
+   * bolsillo (entrega el neto), así que no se le da nada del cajón por esto.
+   */
+  propina_efectivo_cents: number;
+  /** La propina que vino por tarjeta/QR/transferencia: esa sí se le entrega. */
+  propina_a_entregar_cents: number;
 };
 
 const EMPTY_BY_METHOD: Record<PaymentMethod, number> = {
@@ -42,6 +49,7 @@ export function calcularRendicionMozo(
   let efectivo_bruto_cents = 0;
   let tickets_cents = 0;
   let total_propinas_cents = 0;
+  let propina_efectivo_cents = 0;
 
   for (const p of payments) {
     const neto = p.amount_cents - p.tip_cents;
@@ -50,6 +58,7 @@ export function calcularRendicionMozo(
     if (p.method === "cash") {
       efectivo_cents += neto;
       efectivo_bruto_cents += p.amount_cents;
+      propina_efectivo_cents += p.tip_cents;
     } else {
       tickets_cents += neto;
     }
@@ -63,6 +72,8 @@ export function calcularRendicionMozo(
     tickets_cents,
     por_metodo,
     total_propinas_cents,
+    propina_efectivo_cents,
+    propina_a_entregar_cents: total_propinas_cents - propina_efectivo_cents,
   };
 }
 
@@ -70,6 +81,8 @@ export function calcularRendicionMozo(
 // ── Cobrado por empleado, en el período de la caja ───────────────
 
 export type CobrosDeMozo = {
+  /** #351 — para cruzarlo con su rendición pendiente. `null` = «Sin mozo». */
+  mozo_id: string | null;
   mozo_name: string;
   /** Venta neta de propina, igual que todo el resto de la pantalla (spec 098). */
   total_cents: number;
@@ -99,6 +112,7 @@ export type CobrosDeMozo = {
 export function agruparCobrosPorMozo(
   payments: Array<{
     attributed_mozo_name: string | null;
+    attributed_mozo_id?: string | null;
     method: PaymentMethod;
     amount_cents: number;
     tip_cents: number;
@@ -108,11 +122,13 @@ export function agruparCobrosPorMozo(
 
   for (const p of payments) {
     const nombre = p.attributed_mozo_name ?? "Sin mozo";
+    const clave = p.attributed_mozo_id ?? nombre;
     const neto = p.amount_cents - p.tip_cents;
 
-    let mozo = porMozo.get(nombre);
+    let mozo = porMozo.get(clave);
     if (!mozo) {
       mozo = {
+        mozo_id: p.attributed_mozo_id ?? null,
         mozo_name: nombre,
         total_cents: 0,
         propinas_cents: 0,
@@ -120,7 +136,7 @@ export function agruparCobrosPorMozo(
         cobros_count: 0,
         por_metodo: [],
       };
-      porMozo.set(nombre, mozo);
+      porMozo.set(clave, mozo);
     }
 
     mozo.total_cents += neto;

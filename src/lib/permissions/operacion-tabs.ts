@@ -21,7 +21,6 @@ export const OPERACION_TABS = [
   // factura de la mesa, y confundirlas en la barra de operación sería caro. Va
   // después de Caja porque es la familia de la plata.
   "cuentas",
-  "rendicion",
   "fichaje",
 ] as const;
 

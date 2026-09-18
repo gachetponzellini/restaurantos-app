@@ -34,7 +34,9 @@ import {
   getOperadoresDeCaja,
   getRendicionesPendientesTodosLosMozos,
   getRendicionPendienteMozo,
+  getMesasSinCobrarPorMozo,
 } from "./queries";
+import { motivoBloqueoRendicion } from "./mesas-sin-cobrar";
 import type {
   CajaCorte,
   CierreResumenSnapshot,
@@ -825,6 +827,15 @@ export async function registrarRendicionMozo(
     .eq("user_id", mozoId)
     .maybeSingle();
   if (!mozoUser) return actionError("El mozo no pertenece a este negocio.");
+
+  // #351 — con una mesa suya sin cobrar no se rinde: lo que se cobre después
+  // caería en un período nuevo y obligaría a una segunda rendición. La card ya
+  // deshabilita el botón; esto es lo que lo hace cumplir.
+  const mesasSinCobrar =
+    (await getMesasSinCobrarPorMozo(business.id)).get(mozoId) ?? [];
+  if (mesasSinCobrar.length > 0) {
+    return actionError(motivoBloqueoRendicion(mesasSinCobrar));
+  }
 
   // issue #264 — el corte se fija ANTES de leer, y es el mismo que se guarda.
   //

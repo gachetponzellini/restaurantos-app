@@ -19,6 +19,11 @@ import {
 } from "./ventas-por-origen";
 import { encadenarPeriodos, ventanaDelCorte } from "./historial-cortes";
 import { saldoCents, tieneSaldoPendiente } from "@/lib/billing/saldo-pendiente";
+import {
+  mesasSinCobrarPorMozo,
+  type MesaSinCobrar,
+  type OrdenDeMesa,
+} from "./mesas-sin-cobrar";
 import type {
   Caja,
   CajaConEstado,
@@ -316,6 +321,8 @@ export type CajaPayment = {
   table_label: string | null;
   customer_name: string | null;
   attributed_mozo_name: string | null;
+  /** #351 — para cruzar el cobro con la rendición pendiente del mismo mozo. */
+  attributed_mozo_id: string | null;
   /**
    * El comprobante de esta orden quedó rechazado y no hay otro vivo (spec 147).
    *
@@ -441,6 +448,7 @@ export async function getPaymentsPeriodoActual(
       delivery_type: ord?.delivery_type ?? "",
       table_label: tbl?.label ?? null,
       customer_name: ord?.customer_name ?? null,
+      attributed_mozo_id: r.attributed_mozo_id,
       attributed_mozo_name: r.attributed_mozo_id
         ? (mozoNameById.get(r.attributed_mozo_id) ?? null)
         : null,
@@ -1040,6 +1048,8 @@ export async function getRendicionPendienteMozo(
     tickets_cents: rendicion.tickets_cents,
     por_metodo: rendicion.por_metodo,
     total_propinas_cents: rendicion.total_propinas_cents,
+    propina_efectivo_cents: rendicion.propina_efectivo_cents,
+    propina_a_entregar_cents: rendicion.propina_a_entregar_cents,
     pagos_count: rendicion.pagos_count,
     por_canal: rendicion.por_canal,
   };
@@ -1060,10 +1070,14 @@ export async function getRendicionesPendientesTodosLosMozos(
 
   if (!mozos || mozos.length === 0) return [];
 
+  // #351 — las mesas sin cobrar de todos, en una sola query: la card de
+  // rendición deshabilita el botón con esto.
+  const mesasPorMozo = cajaId ? null : await getMesasSinCobrarPorMozo(businessId);
+
   // En paralelo, no en cascada (spec 103): esto corre en la carga inicial de
   // `/admin/operacion` y con 8 mozos eran 8 round-trips encadenados —cada uno
   // con su propia consulta de pagos— antes de que la página pudiera cerrar.
-  return Promise.all(
+  const pendientes = await Promise.all(
     (
       mozos as Array<{
         user_id: string;
@@ -1081,6 +1095,48 @@ export async function getRendicionesPendientesTodosLosMozos(
       ),
     ),
   );
+  if (!mesasPorMozo) return pendientes;
+  return pendientes.map((p) => ({
+    ...p,
+    mesas_sin_cobrar: mesasPorMozo.get(p.mozo_id) ?? [],
+  }));
+}
+
+/**
+ * #351 — las mesas sin cobrar del negocio, por mozo. Abiertas con consumo o
+ * cerradas con saldo, de los últimos 30 días (mismo piso que
+ * `getCuentasConSaldo`: una cuenta con saldo no se arregla sola).
+ */
+export async function getMesasSinCobrarPorMozo(
+  businessId: string,
+): Promise<Map<string, MesaSinCobrar[]>> {
+  const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await db()
+    .from("orders")
+    .select(
+      "id, lifecycle_status, status, total_cents, total_paid_cents, mozo_id, tables!orders_table_id_fkey(label, mozo_id), payments(attributed_mozo_id)",
+    )
+    .eq("business_id", businessId)
+    .not("table_id", "is", null)
+    .neq("status", "cancelled")
+    .gte("created_at", desde)
+    .or("lifecycle_status.eq.open,and(lifecycle_status.eq.closed,payment_status.neq.paid)");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ordenes: OrdenDeMesa[] = ((data ?? []) as any[]).map((o) => ({
+    id: o.id,
+    table_label: o.tables?.label ?? null,
+    lifecycle_status: o.lifecycle_status,
+    status: o.status,
+    total_cents: Number(o.total_cents),
+    total_paid_cents: Number(o.total_paid_cents),
+    mesa_mozo_id: o.tables?.mozo_id ?? null,
+    orden_mozo_id: o.mozo_id ?? null,
+    pagos_mozo_ids: ((o.payments ?? []) as { attributed_mozo_id: string | null }[])
+      .map((p) => p.attributed_mozo_id)
+      .filter((x): x is string => !!x),
+  }));
+  return mesasSinCobrarPorMozo(ordenes);
 }
 
 export async function getRendicionesHistorial(

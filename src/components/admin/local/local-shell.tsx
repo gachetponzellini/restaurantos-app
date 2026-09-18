@@ -41,11 +41,6 @@ const CuentasPanel = dynamic(() =>
     (m) => m.CuentasPanel,
   ),
 );
-const RendicionMozosTab = dynamic(() =>
-  import("@/components/admin/local/rendicion-mozos-tab").then(
-    (m) => m.RendicionMozosTab,
-  ),
-);
 const SalonDesktop = dynamic(() =>
   import("@/components/admin/local/salon-desktop").then((m) => m.SalonDesktop),
 );
@@ -65,10 +60,9 @@ import {
   TabContentSkeleton,
 } from "@/components/skeletons/operacion-skeleton";
 import {
-  countCajas,
+  countRendicionesPendientes,
   countPedidosNuevos,
   countPresentes,
-  countRendicionesPendientes,
   countReservasPorSentar,
   countSalonOcupadas,
 } from "@/app/[business_slug]/admin/(authed)/operacion/counts";
@@ -79,7 +73,6 @@ import type {
   CuentasData,
   FichajeData,
   PedidosData,
-  RendicionData,
   ReservasData,
   SalonData,
 } from "@/app/[business_slug]/admin/(authed)/operacion/data";
@@ -108,7 +101,7 @@ type Tab = OperacionTab;
 /**
  * Tabs a las que aplica el filtro por salón (spec 065, FR-002).
  *
- * En Caja / Rendición / Fichaje / Pedidos online el selector se **oculta**: no
+ * En Caja / Fichaje / Pedidos online el selector se **oculta**: no
  * tienen dimensión salón y dejarlo a la vista invitaría a leer un total de caja
  * como si estuviera recortado por salón.
  */
@@ -122,7 +115,6 @@ const TEMA_POR_TAB: Record<Tab, string> = {
   pedidos: "pedidos",
   caja: "caja",
   cuentas: "cuentas-corrientes",
-  rendicion: "rendicion",
   fichaje: "fichaje",
 };
 
@@ -149,7 +141,6 @@ type ShellProps = {
   pedidos: Promise<PedidosData> | null;
   caja: Promise<CajaData> | null;
   cuentas: Promise<CuentasData> | null;
-  rendicion: Promise<RendicionData> | null;
   reservas: Promise<ReservasData> | null;
 };
 
@@ -345,6 +336,7 @@ function ComandasPanel({
 function CajaPanel({
   promise,
   slug,
+  role,
   cajaPedida,
   active,
   refetchAlMontar,
@@ -352,60 +344,21 @@ function CajaPanel({
 }: {
   promise: Promise<CajaData>;
   slug: string;
+  role: BusinessRole;
   cajaPedida?: string | null;
   active: boolean;
   refetchAlMontar: boolean;
   onServerData: (d: CajaData) => void;
 }) {
-  const { cajas, cuentasConSaldo } = use(promise);
+  const { cajas, cuentasConSaldo, rendicion } = use(promise);
   return (
     <CajaAdminBoard
       slug={slug}
       cajas={cajas}
       cuentasConSaldo={cuentasConSaldo}
-      cajaPedida={cajaPedida}
-      active={active}
-      refetchAlMontar={refetchAlMontar}
-      onServerData={onServerData}
-    />
-  );
-}
-
-function RendicionPanel({
-  rendicionPromise,
-  cajaPromise,
-  slug,
-  role,
-  active,
-  refetchAlMontar,
-  onServerData,
-}: {
-  rendicionPromise: Promise<RendicionData>;
-  cajaPromise: Promise<CajaData>;
-  slug: string;
-  role: BusinessRole;
-  active: boolean;
-  refetchAlMontar: boolean;
-  onServerData: (d: RendicionData) => void;
-}) {
-  const {
-    rendicionPendientes,
-    rendicionHistorial,
-    cajaAssignments,
-    businessMembers,
-  } = use(rendicionPromise);
-  // La tab de rendición también necesita las cajas: se lee de la MISMA promesa
-  // que alimenta la tab Caja y su pill (fuente única, sin duplicar la query).
-  const { cajas } = use(cajaPromise);
-  return (
-    <RendicionMozosTab
-      slug={slug}
-      initialPendientes={rendicionPendientes}
-      initialHistorial={rendicionHistorial}
-      cajas={cajas}
-      cajaAssignments={cajaAssignments}
-      members={businessMembers}
+      rendicion={rendicion}
       showAssignments={role === "admin"}
+      cajaPedida={cajaPedida}
       active={active}
       refetchAlMontar={refetchAlMontar}
       onServerData={onServerData}
@@ -680,7 +633,6 @@ function TabsInner({
   pedidos,
   caja,
   cuentas,
-  rendicion,
   fichaje,
   reservas,
 }: ShellProps) {
@@ -742,9 +694,6 @@ function TabsInner({
   const [salonData, setSalonData] = useState<SalonData | null>(null);
   const [cajaData, setCajaData] = useState<CajaData | null>(null);
   const [cuentasData] = useState<CuentasData | null>(null);
-  const [rendicionData, setRendicionData] = useState<RendicionData | null>(
-    null,
-  );
   const [reservasData, setReservasData] = useState<ReservasData | null>(null);
   const [fichajeData, setFichajeData] = useState<FichajeData | null>(null);
 
@@ -832,7 +781,11 @@ function TabsInner({
             <Pill
               promise={caja}
               override={cajaData}
-              compute={(d) => countCajas(d.cajas)}
+              /* #351 — la rendición vive en Caja: la pill cuenta quién
+                 falta rendir, no cuántas cajas hay configuradas. */
+              compute={(d) =>
+                countRendicionesPendientes(d.rendicion.rendicionPendientes)
+              }
             />
           }
         >
@@ -854,21 +807,6 @@ function TabsInner({
           }
         >
           Cuentas corrientes
-        </TabButton>
-      )}
-      {ve("rendicion") && rendicion && (
-        <TabButton
-          active={active === "rendicion"}
-          onClick={() => setTab("rendicion")}
-          count={
-            <Pill
-              promise={rendicion}
-              override={rendicionData}
-              compute={(d) => countRendicionesPendientes(d.rendicionPendientes)}
-            />
-          }
-        >
-          Rendición
         </TabButton>
       )}
       <TabButton
@@ -1001,6 +939,7 @@ function TabsInner({
                 <CajaPanel
                   promise={caja}
                   slug={slug}
+                  role={role}
                   cajaPedida={cajaPedida}
                   active={active === "caja"}
                   refetchAlMontar={tabInicial !== "caja"}
@@ -1018,23 +957,6 @@ function TabsInner({
                   promise={cuentas}
                   slug={slug}
                   puedeCobrar={canCobrarCuentaCorriente(role)}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        )}
-        {ve("rendicion") && mounted("rendicion") && rendicion && caja && (
-          <div className={paneClass("rendicion")}>
-            <ErrorBoundary fallback={<TabLoadError money />}>
-              <Suspense fallback={<TabContentSkeleton />}>
-                <RendicionPanel
-                  rendicionPromise={rendicion}
-                  cajaPromise={caja}
-                  slug={slug}
-                  role={role}
-                  active={active === "rendicion"}
-                  refetchAlMontar={tabInicial !== "rendicion"}
-                  onServerData={setRendicionData}
                 />
               </Suspense>
             </ErrorBoundary>

@@ -36,7 +36,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { registrarIngreso, registrarSangria } from "@/lib/caja/actions";
-import { agruparCobrosPorMozo } from "@/lib/caja/liquidacion-mozo";
+import { RendicionEnCaja } from "@/components/admin/local/rendicion-en-caja";
+import type {
+  CajaData,
+  RendicionData,
+} from "@/app/[business_slug]/admin/(authed)/operacion/data";
 import { MOVIMIENTO_LABEL, saleDelCajon } from "@/lib/caja/movimiento-label";
 import type { CajaPayment } from "@/lib/caja/queries";
 import type {
@@ -62,10 +66,7 @@ type Props = {
   /** `true` si el panel montó lazy (spec 103): entonces revalida al montar. */
   refetchAlMontar?: boolean;
   /** Spec 103: cada snapshot nuevo del refetch, para el badge de la tab. */
-  onServerData?: (d: {
-    cajas: CajaConEstado[];
-    cuentasConSaldo: CuentaConSaldo[];
-  }) => void;
+  onServerData?: (d: CajaData) => void;
   /** Issue #339 — mesas con cobro parcial y cuentas cerradas con saldo. */
   cuentasConSaldo?: CuentaConSaldo[];
   /**
@@ -76,6 +77,10 @@ type Props = {
    * llega seguro.
    */
   cajaPedida?: string | null;
+  /** #351 — la rendición de mozos se hace acá, en las cards por empleado. */
+  rendicion?: RendicionData;
+  /** Asignación caja↔usuario: sólo el admin. */
+  showAssignments?: boolean;
 };
 
 export function CajaAdminBoard({
@@ -86,6 +91,8 @@ export function CajaAdminBoard({
   refetchAlMontar = false,
   onServerData,
   cajaPedida,
+  rendicion: initialRendicion,
+  showAssignments = false,
 }: Props) {
   const [statsByCaja, setStatsByCaja] = useState<
     Record<string, CajaLiveStats | null>
@@ -105,6 +112,9 @@ export function CajaAdminBoard({
   const [cuentasConSaldo, setCuentasConSaldo] = useState(
     initialCuentasConSaldo,
   );
+  // Se reemplaza entero con cada refetch: es plata, y sumar en el cliente es
+  // como se duplica una rendición.
+  const [rendicion, setRendicion] = useState(initialRendicion);
   const refetchSeq = useRef(0);
   const onServerDataRef = useRef(onServerData);
   onServerDataRef.current = onServerData;
@@ -116,6 +126,7 @@ export function CajaAdminBoard({
       if (res.ok) {
         setCajas(res.data.cajas);
         setCuentasConSaldo(res.data.cuentasConSaldo);
+        setRendicion(res.data.rendicion);
         onServerDataRef.current?.(res.data);
       }
     } catch {
@@ -280,6 +291,21 @@ export function CajaAdminBoard({
         payments={paymentsByCaja[activeCaja.id] ?? []}
         slug={slug}
         onChanged={resincronizar}
+        porEmpleado={
+          rendicion ? (
+            <RendicionEnCaja
+              slug={slug}
+              payments={paymentsByCaja[activeCaja.id] ?? []}
+              pendientes={rendicion.rendicionPendientes}
+              historial={rendicion.rendicionHistorial}
+              cajas={cajas}
+              assignments={rendicion.cajaAssignments}
+              members={rendicion.businessMembers}
+              showAssignments={showAssignments}
+              onChanged={resincronizar}
+            />
+          ) : null
+        }
       />
 
       <div className="pt-1 text-center">
@@ -304,6 +330,7 @@ function CajaCard({
   payments,
   slug,
   onChanged,
+  porEmpleado,
 }: {
   caja: CajaConEstado;
   stats: CajaLiveStats | null;
@@ -312,6 +339,8 @@ function CajaCard({
   slug: string;
   /** Re-sincroniza la tab después de mover plata (spec 103). */
   onChanged: () => void;
+  /** #351 — cobrado por empleado + rendición, al pie de la caja. */
+  porEmpleado?: React.ReactNode;
 }) {
   const [, startTransition] = useTransition();
   const [sangriaOpen, setSangriaOpen] = useState(false);
@@ -528,7 +557,7 @@ function CajaCard({
         </section>
       </div>
 
-      {payments.length > 0 && <CobradoPorEmpleado payments={payments} />}
+      {porEmpleado}
 
       <MovimientoModal
         open={sangriaOpen}
@@ -698,130 +727,6 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
 // ── Modales ──────────────────────────────────────────────────────
 
 
-
-// ── Cobrado por empleado ─────────────────────────────────────────
-
-/** Iniciales para el avatar. «Sin mozo» no lleva. */
-function iniciales(nombre: string): string {
-  return nombre
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-/**
- * Qué cobró cada empleado en el período (pedido de Juan, 2026-09-03: *"la
- * rendición por empleado podría ser más estético ese componente"*).
- *
- * Era una tabla de cuatro columnas con el nombre repetido en blanco y el total
- * del mozo metido entre paréntesis pegado al último monto — dos números en una
- * celda, sin rótulo. Ahora es una tarjeta por persona: el nombre y su total
- * arriba, los métodos abajo con el **mismo punto de color** que las barras de
- * más arriba, y el efectivo señalado como lo que va a tener que entregar.
- *
- * Se llamaba «Rendición por empleado» y listaba tarjeta, que es justo lo que la
- * spec 151 sacó de la rendición. Acá **sí** se muestra —es la caja, y ver lo que
- * cobró cada uno es el punto— pero el bloque pasa a llamarse por lo que es, y la
- * línea «a rendir» dice cuál de esos números es el que se le va a pedir.
- */
-function CobradoPorEmpleado({ payments }: { payments: CajaPayment[] }) {
-  const mozos = agruparCobrosPorMozo(payments);
-
-  return (
-    <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Cobrado por empleado
-      </p>
-
-      {mozos.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">Todavía no hubo cobros.</p>
-      ) : (
-        <ul className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {mozos.map((m) => {
-            const sinMozo = m.mozo_name === "Sin mozo";
-            return (
-              <li
-                key={m.mozo_name}
-                className="rounded-xl bg-muted/50 p-4 ring-1 ring-border/70"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span
-                      className={cn(
-                        "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold",
-                        sinMozo
-                          ? "bg-card text-muted-foreground/70 ring-1 ring-border"
-                          : "bg-border text-foreground/80",
-                      )}
-                    >
-                      {sinMozo ? "—" : iniciales(m.mozo_name)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {m.mozo_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {m.cobros_count} cobro{m.cobros_count === 1 ? "" : "s"}
-                        {m.propinas_cents > 0 && (
-                          <>
-                            <span className="mx-1 text-muted-foreground/50">·</span>
-                            <span className="text-emerald-700">
-                              {formatCurrency(m.propinas_cents)} de propina
-                            </span>
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="shrink-0 text-base font-bold tracking-tight text-foreground tabular-nums">
-                    {formatCurrency(m.total_cents)}
-                  </p>
-                </div>
-
-                <ul className="mt-3 space-y-1.5">
-                  {m.por_metodo.map((f) => (
-                    <li
-                      key={f.method}
-                      className="flex items-baseline justify-between gap-2 text-xs"
-                    >
-                      <span className="inline-flex items-baseline gap-1.5 text-foreground/70">
-                        <span
-                          className="inline-block size-2 shrink-0 translate-y-px rounded-full"
-                          style={{ background: METHOD_COLOR[f.method] }}
-                        />
-                        {METHOD_LABEL[f.method]}
-                        <span className="text-muted-foreground/70 tabular-nums">
-                          ×{f.count}
-                        </span>
-                      </span>
-                      <span className="font-semibold tabular-nums text-foreground/90">
-                        {formatCurrency(f.total_cents)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                {/* Sólo el efectivo se rinde (spec 151). Sin mozo no hay a
-                    quién pedírselo: esa plata la cobró la caja. */}
-                {!sinMozo && m.a_rendir_cents > 0 && (
-                  <p className="mt-3 flex items-baseline justify-between gap-2 border-t border-border/70 pt-2.5 text-xs">
-                    <span className="font-medium text-foreground/70">
-                      Efectivo a rendir
-                    </span>
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {formatCurrency(m.a_rendir_cents)}
-                    </span>
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
 
 // ── Cuentas con saldo pendiente (issue #339) ─────────────────────
 

@@ -32,7 +32,7 @@ describe("tabsVisiblesEnOperacion", () => {
   });
 
   it("la terminal NO ve la plata de supervisión", () => {
-    for (const tab of ["caja", "cuentas", "rendicion", "pedidos"] as const) {
+    for (const tab of ["caja", "cuentas", "pedidos"] as const) {
       expect(veTabDeOperacion("terminal", tab)).toBe(false);
     }
   });

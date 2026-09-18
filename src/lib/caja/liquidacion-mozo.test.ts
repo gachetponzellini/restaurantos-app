@@ -128,3 +128,15 @@ describe("agruparCobrosPorMozo", () => {
     expect(agruparCobrosPorMozo([])).toEqual([]);
   });
 });
+
+describe("propina en efectivo vs. a pagar del cajón (#351)", () => {
+  it("separa la propina que ya tiene encima de la que hay que darle", () => {
+    const r = calcularRendicionMozo([
+      { method: "cash", amount_cents: 11_000, tip_cents: 1_000 },
+      { method: "card_manual", amount_cents: 8_500, tip_cents: 1_020 },
+    ]);
+    expect(r.total_propinas_cents).toBe(2_020);
+    expect(r.propina_efectivo_cents).toBe(1_000);
+    expect(r.propina_a_entregar_cents).toBe(1_020);
+  });
+});

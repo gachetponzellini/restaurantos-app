@@ -172,17 +172,6 @@ export async function getCierreCajaTabData(
   return actionOk(data);
 }
 
-/** Tab **Rendición**: pendientes por mozo, historial, asignaciones y nómina. */
-export async function getRendicionTabData(
-  slug: string,
-): Promise<ActionResult<RendicionData>> {
-  const ctx = await requireOperacionContext(slug, {
-    soloSupervision: true,
-  });
-  if (!ctx.ok) return ctx;
-  return actionOk(await loadRendicion(ctx.data.businessId, service()));
-}
-
 /**
  * Tab **Reservas** (libro del día). Recibe el día porque el navegador de fechas
  * ahora lo cambia sin navegar: antes cada flecha era un `router.push` que

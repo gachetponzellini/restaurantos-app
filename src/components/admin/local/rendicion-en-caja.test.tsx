@@ -14,20 +14,13 @@ vi.mock("@/lib/caja/rendicion-print-actions", () => ({
   })),
 }));
 
-vi.mock("@/app/[business_slug]/admin/(authed)/operacion/actions", () => ({
-  getRendicionTabData: async () => ({
-    ok: false as const,
-    error: "sin refetch",
-  }),
-}));
-
 // El panel de asignaciones trae su propio árbol (y sus propias actions); acá se
 // renderiza con `showAssignments: false`, pero el import igual se evalúa.
 vi.mock("@/components/admin/local/caja-assignments-tab", () => ({
   CajaAssignmentsPanel: () => null,
 }));
 
-import { RendicionMozosTab } from "./rendicion-mozos-tab";
+import { RendicionEnCaja, type HistorialRendicion } from "./rendicion-en-caja";
 
 const EMPTY_METODO = {
   cash: 0,
@@ -54,6 +47,8 @@ function pendienteMixto(
     tickets_cents: 3_850_000,
     por_metodo: { ...EMPTY_METODO, cash: 1_850_000, card_manual: 3_850_000 },
     total_propinas_cents: 0,
+    propina_efectivo_cents: 0,
+    propina_a_entregar_cents: 0,
     pagos_count: 2,
     por_canal: {
       salon: {
@@ -66,21 +61,23 @@ function pendienteMixto(
   };
 }
 
-type Historial = React.ComponentProps<typeof RendicionMozosTab>["initialHistorial"];
+type Historial = HistorialRendicion[];
 
 function renderTab(
   pendientes: RendicionMozoPendiente[],
   historial: Historial = [],
 ) {
   return render(
-    <RendicionMozosTab
+    <RendicionEnCaja
       slug="demo"
-      initialPendientes={pendientes}
-      initialHistorial={historial}
+      payments={[]}
+      pendientes={pendientes}
+      historial={historial}
       cajas={[]}
-      cajaAssignments={[]}
+      assignments={[]}
       members={[]}
       showAssignments={false}
+      onChanged={() => {}}
     />,
   );
 }
@@ -88,10 +85,11 @@ function renderTab(
 describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
   // #330 — lo cobrado con otros métodos vuelve, pero sólo informativo: el
   // monto a entregar sigue siendo el efectivo y la leyenda lo dice.
-  it("muestra el efectivo a entregar y la tarjeta como informativo", () => {
+  it("muestra el efectivo a entregar y la tarjeta como informativo", async () => {
     renderTab([pendienteMixto()]);
 
     expect(screen.getByText("$ 18.500")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^rendir$/i }));
     expect(screen.getByText(/otros cobros · informativo/i)).toBeInTheDocument();
     expect(screen.getByText("Tarjeta")).toBeInTheDocument();
     expect(screen.getByText("$ 38.500")).toBeInTheDocument();
@@ -108,15 +106,14 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     renderTab([pendienteMixto()]);
 
     await user.click(
-      screen.getByRole("button", { name: /registrar rendición/i }),
+      screen.getByRole("button", { name: /^rendir$/i }),
     );
 
     expect(
       await screen.findByText(/efectivo que debería entregar/i),
     ).toBeInTheDocument();
     expect(screen.getAllByText("$ 18.500").length).toBeGreaterThan(0);
-    // Tarjeta del listado + modal.
-    expect(screen.getAllByText(/sólo se rinde el efectivo/i)).toHaveLength(2);
+    expect(screen.getAllByText(/sólo se rinde el efectivo/i)).toHaveLength(1);
     expect(screen.queryByText(/en tickets/i)).not.toBeInTheDocument();
   });
 
@@ -129,11 +126,21 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
 
   // Spec 177 · Parte B — la propina dejó de ser un número informativo: se le
   // paga en esta misma rendición y sale del cajón.
-  it("la propina se muestra como lo que hay que pagarle", () => {
-    renderTab([pendienteMixto({ total_propinas_cents: 420_000 })]);
+  // #351 — la propina se parte: la de efectivo ya la tiene, sólo se le da la
+  // de tarjeta/QR/transferencia.
+  it("la propina se parte en lo que hay que darle y lo que ya tiene", () => {
+    renderTab([
+      pendienteMixto({
+        total_propinas_cents: 520_000,
+        propina_efectivo_cents: 100_000,
+        propina_a_entregar_cents: 420_000,
+      }),
+    ]);
 
-    expect(screen.getByText(/propina a pagarle/i)).toBeInTheDocument();
+    expect(screen.getByText(/propina a darle del cajón/i)).toBeInTheDocument();
     expect(screen.getByText("$ 4.200")).toBeInTheDocument();
+    expect(screen.getByText(/propina en efectivo · ya la tiene/i)).toBeInTheDocument();
+    expect(screen.getByText("$ 1.000")).toBeInTheDocument();
   });
 
   it("el mozo que cobró todo con tarjeta sigue en la lista, con $0 (spec 139 · D4)", () => {
@@ -148,7 +155,6 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
 
     expect(screen.getByText("Diego Mozo")).toBeInTheDocument();
     expect(screen.getByText("$ 0")).toBeInTheDocument();
-    expect(screen.getByText("$ 38.500")).toBeInTheDocument();
   });
 
   describe("el mozo que no tiene efectivo para entregar", () => {
@@ -164,7 +170,7 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     it("le explica que no hay nada que entregar, en vez de pedirle $0", async () => {
       renderTab([soloTarjeta()]);
       await userEvent.click(
-        screen.getByRole("button", { name: /registrar rendición/i }),
+        screen.getByRole("button", { name: /^rendir$/i }),
       );
 
       expect(
@@ -178,7 +184,7 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     it("no ofrece «No entregó»: una deuda de $0 avisada al dueño es ruido", async () => {
       renderTab([soloTarjeta()]);
       await userEvent.click(
-        screen.getByRole("button", { name: /registrar rendición/i }),
+        screen.getByRole("button", { name: /^rendir$/i }),
       );
 
       expect(
@@ -190,7 +196,7 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
       const { registrarRendicionMozo } = await import("@/lib/caja/actions");
       renderTab([soloTarjeta()]);
       await userEvent.click(
-        screen.getByRole("button", { name: /registrar rendición/i }),
+        screen.getByRole("button", { name: /^rendir$/i }),
       );
 
       const cerrar = screen.getByRole("button", { name: /cerrar período/i });
@@ -212,7 +218,7 @@ describe("rendición · sólo se rinde el efectivo (spec 151)", () => {
     it("con efectivo, el flujo de siempre no cambia", async () => {
       renderTab([pendienteMixto()]);
       await userEvent.click(
-        screen.getByRole("button", { name: /registrar rendición/i }),
+        screen.getByRole("button", { name: /^rendir$/i }),
       );
 
       expect(
@@ -255,7 +261,7 @@ describe("rendición · por canal (spec 203)", () => {
     const { registrarRendicionMozo } = await import("@/lib/caja/actions");
     vi.mocked(registrarRendicionMozo).mockClear();
     renderTab([sofia()]);
-    await user.click(screen.getByRole("button", { name: /registrar rendición/i }));
+    await user.click(screen.getByRole("button", { name: /^rendir$/i }));
 
     await user.type(await screen.findByLabelText(/takeaway · efectivo que entrega/i), "3000");
     await user.type(screen.getByLabelText(/delivery · efectivo que entrega/i), "4500");
@@ -275,7 +281,7 @@ describe("rendición · por canal (spec 203)", () => {
   it("una diferencia en un canal pide motivo aunque el total cuadre", async () => {
     const user = userEvent.setup();
     renderTab([sofia()]);
-    await user.click(screen.getByRole("button", { name: /registrar rendición/i }));
+    await user.click(screen.getByRole("button", { name: /^rendir$/i }));
 
     await user.type(await screen.findByLabelText(/takeaway · efectivo que entrega/i), "3500");
     await user.type(screen.getByLabelText(/delivery · efectivo que entrega/i), "4000");
@@ -325,5 +331,24 @@ describe("rendición · el ticket por mozo (spec 178)", () => {
 
     expect(imprimirRendicion).toHaveBeenCalledWith("r1", "demo");
     expect(await screen.findByText(/reimprimir/i)).toBeInTheDocument();
+  });
+});
+
+// ── #351 — no se rinde con una mesa sin cobrar ────────────────────────────
+describe("rendición · mesa sin cobrar (#351)", () => {
+  it("traba el botón y dice qué mesa falta cobrar", () => {
+    renderTab([
+      pendienteMixto({
+        mesas_sin_cobrar: [{ orderId: "o1", tableLabel: "12", saldoCents: 1_850_000 }],
+      }),
+    ]);
+
+    expect(screen.getByRole("button", { name: /^rendir$/i })).toBeDisabled();
+    expect(screen.getByText(/tiene mesa 12 sin cobrar/i)).toBeInTheDocument();
+  });
+
+  it("sin mesas pendientes, se puede rendir", () => {
+    renderTab([pendienteMixto({ mesas_sin_cobrar: [] })]);
+    expect(screen.getByRole("button", { name: /^rendir$/i })).toBeEnabled();
   });
 });

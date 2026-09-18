@@ -34,12 +34,6 @@ const loadSalon = vi.fn(async () => ({
   mozos: [{ user_id: "u1", full_name: "Ana", role: "mozo" }],
 }));
 const loadCaja = vi.fn(async () => ({ cajas: [{ id: "caja1" }] }));
-const loadRendicion = vi.fn(async () => ({
-  rendicionPendientes: [{ mozo_id: "u1" }],
-  rendicionHistorial: [],
-  cajaAssignments: [],
-  businessMembers: [],
-}));
 const loadReservas = vi.fn(async () => ({
   date: "2026-08-08",
   rows: [],
@@ -55,7 +49,6 @@ const loadFichaje = vi.fn(async () => ({
 vi.mock("./data", () => ({
   loadSalon: (...args: unknown[]) => loadSalon(...(args as [])),
   loadCaja: (...args: unknown[]) => loadCaja(...(args as [])),
-  loadRendicion: (...args: unknown[]) => loadRendicion(...(args as [])),
   loadReservas: (...args: unknown[]) => loadReservas(...(args as [])),
   loadFichaje: (...args: unknown[]) => loadFichaje(...(args as [])),
 }));
@@ -67,7 +60,6 @@ vi.mock("@/lib/supabase/service", () => ({
 import {
   getCajaTabData,
   getFichajeTabData,
-  getRendicionTabData,
   getReservasTabData,
   getSalonTabData,
 } from "./actions";
@@ -128,7 +120,6 @@ describe("gate de rol de las actions de operación (spec 103)", () => {
   const actions = [
     ["salón", () => getSalonTabData("golf"), loadSalon],
     ["caja", () => getCajaTabData("golf"), loadCaja],
-    ["rendición", () => getRendicionTabData("golf"), loadRendicion],
     ["reservas", () => getReservasTabData("golf", "2026-08-08"), loadReservas],
     ["fichaje", () => getFichajeTabData("golf"), loadFichaje],
   ] as const;
@@ -180,7 +171,6 @@ describe("la terminal del salón (spec 140 · D2)", () => {
 
   const ajenas = [
     ["caja", () => getCajaTabData("golf"), loadCaja],
-    ["rendición", () => getRendicionTabData("golf"), loadRendicion],
     // Spec 182 · D1 — el libro del día pasó a ser supervisión. La terminal ve
     // las reservas de HOY por la tab Mesas (viajan con el plano); navegar
     // fechas, editar y la bandeja «A confirmar» son del encargado.

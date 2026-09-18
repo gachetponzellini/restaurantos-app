@@ -1,3 +1,4 @@
+import type { MesaSinCobrar } from "./mesas-sin-cobrar";
 import type {
   CanalRendicion,
   LiquidacionDeCanal,
@@ -378,6 +379,15 @@ export type RendicionMozoPendiente = {
   tickets_cents: number;
   por_metodo: Record<PaymentMethod, number>;
   total_propinas_cents: number;
+  /** #351 — propina que vino en efectivo: ya la tiene, no se le da del cajón. */
+  propina_efectivo_cents: number;
+  /** #351 — propina de tarjeta/QR/transferencia: se le entrega del cajón. */
+  propina_a_entregar_cents: number;
+  /**
+   * #351 — mesas suyas sin cobrar. Con alguna, no puede rendir. Sólo lo llena
+   * `getRendicionesPendientesTodosLosMozos`; la action lo re-chequea aparte.
+   */
+  mesas_sin_cobrar?: MesaSinCobrar[];
   pagos_count: number;
   /** Lo mismo, partido por canal (spec 203). Sólo canales con cobros. */
   por_canal: Partial<Record<CanalRendicion, PendienteDeCanal>>;

@@ -805,21 +805,21 @@ export const TEMAS: Tema[] = [
     grupo: "operacion",
     claves: [
       "Acá se rinde SÓLO efectivo. Lo cobrado con tarjeta, QR o transferencia ya entró a la caja solo.",
-      "Sin todas las rendiciones, la caja no cierra.",
+      "Sin todas las rendiciones la caja no cierra, y a un mozo con una mesa sin cobrar no se le puede rendir.",
       "El que no entrega queda registrado como deuda, a la vista en el cierre y avisada al dueño.",
     ],
     pasos: [
       {
         titulo: "Quién debe cuánto",
         texto:
-          'La pantalla lista los mozos con pagos pendientes del turno y, en cada uno, «Efectivo a entregar» y cuántos cobros hizo. Es sólo el efectivo: lo que cobró con tarjeta, QR o transferencia no aparece acá, porque esa plata ya entró a la caja sola y el mozo no la tiene encima. Si no hay nadie, dice "No hay mozos/encargados con pagos pendientes de rendir.".',
+          'Se rinde desde la pestaña Caja, abajo de todo: en «Cobrado por empleado · rendición» hay una tarjeta por persona con lo que cobró en esa caja y, al pie, «Efectivo a rendir» con el botón «Rendir». Si ya rindió dice «Rendido». Es sólo el efectivo: lo que cobró con tarjeta, QR o transferencia no aparece acá, porque esa plata ya entró a la caja sola y el mozo no la tiene encima. Si tiene una mesa sin cobrar —abierta, o cerrada con saldo porque se anuló un cobro— el botón queda trabado y la tarjeta dice cuál: cobrala primero, o esa plata termina en una segunda rendición.',
         aviso: {
           tono: "ojo",
           texto:
             "Si querés ver todo lo que cobró un mozo, con tarjetas incluidas, eso está en la caja y en el resumen del cierre. Acá se le pide plata a una persona: sólo puede figurar lo que tiene en el bolsillo.",
         },
         imagen: "/ayuda/op-rendicion.png",
-        alt: "La pestaña Rendición, con una tarjeta por mozo mostrando el efectivo a entregar, y abajo la tabla de últimas rendiciones.",
+        alt: "Las tarjetas por empleado al pie de la caja, con el efectivo a rendir de cada uno.",
         // % del ancho y del alto de la captura (1160 × 860).
         marcas: [
           { n: 1, x: 13.5, y: 28.4 },
@@ -839,7 +839,7 @@ export const TEMAS: Tema[] = [
       {
         titulo: "Las que ya se tomaron",
         texto:
-          "Abajo, «Últimas rendiciones» deja la constancia: qué se esperaba, qué entregó cada uno, la diferencia —«OK» cuando cerró— y quién la registró. Es el lugar donde mirar si alguien pregunta.",
+          "Debajo de las tarjetas, al desplegar «Últimas rendiciones», queda la constancia: qué se esperaba, qué entregó cada uno, la diferencia —«OK» cuando cerró— y quién la registró. Es el lugar donde mirar si alguien pregunta.",
       },
       {
         titulo: "Cuando no coincide",
