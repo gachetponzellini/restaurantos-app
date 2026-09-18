@@ -27,6 +27,11 @@ import type { MermaReportItem } from "@/lib/ingredients/merma";
 import type { IngredientOverview, ProductCosteo } from "@/lib/ingredients/types";
 import type { StockOverviewItem } from "@/lib/stock/queries";
 import { cn } from "@/lib/utils";
+import { catalogAttention } from "@/lib/catalog/attention";
+import {
+  CatalogHeaderActionProvider,
+  CatalogHeaderActionSlot,
+} from "@/components/admin/catalog/ui/header-action";
 
 type Tab =
   | "productos"
@@ -123,6 +128,17 @@ function TabsInner({
     ],
   );
 
+  const attention = useMemo(
+    () =>
+      catalogAttention({
+        costeo,
+        stockBebidas,
+        stockBar,
+        ingredients,
+      }),
+    [costeo, stockBebidas, stockBar, ingredients],
+  );
+
   // Costo de mercadería por producto (centavos), sólo productos con receta.
   const costByProduct = useMemo(() => {
     const map: Record<string, number> = {};
@@ -152,73 +168,26 @@ function TabsInner({
     ) : null;
 
   return (
-    <>
+    <CatalogHeaderActionProvider>
       <PageHeader
         eyebrow="Gestión"
         title="Productos e inventario"
         description="Tu carta, insumos y costos, más el stock de bebidas y cocina. Todo lo que ofrecés y lo que tenés en el local."
         action={
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <CatalogHeaderActionSlot />
             {action}
             <AyudaChip slug={slug} tema="catalogo" />
           </div>
         }
       />
 
-      <nav
-        aria-label="Secciones del catálogo"
-        className="inline-flex rounded-2xl bg-white p-1 ring-1 ring-zinc-200/70"
-      >
-        <TabButton
-          active={active === "productos"}
-          onClick={() => setTab("productos")}
-          count={counts.productos}
-        >
-          Productos
-        </TabButton>
-        <TabButton
-          active={active === "categorias"}
-          onClick={() => setTab("categorias")}
-          count={counts.categorias}
-        >
-          Categorías
-        </TabButton>
-        <TabButton
-          active={active === "sectores"}
-          onClick={() => setTab("sectores")}
-          count={counts.sectores}
-        >
-          Sectores
-        </TabButton>
-        <TabButton
-          active={active === "menu-del-dia"}
-          onClick={() => setTab("menu-del-dia")}
-          count={counts.menuDelDia}
-        >
-          Menú del día
-        </TabButton>
-        <TabButton
-          active={active === "insumos"}
-          onClick={() => setTab("insumos")}
-          count={counts.insumos}
-        >
-          Insumos
-        </TabButton>
-        <TabButton
-          active={active === "costeo"}
-          onClick={() => setTab("costeo")}
-          count={counts.costeo}
-        >
-          Costeo
-        </TabButton>
-        <TabButton
-          active={active === "stock"}
-          onClick={() => setTab("stock")}
-          count={counts.stock}
-        >
-          Stock
-        </TabButton>
-      </nav>
+      <CatalogTabs
+        active={active}
+        onChange={setTab}
+        counts={counts}
+        attention={attention}
+      />
 
       <div>
         {active === "productos" && (
@@ -269,43 +238,125 @@ function TabsInner({
           />
         )}
       </div>
-    </>
+    </CatalogHeaderActionProvider>
   );
 }
 
-function TabButton({
+/**
+ * Tabs agrupadas por familia (spec 205 · D6): Carta · Cocina · Costos e
+ * inventario. El badge rojo marca lo que pide atención (platos que pierden
+ * plata, stock bajo mínimo).
+ */
+const TAB_GROUPS: {
+  label: string;
+  tabs: { id: Tab; label: string; count: keyof Counts; alert?: keyof Attention }[];
+}[] = [
+  {
+    label: "Carta",
+    tabs: [
+      { id: "productos", label: "Productos", count: "productos" },
+      { id: "categorias", label: "Categorías", count: "categorias" },
+      { id: "menu-del-dia", label: "Menú del día", count: "menuDelDia" },
+    ],
+  },
+  {
+    label: "Cocina",
+    tabs: [{ id: "sectores", label: "Sectores", count: "sectores" }],
+  },
+  {
+    label: "Costos e inventario",
+    tabs: [
+      { id: "insumos", label: "Insumos", count: "insumos", alert: "insumos" },
+      { id: "costeo", label: "Costeo", count: "costeo", alert: "costeo" },
+      { id: "stock", label: "Stock", count: "stock", alert: "stock" },
+    ],
+  },
+];
+
+type Counts = Record<
+  | "productos"
+  | "categorias"
+  | "sectores"
+  | "menuDelDia"
+  | "insumos"
+  | "costeo"
+  | "stock",
+  number
+>;
+type Attention = ReturnType<typeof catalogAttention>;
+
+const ALERT_TITLE: Record<keyof Attention, string> = {
+  costeo: "platos que pierden plata",
+  insumos: "insumos bajo mínimo",
+  stock: "productos o insumos bajo mínimo",
+};
+
+function CatalogTabs({
   active,
-  onClick,
-  count,
-  children,
+  onChange,
+  counts,
+  attention,
 }: {
-  active: boolean;
-  onClick: () => void;
-  count: number;
-  children: React.ReactNode;
+  active: Tab;
+  onChange: (t: Tab) => void;
+  counts: Counts;
+  attention: Attention;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "relative inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition",
-        active
-          ? "bg-zinc-100 text-zinc-900"
-          : "text-zinc-500 hover:text-zinc-900",
-      )}
+    <nav
+      aria-label="Secciones del catálogo"
+      className="flex items-end overflow-x-auto border-b border-zinc-200 [scrollbar-width:none]"
     >
-      {children}
-      <span
-        className={cn(
-          "rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums",
-          active ? "bg-white text-zinc-900 ring-1 ring-zinc-200" : "bg-zinc-100 text-zinc-500",
-        )}
-      >
-        {count}
-      </span>
-    </button>
+      {TAB_GROUPS.map((g, gi) => (
+        <div key={g.label} className="flex items-end">
+          {gi > 0 && (
+            <span aria-hidden className="mx-2 mb-2.5 h-[22px] w-px bg-zinc-200" />
+          )}
+          <div role="group" aria-label={g.label} className="flex flex-col">
+            <span
+              aria-hidden
+              className="px-3 text-[10px] font-semibold tracking-[0.12em] whitespace-nowrap text-zinc-400 uppercase max-md:hidden"
+            >
+              {g.label}
+            </span>
+            <div className="flex">
+              {g.tabs.map((t) => {
+                const on = active === t.id;
+                const alert = t.alert ? attention[t.alert] : 0;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onChange(t.id)}
+                    aria-current={on ? "page" : undefined}
+                    className={cn(
+                      "-mb-px flex items-center gap-1.5 border-b-2 px-3 pt-2 pb-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+                      on
+                        ? "border-zinc-900 text-zinc-900"
+                        : "border-transparent text-zinc-500 hover:text-zinc-900",
+                    )}
+                  >
+                    {t.label}
+                    <span className="text-[11px] text-zinc-400 tabular-nums">
+                      {counts[t.count]}
+                    </span>
+                    {alert > 0 && t.alert && (
+                      <span
+                        title={`${alert} ${ALERT_TITLE[t.alert]}`}
+                        className="rounded-full bg-rose-50 px-1.5 text-[11px] font-semibold text-rose-700 tabular-nums"
+                      >
+                        {alert}
+                        <span className="sr-only"> {ALERT_TITLE[t.alert]}</span>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </nav>
   );
 }
 
