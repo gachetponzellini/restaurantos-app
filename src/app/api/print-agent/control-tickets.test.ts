@@ -71,6 +71,8 @@ vi.mock("@/lib/supabase/service", () => ({
           in: () => b,
           or: () => b,
           gt: () => b,
+          // Spec 095 · H-37: la cuenta excluye las órdenes anuladas.
+          neq: () => b,
           // Spec 190: el resolver filtra los usuarios sin comandera elegida.
           not: () => b,
           order: () => b,
@@ -165,7 +167,7 @@ function ticket(over: Row = {}): Row {
 }
 
 /** Una cuenta de mesa pendiente, con su comandera en OTRA LAN que el control. */
-function cuentaJob(): Row {
+function cuentaJob(over: Row = {}): Row {
   return {
     id: "cta1",
     status: "pendiente",
@@ -198,6 +200,7 @@ function cuentaJob(): Row {
         },
       ],
     },
+    ...over,
   };
 }
 
@@ -454,6 +457,75 @@ describe("GET · alcance del agente (spec 124)", () => {
       "CONTROL",
       "CUENTA",
     ]);
+  });
+});
+
+describe("GET · cuenta de mesa pedida por alguien con comandera propia (#342)", () => {
+  // Para el local, el «control» es la cuenta de la mesa (el ticket de control
+  // de MaxiRest). La USB de la terminal tiene que sacar ESE papel.
+  const usb = {
+    user_id: "term1",
+    control_printers: {
+      printer_ip: "local:Control",
+      printer_port: null,
+      is_active: true,
+    },
+  };
+
+  beforeEach(() => {
+    controlRows = [];
+  });
+
+  it("la cuenta que pide la terminal sale por SU comandera", async () => {
+    // Un `local:` sólo lo alcanza el agente que lo lista (spec 181 · D3).
+    agentScope = ["local:Control"];
+    cuentaRows = [cuentaJob({ requested_by: "term1" })];
+    businessUsersRows = [usb];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas).toHaveLength(1);
+    expect(body.comandas[0].printer_ip).toBe("local:Control");
+  });
+
+  it("la que pide alguien sin comandera propia sigue saliendo por la del salón", async () => {
+    cuentaRows = [cuentaJob({ requested_by: "sofia" })];
+    businessUsersRows = [];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.20.70");
+  });
+
+  it("una comandera propia desactivada no se usa: cae a la del salón", async () => {
+    cuentaRows = [cuentaJob({ requested_by: "term1" })];
+    businessUsersRows = [
+      { ...usb, control_printers: { ...usb.control_printers, is_active: false } },
+    ];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("192.168.20.70");
+  });
+
+  it("sale aunque el salón no tenga comandera de cuentas", async () => {
+    // Un `local:` sólo lo alcanza el agente que lo lista (spec 181 · D3).
+    agentScope = ["local:Control"];
+    const job = cuentaJob({ requested_by: "term1" });
+    const orders = job.orders as Row;
+    const tables = orders.tables as Row;
+    tables.floor_plans = {
+      name: "Terraza",
+      cuenta_printer_ip: null,
+      cuenta_printer_port: null,
+      cuenta_printer_enabled: true,
+    };
+    cuentaRows = [job];
+    businessUsersRows = [usb];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas[0].printer_ip).toBe("local:Control");
+  });
+
+  it("el agente principal (alcance por IP) no se la lleva: es de la terminal", async () => {
+    cuentaRows = [cuentaJob({ requested_by: "term1" })];
+    businessUsersRows = [usb];
+    agentScope = ["192.168.20.0/24"];
+    const body = await (await GET(getReq())).json();
+    expect(body.comandas).toEqual([]);
   });
 });
 

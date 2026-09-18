@@ -16,6 +16,29 @@ import { resolveCuentaPrinter } from "./cuenta-printer";
 type GenericClient = SupabaseClient;
 
 /**
+ * ¿Quien pide tiene comandera propia (la USB de su compu)? #342 — la cuenta
+ * pedida por él sale por ésa (lo resuelve el GET del agente), así que un salón
+ * sin comandera de cuentas no es motivo para rechazarla.
+ */
+async function tieneComanderaPropia(
+  service: GenericClient,
+  businessId: string,
+  userId: string | null | undefined,
+): Promise<boolean> {
+  if (!userId) return false;
+  const { data } = await service
+    .from("business_users")
+    .select("control_printers:control_printer_id(printer_ip, is_active)")
+    .eq("business_id", businessId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const p = (data as {
+    control_printers: { printer_ip: string | null; is_active: boolean } | null;
+  } | null)?.control_printers;
+  return Boolean(p?.printer_ip?.trim() && p.is_active);
+}
+
+/**
  * Encola la impresión de la cuenta de una mesa (spec 080).
  *
  * A diferencia del control de pedido (spec 063), que sale **una** vez por orden,
@@ -121,17 +144,17 @@ export async function imprimirCuenta(
     .eq("order_id", orderId)
     .eq("kind", "cuenta");
 
+  const hayComandera =
+    !!printer || (await tieneComanderaPropia(service, business.id, ctx.userId));
+
   if (opts?.alCobrar) {
-    const decision = decidirCuentaAlCobrar({
-      previos,
-      hayComandera: !!printer,
-    });
+    const decision = decidirCuentaAlCobrar({ previos, hayComandera });
     if (decision !== "imprimir") {
       return actionOk({ print_job_id: null, omitida: decision });
     }
   }
 
-  if (!printer) {
+  if (!hayComandera) {
     return actionError(
       `No hay comandera de cuentas configurada para ${floorPlan.name}. Configurala en Ajustes → Operación del local.`,
     );
@@ -210,7 +233,10 @@ export async function imprimirCuentaPedido(
       business as { cuenta_printer_enabled?: boolean | null }
     ).cuenta_printer_enabled,
   });
-  if (!printer) {
+  if (
+    !printer &&
+    !(await tieneComanderaPropia(service, business.id, ctx.userId))
+  ) {
     return actionError(
       "No hay comandera de cuentas configurada. Configurala en Ajustes → Operación del local.",
     );
