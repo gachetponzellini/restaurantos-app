@@ -1,20 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChefHat, GlassWater, Package, Settings, TrendingDown, Wine } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 
+import { CatalogHeaderAction } from "@/components/admin/catalog/ui/header-action";
+import { Segmented } from "@/components/admin/catalog/ui/catalog-toolbar";
+import { StockBarAddModal } from "@/components/admin/stock/stock-bar-add-modal";
+import type { BarStockCandidate } from "@/components/admin/stock/stock-bar-tab";
 import { MermaTab } from "@/components/admin/stock/merma-tab";
-import { StockBarTab, type BarStockCandidate } from "@/components/admin/stock/stock-bar-tab";
-import { StockCocinaTab } from "@/components/admin/stock/stock-cocina-tab";
-import { StockGrid } from "@/components/admin/stock/stock-grid";
+import { StockList } from "@/components/admin/stock/stock-list";
+import { StockMovementModal } from "@/components/admin/stock/stock-movement-modal";
+import { StockPickerModal } from "@/components/admin/stock/stock-picker-modal";
+import { Button } from "@/components/ui/button";
 import type { KitchenStockFull } from "@/lib/ingredients/queries";
 import type { MermaReportItem } from "@/lib/ingredients/merma";
 import type { StockOverviewItem } from "@/lib/stock/queries";
-import { cn } from "@/lib/utils";
+import {
+  bebidasToRows,
+  cocinaToRows,
+  lowCount,
+  type StockRow,
+} from "@/lib/stock/stock-rows";
 
-type StockView = "bebidas" | "cocina" | "bar" | "merma";
+type StockSub = "bebidas" | "cocina" | "bar" | "merma";
 
+/**
+ * Tab Stock del catálogo (spec 205 · D12): sub-tabs como `Segmented` con
+ * badge de bajo mínimo — Bebidas · Cocina · Bar · Merma del mes — sobre el
+ * mismo patrón toolbar → tabla densa → modal que ya usan Productos/Insumos.
+ *
+ * Firma de props sin cambios: `catalog-shell.tsx` (fuera de alcance de esta
+ * spec) sigue llamando a `StockTab` con estos nombres exactos.
+ */
 export function StockTab({
   slug,
   bebidas,
@@ -36,92 +54,103 @@ export function StockTab({
   mermaFrom: string;
   mermaTo: string;
 }) {
-  const [view, setView] = useState<StockView>("bebidas");
+  const [sub, setSub] = useState<StockSub>("bebidas");
+  const [addingBar, setAddingBar] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<StockRow | null>(null);
+
+  const bebidasRows = useMemo(() => bebidasToRows(bebidas), [bebidas]);
+  const cocinaRows = useMemo(() => cocinaToRows(cocina), [cocina]);
+  const barRows = useMemo(
+    () => bebidasToRows(bar, costByProduct),
+    [bar, costByProduct],
+  );
+
+  const allRows = useMemo(
+    () => [...bebidasRows, ...cocinaRows, ...barRows],
+    [bebidasRows, cocinaRows, barRows],
+  );
+
+  const lowB = lowCount(bebidasRows);
+  const lowC = lowCount(cocinaRows);
+  const lowBar = lowCount(barRows);
 
   return (
     <div className="space-y-4">
-      {/* Toggle bebidas / cocina / bar / merma + acción configurar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap rounded-xl bg-white p-1 ring-1 ring-zinc-200/70">
-          <ToggleButton
-            active={view === "bebidas"}
-            onClick={() => setView("bebidas")}
-            icon={<Wine className="size-4" />}
-            count={bebidas.length}
-          >
-            Bebidas
-          </ToggleButton>
-          <ToggleButton
-            active={view === "cocina"}
-            onClick={() => setView("cocina")}
-            icon={<ChefHat className="size-4" />}
-            count={cocina.length}
-          >
-            Cocina
-          </ToggleButton>
-          <ToggleButton
-            active={view === "bar"}
-            onClick={() => setView("bar")}
-            icon={<GlassWater className="size-4" />}
-            count={bar.length}
-          >
-            Bar
-          </ToggleButton>
-          <ToggleButton
-            active={view === "merma"}
-            onClick={() => setView("merma")}
-            icon={<TrendingDown className="size-4" />}
-          >
-            Merma
-          </ToggleButton>
-        </div>
+      {/* «Ingresar mercadería»: la acción principal de la tab, siempre en el
+          header (D6) — elegís de las tres listas y va directo al mismo
+          modal de movimiento. */}
+      <CatalogHeaderAction>
+        <Button
+          type="button"
+          size="xl"
+          className="bg-brand text-brand-foreground hover:bg-brand-hover"
+          onClick={() => setPicking(true)}
+        >
+          <Plus /> Ingresar mercadería
+        </Button>
+      </CatalogHeaderAction>
 
-        {view === "bebidas" && (
-          <Link
-            href={`/${slug}/admin/stock/configurar`}
-            className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
-          >
-            <Settings className="size-4" />
-            Configurar productos
-          </Link>
-        )}
-      </div>
+      <Segmented<StockSub>
+        aria-label="Sección de stock"
+        value={sub}
+        onChange={setSub}
+        options={[
+          { value: "bebidas", label: "Bebidas", count: lowB, alert: true },
+          { value: "cocina", label: "Cocina", count: lowC, alert: true },
+          { value: "bar", label: "Bar", count: lowBar, alert: true },
+          { value: "merma", label: "Merma del mes" },
+        ]}
+      />
 
-      {view === "bebidas" &&
-        (bebidas.length === 0 ? (
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/50 py-16">
-            <Package className="size-10 text-zinc-400" strokeWidth={1.5} />
-            <div className="text-center">
-              <p className="text-sm font-medium text-zinc-700">
-                No hay productos con stock trackeado
-              </p>
-              <p className="mt-1 text-sm text-zinc-500">
-                Activá el tracking desde{" "}
-                <Link
-                  href={`/${slug}/admin/stock/configurar`}
-                  className="font-medium underline underline-offset-2"
-                >
-                  Configurar productos
-                </Link>
-              </p>
-            </div>
-          </div>
-        ) : (
-          <StockGrid items={bebidas} slug={slug} />
-        ))}
-
-      {view === "cocina" && <StockCocinaTab slug={slug} items={cocina} />}
-
-      {view === "bar" && (
-        <StockBarTab
+      {sub === "bebidas" && (
+        <StockList
+          rows={bebidasRows}
           slug={slug}
-          items={bar}
-          candidates={barCandidates}
-          costByProduct={costByProduct}
+          noun="producto"
+          searchPlaceholder="Buscar producto o categoría…"
+          secondaryAction={
+            <Link
+              href={`/${slug}/admin/stock/configurar`}
+              className="ml-auto inline-flex h-[38px] items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              <Sparkles className="size-4 text-zinc-400" />
+              Elegir productos con stock
+            </Link>
+          }
         />
       )}
 
-      {view === "merma" && (
+      {sub === "cocina" && (
+        <StockList
+          rows={cocinaRows}
+          slug={slug}
+          noun="insumo"
+          searchPlaceholder="Buscar insumo…"
+        />
+      )}
+
+      {sub === "bar" && (
+        <StockList
+          rows={barRows}
+          slug={slug}
+          noun="producto"
+          searchPlaceholder="Buscar producto o categoría…"
+          showCost
+          secondaryAction={
+            <Button
+              type="button"
+              variant="outline"
+              className="ml-auto h-[38px]"
+              onClick={() => setAddingBar(true)}
+            >
+              <Plus className="size-4" /> Agregar producto
+            </Button>
+          }
+        />
+      )}
+
+      {sub === "merma" && (
         <MermaTab
           slug={slug}
           initialReport={merma}
@@ -129,45 +158,31 @@ export function StockTab({
           initialTo={mermaTo}
         />
       )}
-    </div>
-  );
-}
 
-function ToggleButton({
-  active,
-  onClick,
-  icon,
-  count,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  count?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
-        active ? "bg-zinc-900 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900",
-      )}
-    >
-      <span className={active ? "text-white" : "text-zinc-400"}>{icon}</span>
-      {children}
-      {count != null && (
-        <span
-          className={cn(
-            "rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums",
-            active ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-500",
-          )}
-        >
-          {count}
-        </span>
-      )}
-    </button>
+      <StockBarAddModal
+        open={addingBar}
+        onOpenChange={setAddingBar}
+        slug={slug}
+        candidates={barCandidates}
+      />
+
+      <StockPickerModal
+        open={picking}
+        onOpenChange={setPicking}
+        rows={allRows}
+        onPick={(row) => {
+          setPicking(false);
+          setPicked(row);
+        }}
+      />
+
+      <StockMovementModal
+        open={!!picked}
+        onOpenChange={(open) => !open && setPicked(null)}
+        row={picked}
+        mode="ingreso"
+        slug={slug}
+      />
+    </div>
   );
 }

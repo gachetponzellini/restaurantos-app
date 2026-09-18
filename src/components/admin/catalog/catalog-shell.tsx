@@ -2,15 +2,14 @@
 
 import { Suspense, useMemo, type ComponentType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
 
 import { CatalogClient } from "@/components/admin/catalog/catalog-client";
 import { CategoriasTab } from "@/components/admin/catalog/categorias-tab";
 import { CosteoTab } from "@/components/admin/catalog/costeo-tab";
 import { IngredientsTab } from "@/components/admin/catalog/ingredients-tab";
 import { SectoresTab } from "@/components/admin/catalog/sectores-tab";
-import { DailyMenuList } from "@/components/admin/daily-menus/daily-menu-list";
-import { BrandButton } from "@/components/admin/shell/brand-button";
+import { DailyMenuTab } from "@/components/admin/daily-menus/daily-menu-tab";
+import { MenuEditor } from "@/components/admin/daily-menus/menu-editor";
 import { AyudaChip } from "@/components/admin/ayuda-chip";
 import { PageHeader } from "@/components/admin/shell/page-shell";
 import type { BarStockCandidate } from "@/components/admin/stock/stock-bar-tab";
@@ -46,6 +45,10 @@ import {
   type CatalogEntityKind,
 } from "@/components/admin/catalog/ui/editor-host";
 import { ProductEditor } from "@/components/admin/catalog/product-editor";
+import { CategoryEditor } from "@/components/admin/catalog/category-editor";
+import { SuperCategoryEditor } from "@/components/admin/catalog/super-category-editor";
+import { StationEditor } from "@/components/admin/catalog/station-editor";
+import { IngredientEditor } from "@/components/admin/catalog/ingredient-editor";
 
 type Tab =
   | "productos"
@@ -162,17 +165,6 @@ function TabsInner({
     return map;
   }, [costeo]);
 
-  const action =
-    active === "menu-del-dia" ? (
-      <BrandButton
-        href={`/${slug}/admin/menu-del-dia/nuevo`}
-        size="md"
-        leadingIcon={<Plus />}
-      >
-        Nuevo menú del día
-      </BrandButton>
-    ) : null;
-
   const data: CatalogData = {
     slug,
     businessId,
@@ -203,7 +195,6 @@ function TabsInner({
             action={
               <div className="flex items-center gap-2">
                 <CatalogHeaderActionSlot />
-                {action}
                 <AyudaChip slug={slug} tema="catalogo" />
               </div>
             }
@@ -218,30 +209,11 @@ function TabsInner({
 
           <div>
             {active === "productos" && <CatalogClient />}
-            {active === "categorias" && (
-              <CategoriasTab
-                slug={slug}
-                superCategories={superCategories}
-                stations={stations}
-                categories={categories}
-                products={products}
-              />
-            )}
-            {active === "sectores" && (
-              <SectoresTab
-                slug={slug}
-                stations={stations}
-                categories={categories}
-                products={products}
-              />
-            )}
-            {active === "menu-del-dia" && (
-              <DailyMenuList slug={slug} menus={menus} todayDow={todayDow} />
-            )}
-            {active === "insumos" && (
-              <IngredientsTab slug={slug} ingredients={ingredients} />
-            )}
-            {active === "costeo" && <CosteoTab items={costeo} />}
+            {active === "categorias" && <CategoriasTab />}
+            {active === "sectores" && <SectoresTab />}
+            {active === "menu-del-dia" && <DailyMenuTab />}
+            {active === "insumos" && <IngredientsTab />}
+            {active === "costeo" && <CosteoTab />}
             {active === "stock" && (
               <StockTab
                 slug={slug}
@@ -270,6 +242,11 @@ const EDITORS: Partial<
   Record<CatalogEntityKind, ComponentType<CatalogEditorProps>>
 > = {
   product: ProductEditor,
+  category: CategoryEditor,
+  superCategory: SuperCategoryEditor,
+  menu: MenuEditor,
+  station: StationEditor,
+  ingredient: IngredientEditor,
 };
 
 /** Nombre de una entidad para el «Volver a X» de los editores enlazados. */

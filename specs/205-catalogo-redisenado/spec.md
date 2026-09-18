@@ -2,7 +2,7 @@
 
 **Issue:** [#334](https://github.com/gachetponzellini/RestaurantOS-app/issues/334) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 🚧 en curso (2026-09-18) · mockup: https://claude.ai/artifact/L99GnYFRkpgrNkxdPaCKCM
+**Estado:** ✅ implementada (2026-09-18) — PR pendiente de merge · mockup: https://claude.ai/artifact/L99GnYFRkpgrNkxdPaCKCM
 
 **Depende de**: 204 (anatomía de modales, `components/ui/modal.tsx`), 065 (filtros
 persistidos), 180 (2ª/3ª comandera).
@@ -225,10 +225,33 @@ Se implementa por fases, una PR por fase; cada una deja el catálogo usable.
 - [x] «Nuevo producto» en el modal.
 - [x] Mobile: hoja desde abajo, tabs de secciones.
 
-**Fase 2 · Carta**: Categorías + supercategorías (D7), Menú del día (D8).
-**Fase 3 · Cocina**: Sectores (D9).
-**Fase 4 · Costos e inventario**: Insumos (D10), Costeo (D11), Stock + movimiento +
-historial + merma (D12).
+**Fase 2 · Carta**
+- [x] Categorías (D7): supercategorías como grupos, arrastrar para ordenar (se mantiene
+      `@dnd-kit` en filas densas: `CatalogTable` no ordena), `CategoryEditor`,
+      `SuperCategoryEditor`. ‹ › recorre todas las categorías visibles.
+- [x] Menú del día (D8): banda «Hoy», tabla con días y switch, `MenuEditor`; campos en
+      `daily-menu-fields.tsx`, compartidos con las páginas `/menu-del-dia`.
+
+**Fase 3 · Cocina**
+- [x] Sectores (D9): tarjetas con ruteo, `StationEditor` de sólo lectura para el ruteo.
+      «Sector propio» = distinto del de su categoría (el catálogo de MaxiRest trae el sector
+      repetido en cada producto; `lib/catalog/station-routing.ts`).
+
+**Fase 4 · Costos e inventario**
+- [x] Insumos (D10) + `IngredientEditor`. «Usado en» usa una lectura nueva,
+      `fetchIngredientUsage` (sólo lectura, con scope de tenant): es la única query que
+      agrega la spec.
+- [x] Costeo (D11): KPIs‑filtro, peor a mejor, abre el producto en «Precio y costo».
+- [x] Stock (D12): sub‑tabs con badges, orden por faltante, movimiento en `ModalContent sm`,
+      historial en `PanelContent`, KPIs de merma. «Elegir productos con stock» sigue
+      llevando a `/admin/stock/configurar`.
+
+**Quedó afuera (issues aparte si hacen falta)**
+- Historial de movimientos de un insumo de Cocina: no hay lectura del lado cliente de
+  `ingredient_consumptions`.
+- Merma del bar (`getMermaDeBar`, #270): existe la query pero la página no la trae.
+- Crear desde dentro de un editor («+ Nuevo producto en X») reemplaza el editor en vez de
+  apilarlo.
 
 **En cada fase**
 - [ ] typecheck + tests (incl. `product-form.precio.test.tsx`, `daily-menu-form.test.tsx`
