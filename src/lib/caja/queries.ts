@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { enLotes, fetchAll } from "@/lib/proveedores/unwrap";
 
 import { calculateExpectedCash, separarRetiroDelCierre } from "./expected-cash";
 import { calcularRendicionPorCanal, canalDelCobro } from "./canal-rendicion";
@@ -51,6 +52,7 @@ import type {
 // Remove after running `pnpm db:types` against a DB with 0044 applied.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = SupabaseClient<any, any, any>;
+
 const db = () => createSupabaseServiceClient() as unknown as AnyClient;
 
 const EMPTY_BY_METHOD: Record<PaymentMethod, number> = {
@@ -286,27 +288,31 @@ export async function getMovimientosPeriodoActual(
   const ultimoCorte = await getUltimoCorte(cajaId, businessId);
   const service = db();
 
-  let query = service
-    .from("caja_movimientos")
-    .select(
-      "id, caja_id, business_id, kind, amount_cents, reason, created_by, created_at, cancelled_at, cancelled_reason",
-    )
-    .eq("caja_id", cajaId)
-    .eq("business_id", businessId)
-    // Spec 130 · El retiro del cierre cae en este período por un milisegundo
-    // (0052) pero es la última línea del corte anterior, no el primer
-    // movimiento del turno: la app lo netea contra la apertura, así que
-    // listarlo acá sería contar la misma plata dos veces en pantalla. Sigue
-    // visible —y anulable— en el libro (spec 070).
-    .is("corte_id", null)
-    .order("created_at", { ascending: true });
+  // #360 — paginado (alimenta el papel del cierre).
+  const armar = () => {
+    let query = service
+      .from("caja_movimientos")
+      .select(
+        "id, caja_id, business_id, kind, amount_cents, reason, created_by, created_at, cancelled_at, cancelled_reason",
+      )
+      .eq("caja_id", cajaId)
+      .eq("business_id", businessId)
+      // Spec 130 · El retiro del cierre cae en este período por un milisegundo
+      // (0052) pero es la última línea del corte anterior, no el primer
+      // movimiento del turno: la app lo netea contra la apertura, así que
+      // listarlo acá sería contar la misma plata dos veces en pantalla. Sigue
+      // visible —y anulable— en el libro (spec 070).
+      .is("corte_id", null)
+      .order("created_at", { ascending: true })
+      .order("id");
+    if (ultimoCorte) {
+      query = query.gt("created_at", ultimoCorte.created_at);
+    }
+    return query;
+  };
 
-  if (ultimoCorte) {
-    query = query.gt("created_at", ultimoCorte.created_at);
-  }
-
-  const { data } = await query;
-  return (data ?? []) as CajaMovimiento[];
+  const data = await fetchAll(armar, "caja_movimientos");
+  return data as CajaMovimiento[];
 }
 
 export type CajaPayment = {
@@ -341,18 +347,22 @@ export async function getPaymentsPeriodoActual(
   const ultimoCorte = await getUltimoCorte(cajaId, businessId);
   const service = db();
 
-  let query = service
-    .from("payments")
-    .select(
-      "id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, order_id, orders!inner(order_number, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
-    )
-    .eq("caja_id", cajaId)
-    .eq("payment_status", "paid")
-    .order("created_at", { ascending: true });
-
-  if (ultimoCorte) {
-    query = query.gt("created_at", ultimoCorte.created_at);
-  }
+  // #360 — paginado.
+  const armar = () => {
+    let query = service
+      .from("payments")
+      .select(
+        "id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, order_id, orders!inner(order_number, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
+      )
+      .eq("caja_id", cajaId)
+      .eq("payment_status", "paid")
+      .order("created_at", { ascending: true })
+      .order("id");
+    if (ultimoCorte) {
+      query = query.gt("created_at", ultimoCorte.created_at);
+    }
+    return query;
+  };
 
   type Row = {
     id: string;
@@ -380,8 +390,7 @@ export async function getPaymentsPeriodoActual(
       | null;
   };
 
-  const { data } = await query;
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = (await fetchAll(armar, "payments")) as unknown as Row[];
 
   const mozoIds = Array.from(
     new Set(
@@ -411,13 +420,17 @@ export async function getPaymentsPeriodoActual(
   );
   const conFallo = new Set<string>();
   if (orderIds.length > 0) {
-    const { data: invRows } = await service
-      .from("invoices")
-      .select("order_id, status")
-      .in("order_id", orderIds)
-      .in("tipo_comprobante", ["factura_a", "factura_b"]);
+    // #360 — por lotes: con más de ~600 órdenes el `.in()` no entra en la URL.
+    const invRows = await enLotes(orderIds, async (lote) => {
+      const { data } = await service
+        .from("invoices")
+        .select("order_id, status")
+        .in("order_id", lote)
+        .in("tipo_comprobante", ["factura_a", "factura_b"]);
+      return (data ?? []) as { order_id: string | null; status: string }[];
+    });
     const vivas = new Set<string>();
-    for (const inv of (invRows ?? []) as {
+    for (const inv of invRows as {
       order_id: string | null;
       status: string;
     }[]) {
@@ -515,29 +528,39 @@ async function getCajaStatsEnVentana(
 
   // `orders!inner` es seguro: `payments.order_id` es NOT NULL, así que el join
   // no puede descartar cobros y desbalancear los totales.
-  let paymentsQuery = service
-    .from("payments")
-    .select("method, amount_cents, tip_cents, orders!inner(delivery_type)")
-    .eq("caja_id", cajaId)
-    .eq("payment_status", "paid");
-  paymentsQuery = paymentsQuery.gt("created_at", desde);
-  if (hasta) paymentsQuery = paymentsQuery.lte("created_at", hasta);
+  // #360 — paginado: PostgREST corta en 1.000 filas sin avisar, y con más
+  // cobros que eso el esperado del arqueo salía más chico en silencio.
+  // `fetchAll` además lanza si la lectura falla: ver que se rompió es mejor
+  // que ver $0.
+  const armarPagos = () => {
+    let q = service
+      .from("payments")
+      .select("id, method, amount_cents, tip_cents, orders!inner(delivery_type)")
+      .eq("caja_id", cajaId)
+      .eq("payment_status", "paid")
+      .gt("created_at", desde);
+    if (hasta) q = q.lte("created_at", hasta);
+    return q.order("id");
+  };
 
   // `cancelled_at` viaja para que el efectivo esperado ignore los movimientos
   // anulados (spec 070): siguen en el libro, pero no mueven la caja.
-  let movQuery = service
-    .from("caja_movimientos")
-    .select("kind, amount_cents, cancelled_at, corte_id")
-    .eq("caja_id", cajaId);
-  movQuery = movQuery.gt("created_at", desde);
-  if (hasta) movQuery = movQuery.lte("created_at", hasta);
+  const armarMovimientos = () => {
+    let q = service
+      .from("caja_movimientos")
+      .select("id, kind, amount_cents, cancelled_at, corte_id")
+      .eq("caja_id", cajaId)
+      .gt("created_at", desde);
+    if (hasta) q = q.lte("created_at", hasta);
+    return q.order("id");
+  };
 
-  const [paymentsRes, movimientosRes] = await Promise.all([
-    paymentsQuery,
-    movQuery,
+  const [pagosLeidos, movimientosLeidos] = await Promise.all([
+    fetchAll(armarPagos, "payments"),
+    fetchAll(armarMovimientos, "caja_movimientos"),
   ]);
 
-  const paymentRows = (paymentsRes.data ?? []) as unknown as Array<{
+  const paymentRows = pagosLeidos as unknown as Array<{
     method: PaymentMethod;
     amount_cents: number;
     tip_cents: number;
@@ -552,7 +575,7 @@ async function getCajaStatsEnVentana(
       delivery_type: ord?.delivery_type ?? "",
     };
   });
-  const movimientosDelPeriodo = (movimientosRes.data ?? []) as Array<{
+  const movimientosDelPeriodo = movimientosLeidos as Array<{
     kind: CajaMovimientoKind;
     amount_cents: number;
     cancelled_at: string | null;
@@ -998,27 +1021,32 @@ export async function getRendicionPendienteMozo(
   const ultima = await getUltimaRendicionMozo(mozoId, businessId);
   const service = db();
 
-  let query = service
-    .from("payments")
-    .select("method, amount_cents, tip_cents, orders(table_id, delivery_type)")
-    .eq("attributed_mozo_id", mozoId)
-    // Scope por negocio (spec 36 · R-C2): sin esto, un mozo activo en dos
-    // locales (House/Golf) veía en su rendición los pagos del OTRO negocio.
-    .eq("business_id", businessId)
-    .eq("payment_status", "paid");
+  const armar = () => {
+    let query = service
+      .from("payments")
+      .select("id, method, amount_cents, tip_cents, orders(table_id, delivery_type)")
+      .eq("attributed_mozo_id", mozoId)
+      // Scope por negocio (spec 36 · R-C2): sin esto, un mozo activo en dos
+      // locales (House/Golf) veía en su rendición los pagos del OTRO negocio.
+      .eq("business_id", businessId)
+      .eq("payment_status", "paid");
 
-  if (ultima) {
-    query = query.gt("created_at", ultima.created_at);
-  }
-  if (cajaId) {
-    query = query.eq("caja_id", cajaId);
-  }
-  if (hastaIso) {
-    query = query.lte("created_at", hastaIso);
-  }
+    if (ultima) {
+      query = query.gt("created_at", ultima.created_at);
+    }
+    if (cajaId) {
+      query = query.eq("caja_id", cajaId);
+    }
+    if (hastaIso) {
+      query = query.lte("created_at", hastaIso);
+    }
+    return query.order("id");
+  };
 
-  const { data } = await query;
-  const payments = (data ?? []) as unknown as Array<{
+  // #360 — un mozo que nunca rindió arrastra toda su historia: sin paginar,
+  // pasadas las 1.000 filas lo que tenía que entregar salía más chico.
+  const data = await fetchAll(armar, "payments");
+  const payments = data as unknown as Array<{
     method: PaymentMethod;
     amount_cents: number;
     tip_cents: number;
