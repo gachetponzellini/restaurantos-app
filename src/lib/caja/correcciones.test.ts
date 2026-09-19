@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   diffPatch,
-  estaCubierta,
   evaluarGuardas,
   evaluarGuardasDeAnulacion,
   mapCorreccionError,
@@ -222,11 +221,29 @@ describe("caja / evaluarGuardas", () => {
     });
   });
 
-  it("una rendición posterior no bloquea una corrección que no toca el mozo", () => {
+  // #356 — la plata de un cobro rendido no se toca: el mozo entregó contra
+  // ESE método y ESE monto. Cambiarlo movía el esperado del cajón y no la
+  // rendición → diferencia en el arqueo sin dueño.
+  it.each([
+    ["el método", { method: "card_manual" as const }],
+    ["el monto", { amount_cents: 12_000 }],
+    ["la propina", { tip_cents: 500 }],
+  ])("con una rendición posterior no se corrige %s", (_, patch) => {
+    const r = evaluarGuardas(
+      { ...CTX, rendicionesPosteriores: [{ mozoId: "mozo-1", nombre: "Ana" }] },
+      patch,
+    );
+    expect(r).toEqual({
+      ok: false,
+      error: "Ese cobro ya entró en la rendición de Ana: su plata no se corrige.",
+    });
+  });
+
+  it("con una rendición posterior sí se corrige lo que no es plata", () => {
     expect(
       evaluarGuardas(
         { ...CTX, rendicionesPosteriores: [{ mozoId: "mozo-1", nombre: "Ana" }] },
-        { method: "card_manual" },
+        { notes: "era Visa", last_four: "1234", card_brand: "visa" },
       ),
     ).toEqual({ ok: true });
   });
@@ -281,36 +298,6 @@ describe("caja / evaluarGuardasDeAnulacion", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.error).toContain("Ana");
-  });
-});
-
-describe("caja / estaCubierta", () => {
-  it("sin splits, compara la suma de pagos contra el total", () => {
-    expect(
-      estaCubierta({ totalCents: 1_500, pagosPaidCents: 1_500, splitsActivos: [] }),
-    ).toBe(true);
-    expect(
-      estaCubierta({ totalCents: 1_500, pagosPaidCents: 1_499, splitsActivos: [] }),
-    ).toBe(false);
-  });
-
-  it("una orden en cero nunca se considera cubierta", () => {
-    expect(
-      estaCubierta({ totalCents: 0, pagosPaidCents: 0, splitsActivos: [] }),
-    ).toBe(false);
-  });
-
-  it("con splits, manda el estado de cada split", () => {
-    expect(
-      estaCubierta({
-        totalCents: 10_000,
-        pagosPaidCents: 10_000,
-        splitsActivos: [
-          { expected_amount_cents: 5_000, paid_amount_cents: 5_000 },
-          { expected_amount_cents: 5_000, paid_amount_cents: 4_000 },
-        ],
-      }),
-    ).toBe(false);
   });
 });
 

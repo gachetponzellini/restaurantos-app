@@ -763,6 +763,14 @@ function DetalleSheet({
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* #356 — el ajuste sigue al método: lo recalcula el server. */}
+                  {method !== entry.method &&
+                    nuevoMonto === entry.amount_cents && (
+                      <p className="text-xs text-zinc-500">
+                        Si el método nuevo tiene recargo o descuento, el monto se
+                        recalcula solo al confirmar.
+                      </p>
+                    )}
                 </div>
               )}
 

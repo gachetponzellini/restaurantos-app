@@ -165,24 +165,6 @@ export type SplitActivo = {
   paid_amount_cents: number;
 };
 
-/**
- * ¿La orden queda cubierta? Mismo criterio que `closeOrderIfFullyPaid` y que
- * `registrar_pago_tx`: con splits activos manda el estado de cada split; sin
- * splits, la suma de los pagos contra el total.
- */
-export function estaCubierta(input: {
-  totalCents: number;
-  pagosPaidCents: number;
-  splitsActivos: SplitActivo[];
-}): boolean {
-  if (input.splitsActivos.length === 0) {
-    return input.totalCents > 0 && input.pagosPaidCents >= input.totalCents;
-  }
-  return input.splitsActivos.every(
-    (s) => s.paid_amount_cents >= s.expected_amount_cents,
-  );
-}
-
 export type VeredictoMonto =
   /** La orden no cambia de estado. */
   | "sin_cambio_de_estado"
@@ -310,7 +292,26 @@ export function evaluarGuardas(
     };
   }
 
+  // #356 — el mozo rindió contra ESTE método y ESTE monto (y cobró esa
+  // propina). Corregir la plata después movía el esperado del cajón y no la
+  // rendición: el arqueo cerraba con una diferencia sin dueño.
+  if (cambiaPlata(patch) && ctx.rendicionesPosteriores.length > 0) {
+    return {
+      ok: false,
+      error: `Ese cobro ya entró en la rendición de ${ctx.rendicionesPosteriores[0].nombre}: su plata no se corrige.`,
+    };
+  }
+
   return { ok: true };
+}
+
+/** #356 — ¿la corrección toca la plata del cobro (y no sólo sus datos)? */
+export function cambiaPlata(patch: CorreccionPatch): boolean {
+  return (
+    patch.method !== undefined ||
+    patch.amount_cents !== undefined ||
+    patch.tip_cents !== undefined
+  );
 }
 
 /**

@@ -11,6 +11,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
 
 import {
+  cambiaPlata,
   evaluarGuardas,
   evaluarGuardasDeAnulacion,
   mapCorreccionError,
@@ -231,10 +232,11 @@ export async function corregirCobro(
   ]);
 
   const rendicionesPosteriores: Array<{ mozoId: string; nombre: string }> = [];
-  if (cambiaMozo) {
+  // #356 — también si cambia la plata: el mozo rindió contra ese monto.
+  if (cambiaMozo || cambiaPlata(patch)) {
     const involucrados = [
       pago.attributed_mozo_id,
-      patch.attributed_mozo_id ?? null,
+      ...(cambiaMozo ? [patch.attributed_mozo_id ?? null] : []),
     ].filter((x): x is string => x !== null);
     for (const mozoId of involucrados) {
       if (
