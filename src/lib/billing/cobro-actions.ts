@@ -1059,20 +1059,12 @@ export async function forzarPago(
     })
     .eq("id", paymentId);
 
-  if (p.split_id) {
-    const split = await loadSplit(service, p.split_id, business.id);
-    if (split) {
-      const newPaid = split.paid_amount_cents + p.amount_cents;
-      const splitDone = newPaid >= split.expected_amount_cents;
-      await service
-        .from("order_splits")
-        .update({
-          paid_amount_cents: newPaid,
-          status: splitDone ? "paid" : "pending",
-        })
-        .eq("id", split.id);
-    }
-  }
+  // #352 — sub-cuenta y lo pagado de la orden, con la regla común (0117). Acá
+  // se sumaba el bruto a mano, sin tocar `total_paid_cents`.
+  const { error: recErr } = await service.rpc("recalcular_pagado_orden", {
+    p_order_id: p.order_id,
+  });
+  if (recErr) return actionError(`No se pudo recalcular la cuenta: ${recErr.message}`);
 
   await closeOrderIfFullyPaid(service, p.order_id, businessSlug);
   revalidatePath(`/${businessSlug}/mozo`);

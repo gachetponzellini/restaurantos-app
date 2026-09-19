@@ -5010,6 +5010,18 @@ export type Database = {
         };
         Returns: undefined;
       };
+      anular_cobro_tx: {
+        Args: {
+          p_business_id: string;
+          p_by_user_id: string;
+          p_order_id: string;
+          p_reason: string;
+        };
+        Returns: {
+          reabierta: boolean;
+          reembolsados: number;
+        }[];
+      };
       anular_pago_tx: {
         Args: {
           p_business_id: string;
@@ -5022,6 +5034,7 @@ export type Database = {
           payment: Json;
         }[];
       };
+      cobrado_en_base: { Args: { p_order_id: string }; Returns: number };
       cerrar_caja_tx: {
         Args: {
           p_barrer_salon: boolean;
@@ -5141,6 +5154,7 @@ export type Database = {
           payment_id: string;
         }[];
       };
+      recalcular_pagado_orden: { Args: { p_order_id: string }; Returns: boolean };
       registrar_pago_tx: {
         Args: {
           p_adjustment_cents: number;
@@ -5168,6 +5182,26 @@ export type Database = {
           payment: Json;
           split_done: boolean;
         }[];
+      };
+      registrar_rendicion_tx: {
+        Args: {
+          p_business_id: string;
+          p_caja_id: string | null;
+          p_created_at: string;
+          p_delivered_cash_cents: number;
+          p_desde_rendicion_id: string | null;
+          p_difference_cents: number;
+          p_estado: string;
+          p_expected_cash_cents: number;
+          p_mozo_id: string;
+          p_notes: string | null;
+          p_por_canal: Json;
+          p_por_metodo: Json;
+          p_propina_pagada_cents: number;
+          p_propina_reason: string;
+          p_registered_by: string;
+        };
+        Returns: Json;
       };
       revertir_items_comprobante_tx: {
         Args: { p_business_id: string; p_invoice_id: string };

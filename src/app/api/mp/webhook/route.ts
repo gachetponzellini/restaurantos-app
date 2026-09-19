@@ -317,6 +317,12 @@ export async function POST(req: Request) {
           orderId: order.id,
           error: payErr,
         });
+      } else {
+        // #352 — lo pagado de la orden sale de la regla común (0117).
+        const { error: recErr } = await service.rpc("recalcular_pagado_orden", {
+          p_order_id: order.id,
+        });
+        if (recErr) console.error("MP webhook: recalcular lo pagado", recErr);
       }
     }
   }
