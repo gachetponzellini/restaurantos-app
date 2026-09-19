@@ -304,13 +304,15 @@ test.describe("P03 · la propina se le paga al mozo en la rendición", () => {
       "el seed no dejó propinas atribuidas a ningún mozo",
     );
 
-    await page.goto(`/${SLUG}/admin/operacion?tab=rendicion`);
+    // #351 — la rendición vive en la tab Caja («Cobrado por empleado»).
+    await page.goto(`/${SLUG}/admin/operacion?tab=caja`);
 
     // El cambio de concepto: dejó de ser un número informativo («Propinas
-    // (aparte)») y pasó a ser plata que sale del cajón en esta pantalla.
-    await expect(page.getByText(/Propina a pagarle/i).first()).toBeVisible({
-      timeout: 20_000,
-    });
+    // (aparte)») y pasó a ser plata que se le da al mozo en esta pantalla —
+    // partida en lo que sale del cajón y lo que ya tiene en efectivo (#351).
+    await expect(
+      page.getByText(/Propina a darle del cajón|Propina en efectivo · ya la tiene/i).first(),
+    ).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Propinas \(aparte\)/i)).toHaveCount(0);
   });
 
@@ -331,17 +333,24 @@ test.describe("P03 · la propina se le paga al mozo en la rendición", () => {
       "el seed no dejó propinas atribuidas a ningún mozo",
     );
 
-    await page.goto(`/${SLUG}/admin/operacion?tab=rendicion`);
-    await page
-      .getByRole("button", { name: /Registrar rendición/i })
-      .first()
-      .click();
+    // #351 — se rinde desde la card del mozo en la tab Caja. El botón está
+    // apagado si el mozo tiene una mesa sin cobrar: se usa uno habilitado.
+    await page.goto(`/${SLUG}/admin/operacion?tab=caja`);
+    const rendir = page.getByRole("button", { name: /^Rendir$/ }).and(page.locator(":enabled"));
+    await expect(page.getByRole("button", { name: /^Rendir$/ }).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    test.skip((await rendir.count()) === 0, "todos los mozos tienen mesas sin cobrar");
+    await rendir.first().click();
 
     // Que salga plata del cajón no puede ser una sorpresa: se lee antes de
     // apretar, no en un toast después. No se confirma — registrar la rendición
     // cierra el período del mozo y deja a los otros specs sin datos.
     await expect(
-      page.getByText(/sale del cajón como movimiento de caja/i),
+      page
+        .getByRole("dialog")
+        .getByText(/Propina a darle del cajón|Propina en efectivo · ya la tiene/i)
+        .first(),
     ).toBeVisible({ timeout: 20_000 });
   });
 });

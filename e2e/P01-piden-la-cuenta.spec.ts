@@ -459,7 +459,10 @@ test.describe("P01 · lo que se muestra antes de confirmar", () => {
     const monto = page.locator("#cobro-monto");
     await monto.fill(String((mesa.total_cents * 2) / 100));
 
-    await expect(page.getByRole("alert")).toContainText(/de propina/);
+    // Filtrado: Next monta su propio `role="alert"` (el anunciador de rutas).
+    await expect(
+      page.getByRole("alert").filter({ hasText: /de propina/ }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /^Confirmar/ }),
     ).toBeDisabled();
