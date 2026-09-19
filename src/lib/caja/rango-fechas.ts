@@ -20,7 +20,7 @@ import { es } from "date-fns/locale";
 // que no tiene nada que ver con esto.
 // ════════════════════════════════════════════════════════════════════════
 
-export type Granularidad = "dia" | "mes" | "anio";
+export type Granularidad = "dia" | "semana" | "mes" | "anio";
 
 /** Hora local a la que arranca el día operativo. */
 export const INICIO_DIA_OPERATIVO_H = 6;
@@ -54,6 +54,13 @@ function sumarMeses(mes: string, delta: number): string {
   return t.toISOString().slice(0, 7);
 }
 
+/** El lunes de la semana de un `yyyy-MM-dd`: la semana va de lunes a domingo. */
+function lunesDe(dia: string): string {
+  const [y, m, d] = dia.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = domingo
+  return sumarDias(dia, -((dow + 6) % 7));
+}
+
 /**
  * En qué día operativo cae un instante. Antes de las 6 AM todavía es el día
  * anterior — es la regla entera de D5, en dos líneas.
@@ -72,6 +79,7 @@ export function anclaDeHoy(
 ): Ancla {
   const dia = diaOperativoDe(ahora, tz);
   if (gran === "dia") return dia;
+  if (gran === "semana") return lunesDe(dia);
   if (gran === "mes") return dia.slice(0, 7);
   return dia.slice(0, 4);
 }
@@ -90,6 +98,12 @@ export function rangoDe(
     return {
       from: arranque(ancla, tz).toISOString(),
       to: arranque(sumarDias(ancla, 1), tz).toISOString(),
+    };
+  }
+  if (gran === "semana") {
+    return {
+      from: arranque(ancla, tz).toISOString(),
+      to: arranque(sumarDias(ancla, 7), tz).toISOString(),
     };
   }
   if (gran === "mes") {
@@ -112,6 +126,7 @@ export function desplazar(
   delta: number,
 ): Ancla {
   if (gran === "dia") return sumarDias(ancla, delta);
+  if (gran === "semana") return sumarDias(ancla, 7 * delta);
   if (gran === "mes") return sumarMeses(ancla, delta);
   return String(Number(ancla) + delta);
 }
@@ -151,6 +166,14 @@ export function etiquetaDe(
     return formatInTimeZone(d, tz, patron, { locale: es });
   }
 
+  if (gran === "semana") {
+    if (ancla === hoy) return "Esta semana";
+    if (ancla === sumarDias(hoy, -7)) return "Semana pasada";
+    const d = (dia: string) => fromZonedTime(`${dia}T12:00:00`, tz);
+    const patron = ancla.slice(0, 4) === hoy.slice(0, 4) ? "d/M" : "d/M/yy";
+    return `${formatInTimeZone(d(ancla), tz, patron)} – ${formatInTimeZone(d(sumarDias(ancla, 6)), tz, patron)}`;
+  }
+
   if (gran === "mes") {
     if (ancla === hoy) return "Este mes";
     const d = fromZonedTime(`${ancla}-01T12:00:00`, tz);
@@ -166,13 +189,19 @@ export function etiquetaDe(
 /** Las tres opciones del segmentado, en orden. */
 export const GRANULARIDADES: { id: Granularidad; label: string }[] = [
   { id: "dia", label: "Día" },
+  { id: "semana", label: "Semana" },
   { id: "mes", label: "Mes" },
   { id: "anio", label: "Año" },
 ];
 
-/** `?gran=` de la URL → una granularidad válida. Default: día. */
-export function parseGranularidad(raw: string | undefined): Granularidad {
-  return raw === "mes" || raw === "anio" ? raw : "dia";
+/** `?gran=` de la URL → una granularidad válida. Default: día (o el que pida la vista). */
+export function parseGranularidad(
+  raw: string | undefined,
+  porDefecto: Granularidad = "dia",
+): Granularidad {
+  return raw === "dia" || raw === "semana" || raw === "mes" || raw === "anio"
+    ? raw
+    : porDefecto;
 }
 
 /**
@@ -185,6 +214,10 @@ export function parseAncla(
   tz: string,
   ahora: Date = new Date(),
 ): Ancla {
+  // La semana se ancla en su lunes: cualquier día válido se normaliza.
+  if (gran === "semana") {
+    return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? lunesDe(raw) : anclaDeHoy(gran, tz, ahora);
+  }
   const patron =
     gran === "dia" ? /^\d{4}-\d{2}-\d{2}$/ : gran === "mes" ? /^\d{4}-\d{2}$/ : /^\d{4}$/;
   return raw && patron.test(raw) ? raw : anclaDeHoy(gran, tz, ahora);

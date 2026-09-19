@@ -155,8 +155,25 @@ describe("lo que llega por la URL", () => {
 
   it("una granularidad desconocida cae en día", () => {
     expect(parseGranularidad("mes")).toBe("mes");
-    expect(parseGranularidad("semana")).toBe("dia");
+    expect(parseGranularidad("semana")).toBe("semana");
+    expect(parseGranularidad("quincena")).toBe("dia");
     expect(parseGranularidad(undefined)).toBe("dia");
+    expect(parseGranularidad(undefined, "semana")).toBe("semana");
+  });
+
+  it("la semana va de lunes 6 AM a lunes 6 AM y se ancla en el lunes", () => {
+    const tz = "America/Argentina/Buenos_Aires";
+    // sáb 19/9/2026 10:00 AR → semana del lun 14/9
+    const ahora = new Date("2026-09-19T13:00:00Z");
+    expect(anclaDeHoy("semana", tz, ahora)).toBe("2026-09-14");
+    expect(parseAncla("semana", "2026-09-17", tz, ahora)).toBe("2026-09-14");
+    expect(rangoDe("semana", "2026-09-14", tz)).toEqual({
+      from: "2026-09-14T09:00:00.000Z",
+      to: "2026-09-21T09:00:00.000Z",
+    });
+    expect(etiquetaDe("semana", "2026-09-14", tz, ahora)).toBe("Esta semana");
+    expect(etiquetaDe("semana", "2026-09-07", tz, ahora)).toBe("Semana pasada");
+    expect(etiquetaDe("semana", "2026-08-31", tz, ahora)).toBe("31/8 – 6/9");
   });
 
   it("un ancla con basura cae en el período corriente, no rompe", () => {

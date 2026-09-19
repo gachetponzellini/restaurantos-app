@@ -38,7 +38,8 @@ export default async function CierresPage({
   }
 
   const tz = business.timezone || AR_TZ;
-  const gran = parseGranularidad(sp.gran);
+  // Cierres abre en la semana en curso: un solo día casi siempre muestra uno o dos.
+  const gran = parseGranularidad(sp.gran, "semana");
   const ancla = parseAncla(gran, sp.fecha, tz);
   const { from, to } = rangoDe(gran, ancla, tz);
 
