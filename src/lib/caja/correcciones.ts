@@ -352,6 +352,10 @@ const ERRORES_RPC: Record<string, string> = {
   MOZO_INVALID: "Ese empleado no puede recibir la atribución del cobro.",
   ORDER_WOULD_BE_UNCOVERED:
     "El monto corregido no alcanza a cubrir la cuenta. Si el cliente pagó menos, anulá el cobro y volvé a cobrar.",
+  // #357 — p. ej. bajar sólo la propina de un cobro con excedente: el total
+  // de la cuenta bajaría y lo cobrado no.
+  TOTAL_BELOW_PAID:
+    "Con esa corrección la cuenta quedaría por debajo de lo cobrado. Si la propina fue menor, corregí también el monto.",
   NOTHING_TO_CHANGE: "No hay nada que corregir.",
   MOVIMIENTO_NOT_FOUND: "No se encontró el movimiento.",
   MOVIMIENTO_OTHER_BUSINESS: "Ese movimiento no es de este negocio.",

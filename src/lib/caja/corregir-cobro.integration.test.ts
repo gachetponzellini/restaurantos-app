@@ -84,12 +84,13 @@ describe.skipIf(!dbAvailable)("corregir un cobro (integration · #356)", () => {
     expect((await f.leerOrden(orderId)).total_paid_cents).toBe(500_000);
   });
 
-  it("bajar la propina por debajo del excedente lo devuelve a la cuenta", async () => {
+  it("bajar propina y monto juntos por debajo del excedente lo devuelve a la cuenta", async () => {
     const orderId = await f.orden(1_000_000);
     const p = await f.pagarOk(orderId, { amount: 1_200_000, extraTip: 200_000, method: "transfer" });
     expect((await f.leerOrden(orderId)).total_cents).toBe(1_200_000);
 
-    const r = await f.corregir(p.payment.id, { tip_cents: 50_000 });
+    // La propina fue $500, no $2.000: entraron $10.500.
+    const r = await f.corregir(p.payment.id, { tip_cents: 50_000, amount_cents: 1_050_000 });
     expect(r.error).toBeNull();
     const x = await pago(p.payment.id);
     expect(x.tip_cents).toBe(50_000);
@@ -97,5 +98,14 @@ describe.skipIf(!dbAvailable)("corregir un cobro (integration · #356)", () => {
     const o = await f.leerOrden(orderId);
     expect(o.tip_cents).toBe(50_000);
     expect(o.total_cents).toBe(1_050_000);
+    expect(o.total_paid_cents).toBe(1_050_000);
+  });
+
+  it("bajar sólo la propina dejaría el total bajo lo cobrado: se rechaza con motivo", async () => {
+    const orderId = await f.orden(1_000_000);
+    const p = await f.pagarOk(orderId, { amount: 1_200_000, extraTip: 200_000, method: "transfer" });
+    const r = await f.corregir(p.payment.id, { tip_cents: 50_000 });
+    expect(r.error?.message).toContain("TOTAL_BELOW_PAID");
+    expect((await pago(p.payment.id)).tip_cents).toBe(200_000);
   });
 });

@@ -206,6 +206,10 @@ export type ComandasTabData = {
  * (RLS `is_business_member`), así que un miembro de varios negocios (House/Golf
  * comparten socios) sólo ve lo del negocio del `slug`.
  */
+/** #357 — el mensaje de la guarda `TOTAL_BELOW_PAID` (migración 0121). */
+const TOTAL_BAJO_LO_COBRADO =
+  "No se puede: la cuenta quedaría por debajo de lo que ya se cobró. Si hay que devolver plata, anulá el cobro primero.";
+
 export async function getComandasTabData(
   slug: string,
 ): Promise<ActionResult<ComandasTabData>> {
@@ -1518,6 +1522,10 @@ export async function cancelarItem(
     })
     .eq("id", orderItemId);
   if (error) {
+    // #357 — la base no deja que el total quede por debajo de lo cobrado.
+    if (error.message.includes("TOTAL_BELOW_PAID")) {
+      return actionError(TOTAL_BAJO_LO_COBRADO);
+    }
     console.error("cancelarItem", error);
     return actionError("No pudimos cancelar el item.");
   }
@@ -1703,7 +1711,7 @@ export async function cancelarComanda(
     (l) => l.order_item_id,
   );
   if (itemIds.length > 0) {
-    await service
+    const { error: itemsErr } = await service
       .from("order_items")
       .update({
         cancelled_at: nowIso,
@@ -1712,6 +1720,15 @@ export async function cancelarComanda(
       })
       .in("id", itemIds)
       .is("cancelled_at", null);
+    // #357 — si los ítems no se pudieron cancelar, la comanda tampoco: antes
+    // el error se ignoraba y quedaba anulada con los ítems vivos.
+    if (itemsErr) {
+      if (itemsErr.message.includes("TOTAL_BELOW_PAID")) {
+        return actionError(TOTAL_BAJO_LO_COBRADO);
+      }
+      console.error("cancelarComanda · items", itemsErr);
+      return actionError("No pudimos anular la comanda.");
+    }
   }
 
   // Marca la comanda anulada + encola la reimpresión del ticket ANULADA (spec
@@ -1970,6 +1987,9 @@ export async function editarItemComanda(
     .update(patchRow as any)
     .eq("id", orderItemId);
   if (error) {
+    if (error.message.includes("TOTAL_BELOW_PAID")) {
+      return actionError(TOTAL_BAJO_LO_COBRADO);
+    }
     console.error("editarItemComanda", error);
     return actionError("No pudimos guardar los cambios.");
   }

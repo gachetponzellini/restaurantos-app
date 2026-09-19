@@ -10,6 +10,7 @@ import { notifyItemCancelled } from "@/lib/notifications/events";
 import { canApplyDiscount, canCancelItem } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
+import { closeOrderIfFullyPaid } from "./cobro-actions";
 
 import {
   calculateTotals,
@@ -95,6 +96,10 @@ async function cobradoDeLaOrden(
     pagos: rows.length,
   };
 }
+
+/** #357 — el mensaje de la guarda de la base (`TOTAL_BELOW_PAID`, 0121). */
+const TOTAL_BAJO_LO_COBRADO =
+  "No se puede: la cuenta quedaría por debajo de lo que ya se cobró. Si hay que devolver plata, anulá el cobro primero.";
 
 const YA_COBRADO_POR_ITEMS =
   "Ya se cobró parte de esta cuenta: dividí lo que falta por monto o por personas.";
@@ -214,6 +219,15 @@ export async function aplicarPropinaYDescuento(
     return actionError("La orden ya está cerrada.");
   }
 
+  // #357 — con cobros registrados, propina y descuento quedan fijos: la
+  // propina ya viajó en esos pagos (#353) y un descuento podía dejar el total
+  // por debajo de lo cobrado.
+  if ((await cobradoDeLaOrden(service, orderId)).pagos > 0) {
+    return actionError(
+      "Ya hay cobros registrados en esta cuenta: para cambiar la propina o el descuento, anulá el cobro primero.",
+    );
+  }
+
   // Validar permiso de descuento server-side (R3 de CU-03).
   if (input.discount_cents > 0) {
     const items = await loadActiveItems(service, orderId);
@@ -297,7 +311,7 @@ export async function cancelarItemEnCuenta(
     return actionError("El item ya está cancelado.");
   }
 
-  await service
+  const { error: cancelErr } = await service
     .from("order_items")
     .update({
       cancelled_at: new Date().toISOString(),
@@ -305,6 +319,13 @@ export async function cancelarItemEnCuenta(
       cancelled_by: ctx.userId, // spec 34 — responsable de la anulación
     })
     .eq("id", orderItemId);
+  if (cancelErr) {
+    // #357 — la base no deja que el total quede por debajo de lo cobrado.
+    if (cancelErr.message.includes("TOTAL_BELOW_PAID")) {
+      return actionError(TOTAL_BAJO_LO_COBRADO);
+    }
+    return actionError(`No se pudo cancelar el ítem: ${cancelErr.message}`);
+  }
 
   // spec 095 · H-36 — avisarle a la comandera. Este camino (sacar un plato
   // desde la pantalla de cuenta) tampoco encolaba la reimpresión: cocina se
@@ -314,6 +335,15 @@ export async function cancelarItemEnCuenta(
   // Splits previos quedan inválidos.
   await deleteSplitsAndItems(service, orderId);
   const { total_cents } = await recalcOrderTotals(service, orderId, {});
+
+  // #357 — si lo que se sacó era justo lo que faltaba pagar, la cuenta quedó
+  // cubierta: se cierra como cualquier cobro completo (mesa libre,
+  // comprobante). Sin esto quedaba abierta con saldo $0 y trababa la caja.
+  const cobrado = await cobradoDeLaOrden(service, orderId);
+  if (cobrado.pagos > 0 && total_cents > 0 && cobrado.base_cents >= total_cents) {
+    await service.rpc("recalcular_pagado_orden", { p_order_id: orderId });
+    await closeOrderIfFullyPaid(service, orderId, businessSlug);
+  }
 
   // spec 27 — avisar al mozo de la mesa que se anuló un ítem.
   await notifyItemCancelled({
