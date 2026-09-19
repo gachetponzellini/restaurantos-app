@@ -441,3 +441,15 @@ function montoAR(cents: number): string {
     maximumFractionDigits: 0,
   }).format(cents / 100);
 }
+
+// ── Un cobro que entra mientras se cuenta (epic #361 · #358) ───────────────
+//
+// **No se prueba acá, y es a propósito.** El esperado que se firma lo recalcula
+// la base con la caja bloqueada, y si cambió rechaza el cierre
+// (`EXPECTED_CHANGED`). Para verlo por el browser hay que meter un cobro entre
+// que el modal arma sus números y el encargado confirma, y ahí compite con el
+// refresco de la pantalla: a veces el modal ya se puso al día y el cierre sale
+// bien. Un test que depende de esa carrera miente las dos veces.
+//
+// Vive en `src/lib/caja/cierre-transaccional.integration.test.ts`, que sí puede
+// forzarla: llama a la RPC con el número viejo y espera el rechazo.

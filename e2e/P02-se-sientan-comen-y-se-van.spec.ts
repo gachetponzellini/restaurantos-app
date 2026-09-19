@@ -36,6 +36,27 @@ async function abrirSalon(page: Page) {
   await page.waitForLoadState("networkidle");
 }
 
+
+/**
+ * El id del salón que el plano abre: el primero por `created_at`.
+ *
+ * El demo tiene dos, y el plano muestra uno. Una mesa del Salón 2 existe en la
+ * base pero no está en pantalla, así que el click por nombre espera para
+ * siempre — y el fallo sale como «no encuentro el total», que apunta al lugar
+ * equivocado. Es la misma trampa que P01 documenta en `mesaViva`.
+ */
+async function primerSalon(bizId: string): Promise<string> {
+  const { data } = await db
+    .from("floor_plans")
+    .select("id")
+    .eq("business_id", bizId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const plano = (data ?? [])[0] as { id: string } | undefined;
+  expect(plano, "el demo tiene que tener al menos un salón").toBeTruthy();
+  return plano!.id;
+}
+
 test.describe("P02 · el plano, la mesa y el cobro dicen lo mismo", () => {
   test("el plano muestra las mesas que la base dice que están ocupadas", async ({
     page,
@@ -65,10 +86,13 @@ test.describe("P02 · el plano, la mesa y el cobro dicen lo mismo", () => {
     const bizId = await businessId(SLUG);
     const { data: orders } = await db
       .from("orders")
-      .select("id, customer_name, total_cents, table_id")
+      .select(
+        "id, customer_name, total_cents, table_id, tables!orders_table_id_fkey!inner(floor_plan_id)",
+      )
       .eq("business_id", bizId)
       .eq("lifecycle_status", "open")
       .not("table_id", "is", null)
+      .eq("tables.floor_plan_id", await primerSalon(bizId))
       .order("total_cents", { ascending: false })
       .limit(1);
     const orden = (orders ?? [])[0] as {
@@ -96,10 +120,13 @@ test.describe("P02 · el plano, la mesa y el cobro dicen lo mismo", () => {
     const bizId = await businessId(SLUG);
     const { data: orders } = await db
       .from("orders")
-      .select("customer_name, total_cents, total_paid_cents")
+      .select(
+        "customer_name, total_cents, total_paid_cents, tables!orders_table_id_fkey!inner(floor_plan_id)",
+      )
       .eq("business_id", bizId)
       .eq("lifecycle_status", "open")
       .not("table_id", "is", null)
+      .eq("tables.floor_plan_id", await primerSalon(bizId))
       .order("total_cents", { ascending: false })
       .limit(1);
     const orden = (orders ?? [])[0] as {

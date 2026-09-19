@@ -797,6 +797,7 @@ function DetalleSheet({
                       $
                     </span>
                     <Input
+                      id="corregir-monto"
                       type="number"
                       inputMode="decimal"
                       value={amount}
@@ -912,6 +913,8 @@ function DetalleSheet({
                   Motivo<span className="ml-1 text-rose-600">*</span>
                 </Label>
                 <Textarea
+                  id="corregir-motivo"
+                  aria-label="Motivo"
                   className="text-base"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
@@ -920,11 +923,14 @@ function DetalleSheet({
                 />
               </div>
 
-              {esCobro && nuevoMonto !== entry.amount_cents && (
+              {/* #356 — el ajuste sigue al método: cambiarlo lo recalcula (lo
+                  avisa el cartel de arriba). Corregir sólo el monto, en cambio,
+                  no cambia cómo se compuso el precio. */}
+              {esCobro && nuevoMonto !== entry.amount_cents && method === entry.method && (
                 <p className="text-sm text-zinc-600">
-                  El recargo o descuento por método registrado en el cobro{" "}
-                  <strong>no se recalcula</strong>: se corrige cuánto entró, no
-                  cómo se compuso el precio.
+                  Corregir el monto <strong>no recalcula</strong> el recargo o
+                  descuento del método: se corrige cuánto entró, no cómo se
+                  compuso el precio.
                 </p>
               )}
               {!montoValido && (

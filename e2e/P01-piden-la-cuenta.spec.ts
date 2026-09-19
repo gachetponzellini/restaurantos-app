@@ -2,6 +2,12 @@ import { test, expect, type Page } from "@playwright/test";
 
 import { SLUG, storageState } from "./roles";
 import { db, businessId } from "./db";
+import { cobrar } from "./cobrar-ui";
+import {
+  borrarMesaDePrueba,
+  crearMesaDePrueba,
+  type MesaDePrueba,
+} from "./mesa-de-prueba";
 
 /**
  * P01 · Piden la cuenta — el número que se ve es el que se cobra.
@@ -480,4 +486,130 @@ function montoAR(cents: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(cents / 100);
+}
+
+// ── La cuenta que se paga en partes (epic #361) ────────────────────────────
+//
+// Estos sí completan cobros, así que arman **su propia mesa** y la borran: lo
+// que se prueba es qué pasa con la plata entre un pago y el siguiente, y eso
+// no se puede ver sin cobrar de verdad.
+//
+// Se cobra por **transferencia** y no por tarjeta a propósito: la tarjeta del
+// demo tiene recargo, y acá lo que se mira es la propina y el saldo, no el
+// ajuste por método (eso vive en los tests de arriba y en P04).
+test.describe("P01 · la cuenta que se paga en partes", () => {
+  let mesa: MesaDePrueba | null = null;
+  test.afterEach(async () => {
+    await borrarMesaDePrueba(mesa);
+    mesa = null;
+  });
+
+  test("la propina de la cuenta se cobra una sola vez", async ({ page }) => {
+    // #353 — la pantalla manda la propina entera de la cuenta en CADA pago, y
+    // la base le asigna a cada uno lo que falta. Sumándolas se le pagaba dos
+    // veces al mozo, del cajón.
+    mesa = await crearMesaDePrueba({
+      montos: [1_000_000],
+      tipCents: 100_000,
+      label: "P01-partes",
+    });
+
+    await cobrar(page, { mesa: mesa.label, metodo: /Transferencia/, pesos: 5_000 });
+    await expect
+      .poll(async () => (await pagosDeLaOrden(mesa!.orderId)).length, { timeout: 20_000 })
+      .toBe(1);
+    await cobrar(page, { mesa: mesa.label, metodo: /Transferencia/, pesos: 6_000 });
+    await expect
+      .poll(async () => (await pagosDeLaOrden(mesa!.orderId)).length, { timeout: 20_000 })
+      .toBe(2);
+
+    const pagos = await pagosDeLaOrden(mesa.orderId);
+    expect(pagos.reduce((n, p) => n + p.tip_cents, 0)).toBe(100_000);
+    expect(pagos.reduce((n, p) => n + p.amount_cents, 0)).toBe(1_100_000);
+    const { data: orden } = await db
+      .from("orders")
+      .select("lifecycle_status, total_paid_cents")
+      .eq("id", mesa.orderId)
+      .single();
+    expect((orden as { lifecycle_status: string }).lifecycle_status).toBe("closed");
+  });
+
+  test("dividir después de un pago parcial reparte lo que falta", async ({ page }) => {
+    // #354 — repartía el total entero: las sub-cuentas nuevas volvían a pedir
+    // la plata que ya había entrado. Caso real en kcc con una cuenta de
+    // $150.100 (2026-09-18).
+    mesa = await crearMesaDePrueba({ montos: [1_000_000], label: "P01-dividir" });
+
+    await cobrar(page, { mesa: mesa.label, metodo: /Transferencia/, pesos: 4_000 });
+    await expect
+      .poll(async () => (await pagosDeLaOrden(mesa!.orderId)).length, { timeout: 20_000 })
+      .toBe(1);
+
+    await abrirCobro(page, mesa.label);
+    await page.getByRole("button", { name: /Dividir/ }).first().click();
+    // Lo que se reparte es el saldo, y la pantalla lo dice antes de confirmar:
+    // la vista previa de «Monto» ya no encabeza con el total de la cuenta.
+    await page.getByRole("tab", { name: /Monto/ }).click();
+    await expect(page.getByText(/Falta cobrar/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Falta cobrar/i).first().locator("..")).toContainText(
+      montoAR(600_000),
+    );
+    await page.getByRole("tab", { name: /Personas/ }).click();
+    await page.getByRole("button", { name: /Confirmar división/ }).click();
+
+    await expect
+      .poll(
+        async () => {
+          const { data } = await db
+            .from("order_splits")
+            .select("expected_amount_cents")
+            .eq("order_id", mesa!.orderId)
+            .neq("status", "cancelled");
+          return ((data ?? []) as { expected_amount_cents: number }[]).reduce(
+            (n, s) => n + s.expected_amount_cents,
+            0,
+          );
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(600_000);
+  });
+
+  test("sacar un ítem no puede dejar la cuenta por debajo de lo cobrado", async ({
+    page,
+  }) => {
+    // #357 — dejaba `total < pagado`: la cuenta quedaba abierta para siempre
+    // (cobrarla decía «ya está pagada») y trababa el cierre de caja.
+    mesa = await crearMesaDePrueba({ montos: [600_000, 400_000], label: "P01-sacar" });
+
+    await cobrar(page, { mesa: mesa.label, metodo: /Transferencia/, pesos: 8_000 });
+    await expect
+      .poll(async () => (await pagosDeLaOrden(mesa!.orderId)).length, { timeout: 20_000 })
+      .toBe(1);
+
+    await abrirCobro(page, mesa.label);
+    await page.getByRole("button", { name: /Cancelar item/ }).first().click();
+    await page.getByRole("textbox").last().fill("se lo llevaron");
+    await page.getByRole("button", { name: /^Confirmar$/ }).click();
+
+    await expect(page.getByText(/por debajo de lo que ya se cobró/i)).toBeVisible({
+      timeout: 20_000,
+    });
+    const { count } = await db
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", mesa.orderId)
+      .is("cancelled_at", null);
+    expect(count).toBe(2);
+  });
+});
+
+/** Los pagos vivos de una orden, para los asserts de los tests de arriba. */
+async function pagosDeLaOrden(orderId: string) {
+  const { data } = await db
+    .from("payments")
+    .select("amount_cents, tip_cents, method")
+    .eq("order_id", orderId)
+    .eq("payment_status", "paid");
+  return (data ?? []) as Array<{ amount_cents: number; tip_cents: number; method: string }>;
 }
