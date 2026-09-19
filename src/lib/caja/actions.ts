@@ -581,6 +581,14 @@ export async function cerrarCaja(input: {
     if (error.message.includes("CAJA_ADMINISTRATIVA_NO_SE_ARQUEA")) {
       return actionError(NO_ES_CAJA_DE_TURNO);
     }
+    // #358 — la base recalcula el esperado con la caja bloqueada. Si no es el
+    // que el encargado vio, entró algo mientras contaba: que lo vea.
+    const cambio = error.message.match(/EXPECTED_CHANGED:(-?\d+)/);
+    if (cambio) {
+      return actionError(
+        `Entró un movimiento mientras contabas: ahora el efectivo esperado es ${formatCurrency(Number(cambio[1]))}. Revisá el conteo y volvé a confirmar.`,
+      );
+    }
     if (error.message.includes("UNRENDERED_MOZOS")) {
       return actionError(
         "Un mozo cobró mientras cerrabas y le quedó plata sin rendir. Actualizá y volvé a intentar.",
@@ -610,7 +618,11 @@ export async function cerrarCaja(input: {
 
   return actionOk({
     corte: row.corte,
-    retiro_cents: row.retiro_id ? input.closing_cash_cents : 0,
+    // #358 — lo que salió es lo contado menos el fondo que queda (0102), no
+    // lo contado entero.
+    retiro_cents: row.retiro_id
+      ? Math.max(0, input.closing_cash_cents - (caja.fondo_fijo_cents ?? 0))
+      : 0,
     mesasLiberadas: Number(row.mesas_liberadas ?? 0),
     mozosLimpiados: Number(row.mozos_limpiados ?? 0),
   });
