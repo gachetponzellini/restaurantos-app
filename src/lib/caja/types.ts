@@ -391,6 +391,12 @@ export type RendicionMozoPendiente = {
   pagos_count: number;
   /** Lo mismo, partido por canal (spec 203). Sólo canales con cobros. */
   por_canal: Partial<Record<CanalRendicion, PendienteDeCanal>>;
+  /**
+   * #359 — la rendición que fija el piso de este período (`null` si nunca
+   * rindió). La RPC verifica que siga siendo la última: si otro rindió en el
+   * medio, esta rendición ya no es sobre lo que se leyó.
+   */
+  desde_rendicion_id?: string | null;
 };
 
 export type CajaUserAssignment = {

@@ -1052,6 +1052,7 @@ export async function getRendicionPendienteMozo(
     propina_a_entregar_cents: rendicion.propina_a_entregar_cents,
     pagos_count: rendicion.pagos_count,
     por_canal: rendicion.por_canal,
+    desde_rendicion_id: ultima?.id ?? null,
   };
 }
 
