@@ -39,6 +39,21 @@ const METHOD_ORDER: PaymentMethod[] = [
 
 export type CancellationKind = "mesa" | "item" | "factura";
 
+/**
+ * Una cuenta que se cerró SIN cobrar: la invitación total (migración 0126). No
+ * es venta ni anulación — la comida se sirvió y el stock salió —, así que tiene
+ * su renglón: es el único lugar donde el dueño ve cuánto regala.
+ */
+export type InvitacionRow = {
+  /** "Mesa 5" o "Pedido #312". */
+  label: string;
+  reason: string;
+  responsable: string | null;
+  /** Lo que valía de carta. */
+  valor_cents: number;
+  at: string; // ISO
+};
+
 export type CancellationRow = {
   kind: CancellationKind;
   /** Qué se anuló: "Mesa 5", "Milanesa napolitana", "Factura B 0001-00000123". */
@@ -123,6 +138,8 @@ export type ShiftSummaryData = {
   anulaciones: CancellationRow[];
   /** Opcional: un resumen calculado antes de la spec 070 no tiene ninguna. */
   correcciones?: CorrectionRow[];
+  /** Cuentas cerradas sin cobro — invitaciones (migración 0126). Opcional. */
+  invitaciones?: InvitacionRow[];
 };
 
 // ── Modelo de vista (formateado, listo para el template) ────────────────
@@ -182,6 +199,15 @@ export type ShiftSummary = {
     responsable: string;
     hora: string;
   }[];
+  invitaciones: {
+    detalle: string;
+    motivo: string;
+    responsable: string;
+    valor: string;
+    hora: string;
+  }[];
+  /** Σ de lo que valía de carta lo invitado, ya formateado. "" si no hubo. */
+  invitacionesTotal: string;
   /** False si el día no tuvo movimiento (recaudación, pedidos ni cortes). */
   hasData: boolean;
 };
@@ -232,6 +258,7 @@ function fmtHora(iso: string, timezone: string): string {
 export function buildShiftSummary(data: ShiftSummaryData): ShiftSummary {
   const { recaudacion, afip, operacion, cortes, porMozo, anulaciones } = data;
   const correcciones = data.correcciones ?? [];
+  const invitaciones = data.invitaciones ?? [];
 
   // `METHOD_ORDER` no lista `cuenta_corriente` a propósito: son los métodos de
   // COBRO, y el fiado no es uno — sale en su propio KPI, al lado de la
@@ -310,6 +337,17 @@ export function buildShiftSummary(data: ShiftSummaryData): ShiftSummary {
       responsable: c.responsable?.trim() ? c.responsable.trim() : "—",
       hora: fmtHora(c.at, data.timezone),
     })),
+    invitaciones: invitaciones.map((i) => ({
+      detalle: i.label,
+      motivo: i.reason.trim() || "—",
+      responsable: i.responsable?.trim() ? i.responsable.trim() : "—",
+      valor: formatCurrency(i.valor_cents),
+      hora: fmtHora(i.at, data.timezone),
+    })),
+    invitacionesTotal:
+      invitaciones.length > 0
+        ? formatCurrency(invitaciones.reduce((n, i) => n + i.valor_cents, 0))
+        : "",
     hasData,
   };
 }

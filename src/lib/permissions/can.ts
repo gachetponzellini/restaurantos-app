@@ -46,6 +46,15 @@ export function canCancelItem(role: BusinessRole): boolean {
 }
 
 /**
+ * Cerrar una cuenta de $0 sin cobrarla — la invitación total (migración 0126).
+ * Es la única puerta por la que una mesa se va sin pagar, y queda en el
+ * resumen del día con nombre: no es del mozo.
+ */
+export function canCerrarSinCobro(role: BusinessRole): boolean {
+  return role === "admin" || role === "encargado";
+}
+
+/**
  * Confirmar un pedido entrante (delivery / take-away / web / chatbot) para
  * que pase del estado "pendiente de confirmación" a "preparing" y se ruteen
  * sus items a las comandas de cada sector. Mozo no — está en salón, no

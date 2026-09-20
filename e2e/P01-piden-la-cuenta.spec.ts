@@ -604,6 +604,69 @@ test.describe("P01 · la cuenta que se paga en partes", () => {
   });
 });
 
+// ── La mesa de $0: se invita, no se anula (migración 0126) ─────────────────
+test.describe("P01 · la mesa invitada", () => {
+  let mesa: MesaDePrueba | null = null;
+  test.afterEach(async () => {
+    await borrarMesaDePrueba(mesa);
+    mesa = null;
+  });
+
+  test("una cuenta de $0 se cierra sin cobro, con motivo, y queda como invitación", async ({
+    page,
+  }) => {
+    // Antes «Pasar a cobro» quedaba apagado y la única salida era anular la
+    // mesa: la venta desaparecía del día y el stock volvía aunque se sirvió.
+    mesa = await crearMesaDePrueba({ montos: [0, 0], label: "P01-invitada" });
+
+    await abrirCobro(page, mesa.label);
+    await page.getByRole("button", { name: /Cerrar sin cobro/ }).click();
+    const confirmar = page.getByRole("dialog").getByRole("button", { name: /^Confirmar$/ });
+    // Sin motivo no deja: una invitación tiene que decir por qué.
+    await expect(confirmar).toBeDisabled();
+    await page.getByRole("dialog").getByRole("textbox").fill("Cumpleaños del dueño");
+    await confirmar.click();
+
+    await expect
+      .poll(
+        async () => {
+          const { data } = await db
+            .from("orders")
+            .select("lifecycle_status")
+            .eq("id", mesa!.orderId)
+            .single();
+          return (data as { lifecycle_status: string }).lifecycle_status;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe("closed");
+
+    const { data: orden } = await db
+      .from("orders")
+      .select("status, cortesia_reason, cortesia_by")
+      .eq("id", mesa.orderId)
+      .single();
+    const o = orden as { status: string; cortesia_reason: string; cortesia_by: string | null };
+    // Entregada, NO cancelada: la comida se sirvió.
+    expect(o.status).toBe("delivered");
+    expect(o.cortesia_reason).toBe("Cumpleaños del dueño");
+    expect(o.cortesia_by).toBeTruthy();
+
+    const { data: t } = await db
+      .from("tables")
+      .select("operational_status")
+      .eq("id", mesa.tableId)
+      .single();
+    expect((t as { operational_status: string }).operational_status).toBe("libre");
+  });
+
+  test("una cuenta que debe plata no ofrece cerrarse sin cobro", async ({ page }) => {
+    mesa = await crearMesaDePrueba({ montos: [500_000], label: "P01-debe" });
+    await abrirCobro(page, mesa.label);
+    await expect(page.getByRole("button", { name: /Cerrar sin cobro/ })).toHaveCount(0);
+  });
+});
+
 /** Los pagos vivos de una orden, para los asserts de los tests de arriba. */
 async function pagosDeLaOrden(orderId: string) {
   const { data } = await db

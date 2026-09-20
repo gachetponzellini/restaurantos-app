@@ -86,6 +86,13 @@ export function renderShiftSummaryEmail(summary: ShiftSummary): {
     a.responsable,
     a.hora,
   ]);
+  const invitacionRows = summary.invitaciones.map((i) => [
+    esc(i.detalle),
+    esc(i.motivo),
+    esc(i.responsable),
+    esc(i.valor),
+    esc(i.hora),
+  ]);
   const correccionRows = summary.correcciones.map((c) => [
     c.detalle,
     c.cambio,
@@ -142,6 +149,14 @@ export function renderShiftSummaryEmail(summary: ShiftSummary): {
 
     ${sectionTitle("Anulaciones")}
     ${rowsTable(["Detalle", "Motivo", "Responsable", "Hora"], anulRows, "Sin anulaciones en el día. ✅")}
+
+    ${
+      // Igual que las correcciones: sin invitaciones no hay sección.
+      invitacionRows.length > 0
+        ? `${sectionTitle(`Invitaciones · ${summary.invitacionesTotal} de carta`)}
+    ${rowsTable(["Detalle", "Motivo", "Quién invitó", "Valía", "Hora"], invitacionRows, "")}`
+        : ""
+    }
 
     ${
       // Sin correcciones no hay sección: el mail no gana nada diciendo que no
@@ -220,6 +235,12 @@ function renderText(s: ShiftSummary): string {
   if (s.anulaciones.length === 0) lines.push("  (sin anulaciones)");
   for (const a of s.anulaciones)
     lines.push(`  - ${a.detalle} · ${a.motivo} · ${a.responsable} · ${a.hora}`);
+  if (s.invitaciones.length > 0) {
+    lines.push("");
+    lines.push(`INVITACIONES (${s.invitacionesTotal} de carta)`);
+    for (const i of s.invitaciones)
+      lines.push(`  - ${i.detalle} · ${i.valor} · ${i.motivo} · ${i.responsable} · ${i.hora}`);
+  }
   if (s.correcciones.length > 0) {
     lines.push("");
     lines.push("CORRECCIONES DE CAJA");

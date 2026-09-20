@@ -2898,6 +2898,9 @@ export type Database = {
           cancelled_by: string | null;
           cancelled_reason: string | null;
           closed_at: string | null;
+          cortesia_by: string | null;
+          cortesia_reason: string | null;
+          cortesia_valor_cents: number | null;
           comprobante_elegido: Json | null;
           created_at: string;
           customer_email: string | null;
@@ -2944,6 +2947,9 @@ export type Database = {
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           closed_at?: string | null;
+          cortesia_by?: string | null;
+          cortesia_reason?: string | null;
+          cortesia_valor_cents?: number | null;
           comprobante_elegido?: Json | null;
           created_at?: string;
           customer_email?: string | null;
@@ -2990,6 +2996,9 @@ export type Database = {
           cancelled_by?: string | null;
           cancelled_reason?: string | null;
           closed_at?: string | null;
+          cortesia_by?: string | null;
+          cortesia_reason?: string | null;
+          cortesia_valor_cents?: number | null;
           comprobante_elegido?: Json | null;
           created_at?: string;
           customer_email?: string | null;

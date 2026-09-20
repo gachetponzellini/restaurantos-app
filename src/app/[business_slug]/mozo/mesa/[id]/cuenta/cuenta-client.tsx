@@ -23,7 +23,12 @@ import { sumActiveItems } from "@/lib/billing/totals";
 import { useArrowFocus } from "@/lib/ui/use-arrow-focus";
 import type { CuentaState } from "@/lib/billing/types";
 import { formatCurrency } from "@/lib/currency";
-import { canApplyDiscount, canCancelItem } from "@/lib/permissions/can";
+import {
+  canApplyDiscount,
+  canCancelItem,
+  canCerrarSinCobro,
+} from "@/lib/permissions/can";
+import { cerrarSinCobro } from "@/lib/billing/cerrar-sin-cobro";
 import { useOptimisticAction } from "@/lib/ui/use-optimistic-action";
 import { cn } from "@/lib/utils";
 
@@ -167,6 +172,7 @@ export function CuentaClient({
     );
   };
   const [cancelarItemId, setCancelarItemId] = useState<string | null>(null);
+  const [sinCobroOpen, setSinCobroOpen] = useState(false);
 
   const dirty =
     tipCents !== cuenta.order.tip_cents ||
@@ -188,6 +194,45 @@ export function CuentaClient({
   // banner seguía anunciando una sub-cuenta y el botón ofrecía «Volver a
   // dividir (1)» sobre una cuenta entera (issue #189).
   const splitsVivos = cuenta.splits.filter((s) => s.status !== "cancelled");
+
+  // 0126 — hay consumo y la cuenta da $0: es una invitación total.
+  const esInvitacion =
+    total === 0 &&
+    items.some((i) => i.cancelled_at === null) &&
+    canCerrarSinCobro(role);
+
+  const handleCerrarSinCobro = (motivo: string) => {
+    setSinCobroOpen(false);
+    startTransition(async () => {
+      // El 100 % de descuento puede estar recién tipeado: se guarda antes, para
+      // que el server vea la misma cuenta de $0 que está viendo el encargado.
+      if (dirty) {
+        const g = await aplicarPropinaYDescuento(
+          cuenta.order.id,
+          {
+            tip_cents: tipCents,
+            discount_cents: discountCents,
+            discount_reason: discountCents > 0 ? discountReasonText : null,
+          },
+          slug,
+        );
+        if (!g.ok) {
+          toast.error(g.error);
+          return;
+        }
+      }
+      const r = await cerrarSinCobro(cuenta.order.id, motivo, slug);
+      if (!r.ok) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success("Cuenta cerrada sin cobro. Queda en el resumen del día como invitación.");
+      if (embedded) {
+        onReload?.();
+        onClose?.();
+      } else router.push(backHref);
+    });
+  };
 
   const handleConfirmar = () => {
     if (cantApplyDiscount) {
@@ -648,6 +693,21 @@ export function CuentaClient({
         )}
       >
         <div className={cn(!embedded && "mx-auto max-w-screen-md p-4")}>
+          {/* 0126 — la mesa de $0 (invitación total) no se cobra: se cierra sin
+              cobro, con motivo. Antes «Pasar a cobro» quedaba apagado y la única
+              salida era anular la mesa, que borra la venta del día. */}
+          {esInvitacion && (
+            <Button
+              type="button"
+              size="xl"
+              variant="outline"
+              onClick={() => setSinCobroOpen(true)}
+              disabled={cantApplyDiscount || faltaMotivo || isPending}
+              className="mb-2 w-full"
+            >
+              Cerrar sin cobro · invitación
+            </Button>
+          )}
           <Button
             type="button"
             size="xl"
@@ -690,6 +750,16 @@ export function CuentaClient({
         }}
       />
 
+      <Modal open={sinCobroOpen} onOpenChange={setSinCobroOpen}>
+        <ModalContent size="sm">
+          <ModalHeader title="Cerrar sin cobro" />
+          <CancelarItemForm
+            placeholder="Ej: invitación de la casa, cumpleaños del dueño…"
+            onSubmit={handleCerrarSinCobro}
+            onCancel={() => setSinCobroOpen(false)}
+          />
+        </ModalContent>
+      </Modal>
       <Modal
         open={cancelarItemId !== null}
         onOpenChange={(o) => !o && setCancelarItemId(null)}
@@ -749,9 +819,11 @@ function ResumenRow({
 function CancelarItemForm({
   onSubmit,
   onCancel,
+  placeholder = "Ej: cliente cambió de opinión, plato salió mal…",
 }: {
   onSubmit: (motivo: string) => void;
   onCancel: () => void;
+  placeholder?: string;
 }) {
   const [motivo, setMotivo] = useState("");
   return (
@@ -763,7 +835,7 @@ function CancelarItemForm({
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
             rows={2}
-            placeholder="Ej: cliente cambió de opinión, plato salió mal…"
+            placeholder={placeholder}
             autoFocus
           />
         </div>

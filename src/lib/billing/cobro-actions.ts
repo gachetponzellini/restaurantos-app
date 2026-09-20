@@ -33,6 +33,7 @@ import type { TipoComprobante } from "@/lib/afip/types";
 
 import { restitucionMesa, type OperationalStatus } from "./restitucion-mesa";
 import { admiteCobro } from "./saldo-pendiente";
+import { liberarMesaDeOrden } from "./liberar-mesa-de-orden";
 import { ajusteDelCobro } from "./adjustment";
 import {
   destinoPorDefecto,
@@ -301,63 +302,17 @@ export async function closeOrderIfFullyPaid(
     })
     .eq("id", orderId);
 
-  // Post-cobro: mesa va directo a `libre`. Eliminamos la transición
-  // intermedia `limpiar` con la simplificación de estados (migración 0038).
-  //
-  // La mesa a liberar es la que ACTUALMENTE es dueña de la orden
-  // (tables.current_order_id = orderId), NO order.table_id: si un traslado
-  // concurrente (spec 048) movió la orden a otra mesa entre este loadOrder y
-  // acá, order.table_id quedó stale y liberaríamos la mesa equivocada, dejando
-  // la mesa destino "ocupada" apuntando a una orden ya cerrada (mesa fantasma).
-  // Keyear por current_order_id es idempotente y sigue a la orden. Fallback a
-  // order.table_id solo si nadie la referencia por current_order_id — eso
-  // implica que NO hubo traslado (un move siempre setea current_order_id en el
-  // destino), así que en ese caso order.table_id no está stale.
-  const { data: ownerRow } = await service
-    .from("tables")
-    .select("id, operational_status")
-    .eq("current_order_id", orderId)
-    .maybeSingle();
-  const ownerTableId =
-    (ownerRow as { id: string } | null)?.id ?? order.table_id;
-
-  if (ownerTableId) {
-    const fromStatus =
-      (ownerRow as { operational_status: string } | null)?.operational_status ??
-      null;
-
-    // mozo_id se preserva: la asignación es fija hasta que el encargado la
-    // cambie manualmente desde "Distribuir mozos". Cobrar una mesa no la
-    // saca del mozo que la atiende.
-    await service
-      .from("tables")
-      .update({
-        operational_status: "libre",
-        opened_at: null,
-        current_order_id: null,
-      })
-      .eq("id", ownerTableId);
-
-    await service.from("tables_audit_log").insert({
-      table_id: ownerTableId,
-      business_id: business.id,
-      kind: "status",
-      from_value: fromStatus,
-      to_value: "libre",
-      by_user_id: null,
-      reason: `cobro completo order ${order.order_number}`,
-    });
-
-    // La reserva seated asociada (si la hubo) pasa a completed: el cliente
-    // consumió y pagó. Si no, queda pegada a la mesa libre (orphan).
-    const { error: resErr } = await service
-      .from("reservations")
-      .update({ status: "completed" })
-      .eq("table_id", ownerTableId)
-      .eq("business_id", business.id)
-      .eq("status", "seated");
-    if (resErr) console.error("cobro: completar reserva seated", resErr);
-  }
+  // Post-cobro: la mesa va directo a `libre` y la reserva sentada se completa.
+  // Vive en `liberar-mesa-de-orden.ts` porque «Cerrar sin cobro» (la mesa de
+  // $0) termina igual: si la lógica se copiara, el día que cambie una se olvida
+  // la otra.
+  await liberarMesaDeOrden(service, {
+    businessId: business.id,
+    orderId,
+    orderNumber: order.order_number,
+    tableIdFallback: order.table_id,
+    motivo: `cobro completo order ${order.order_number}`,
+  });
 
   // spec 147 — la mesa cobrada termina en comprobante. Va acá y no en un
   // componente a propósito (D2): los cinco callers de `emitInvoice` son `.tsx`,

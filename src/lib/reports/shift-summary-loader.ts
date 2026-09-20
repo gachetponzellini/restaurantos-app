@@ -12,6 +12,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import type {
   CancellationRow,
   CorrectionRow,
+  InvitacionRow,
   ShiftCorte,
   ShiftMozo,
   ShiftSummaryData,
@@ -278,6 +279,9 @@ export async function loadShiftSummaryData(
     endIso,
   });
 
+  // ── Invitaciones: cuentas cerradas sin cobro (migración 0126) ──────────
+  const invitaciones = await loadInvitaciones(service, businessId, { startIso, endIso });
+
   return {
     businessName,
     timezone,
@@ -304,7 +308,44 @@ export async function loadShiftSummaryData(
     porMozo,
     anulaciones,
     correcciones,
+    invitaciones,
   };
+}
+
+/**
+ * Las cuentas que se cerraron sin cobrar en el día: qué mesa, por qué, quién lo
+ * decidió y cuánto valía de carta. Se fechan por `closed_at` — es cuando se
+ * regaló, no cuando se sentaron.
+ */
+async function loadInvitaciones(
+  service: AnyClient,
+  businessId: string,
+  ctx: { startIso: string; endIso: string },
+): Promise<InvitacionRow[]> {
+  const { data } = await service
+    .from("orders")
+    .select(
+      "order_number, closed_at, cortesia_reason, cortesia_by, cortesia_valor_cents, tables!orders_table_id_fkey(label)",
+    )
+    .eq("business_id", businessId)
+    .not("cortesia_reason", "is", null)
+    .gte("closed_at", ctx.startIso)
+    .lt("closed_at", ctx.endIso)
+    .order("closed_at", { ascending: true });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) return [];
+  const nombres = await resolveUserNames(
+    service,
+    rows.map((r) => r.cortesia_by as string | null),
+  );
+  return rows.map((r) => ({
+    label: r.tables?.label ? `Mesa ${r.tables.label}` : `Pedido #${r.order_number}`,
+    reason: (r.cortesia_reason as string) ?? "",
+    responsable: r.cortesia_by ? (nombres.get(r.cortesia_by) ?? null) : null,
+    valor_cents: Number(r.cortesia_valor_cents ?? 0),
+    at: r.closed_at as string,
+  }));
 }
 
 /**

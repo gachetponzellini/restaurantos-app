@@ -258,4 +258,44 @@ describe("buildShiftSummary", () => {
   it("sin correcciones, la lista queda vacía (el mail no muestra la sección)", () => {
     expect(buildShiftSummary(baseData()).correcciones).toEqual([]);
   });
+
+  it("lista las invitaciones con lo que valían de carta (migración 0126)", () => {
+    // Una mesa cerrada sin cobro no es venta ni anulación: es el único lugar
+    // donde el dueño ve cuánto se regaló, por qué y quién lo decidió.
+    const base = buildShiftSummary({
+      businessName: "Demo",
+      timezone: "America/Argentina/Buenos_Aires",
+      rangeLabel: "hoy",
+      recaudacion: { total_cents: 0, fiado_cents: 0, propinas_cents: 0, por_metodo: {} as never, cobros_count: 0 },
+      afip: { totalCents: 0, count: 0, countA: 0, countB: 0, countFailed: 0, countPending: 0 },
+      operacion: { orderCount: 0, revenueCents: 0, averageTicketCents: 0, deliveryCount: 0, pickupCount: 0, dineInCount: 0, cancelledCount: 0 },
+      cortes: [],
+      porMozo: [],
+      anulaciones: [],
+      invitaciones: [
+        { label: "Mesa 5", reason: "Cumpleaños del dueño", responsable: "Sofía", valor_cents: 4_500_000, at: "2026-09-20T23:10:00.000Z" },
+        { label: "Mesa 9", reason: " ", responsable: null, valor_cents: 1_000_000, at: "2026-09-20T23:40:00.000Z" },
+      ],
+    });
+    expect(base.invitaciones).toHaveLength(2);
+    expect(base.invitaciones[0]).toMatchObject({ detalle: "Mesa 5", motivo: "Cumpleaños del dueño", responsable: "Sofía" });
+    expect(base.invitaciones[1]).toMatchObject({ motivo: "—", responsable: "—" });
+    expect(base.invitacionesTotal.replace(/\u00a0/g, " ")).toContain("55.000");
+  });
+
+  it("sin invitaciones no hay total que mostrar", () => {
+    const s = buildShiftSummary({
+      businessName: "Demo",
+      timezone: "America/Argentina/Buenos_Aires",
+      rangeLabel: "hoy",
+      recaudacion: { total_cents: 0, fiado_cents: 0, propinas_cents: 0, por_metodo: {} as never, cobros_count: 0 },
+      afip: { totalCents: 0, count: 0, countA: 0, countB: 0, countFailed: 0, countPending: 0 },
+      operacion: { orderCount: 0, revenueCents: 0, averageTicketCents: 0, deliveryCount: 0, pickupCount: 0, dineInCount: 0, cancelledCount: 0 },
+      cortes: [],
+      porMozo: [],
+      anulaciones: [],
+    });
+    expect(s.invitaciones).toEqual([]);
+    expect(s.invitacionesTotal).toBe("");
+  });
 });
