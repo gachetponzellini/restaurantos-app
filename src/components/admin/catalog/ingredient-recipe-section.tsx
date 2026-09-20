@@ -12,6 +12,7 @@ import {
   saveIngredientRecipe,
 } from "@/lib/ingredients/actions";
 import type { IngredientRecipeLine } from "@/lib/ingredients/types";
+import { factorDeMerma } from "@/lib/ingredients/factor-de-merma";
 
 type IngredientOption = {
   id: string;
@@ -125,7 +126,7 @@ export function IngredientRecipeSection({
   const totalCostCents = useMemo(() => {
     return lines.reduce((sum, l) => {
       if (l.costPerUnit == null || l.quantity <= 0) return sum;
-      return sum + l.quantity * l.costPerUnit * (1 + l.wastePercent / 100);
+      return sum + l.quantity * l.costPerUnit * factorDeMerma(l.wastePercent);
     }, 0);
   }, [lines]);
 
@@ -210,7 +211,7 @@ export function IngredientRecipeSection({
                     {(
                       (line.quantity *
                         line.costPerUnit *
-                        (1 + line.wastePercent / 100)) /
+                        factorDeMerma(line.wastePercent)) /
                       100
                     ).toFixed(2)}
                   </p>

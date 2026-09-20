@@ -25,6 +25,7 @@ import type {
   ProductCosteo,
   RecipeLine,
 } from "./types";
+import { factorDeMerma } from "@/lib/ingredients/factor-de-merma";
 
 // ── getIngredients (list for admin table) ────────────────────────
 
@@ -245,7 +246,7 @@ async function resolveIngredientCost(
     return defaultPres.cost_cents / Number(defaultPres.net_quantity);
   }
 
-  // Composite: sum child costs × quantities × (1 + child_waste/100)
+  // Composite: sum child costs × quantities × factorDeMerma(child_waste)
   const { data: subLines } = await service
     .from("ingredient_recipes")
     .select("child_ingredient_id, quantity, ingredients!ingredient_recipes_child_ingredient_id_fkey(waste_percent)")
@@ -256,7 +257,7 @@ async function resolveIngredientCost(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const childWaste = Number((line as any).ingredients?.waste_percent ?? 0);
     const childCostPerUnit = await resolveIngredientCost(service, line.child_ingredient_id, new Set(visited));
-    total += childCostPerUnit * Number(line.quantity) * (1 + childWaste / 100);
+    total += childCostPerUnit * Number(line.quantity) * factorDeMerma(childWaste);
   }
   return total;
 }
@@ -277,7 +278,7 @@ export async function calculateFoodCost(
       if (costPerUnit === null) {
         costPerUnit = await resolveIngredientCost(service, line.ingredientId);
       }
-      const lineCost = line.quantity * costPerUnit * (1 + line.wastePercent / 100);
+      const lineCost = line.quantity * costPerUnit * factorDeMerma(line.wastePercent);
       return {
         ingredientId: line.ingredientId,
         ingredientName: line.ingredientName,
@@ -419,7 +420,7 @@ export async function getCosteoOverview(
       // Un insumo a $0 (o un compuesto sin sub-receta) suma $0 en silencio.
       if (!(costPerUnit > 0)) lineasSinCosto += 1;
 
-      totalCost += Number(rec.quantity) * costPerUnit * (1 + wastePercent / 100);
+      totalCost += Number(rec.quantity) * costPerUnit * factorDeMerma(wastePercent);
     }
 
     const foodCostCents = Math.round(totalCost);

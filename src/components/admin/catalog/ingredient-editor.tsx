@@ -649,6 +649,13 @@ function IngredientEditorForm({
                               }
                             />
                           </FormControl>
+                          {/* La merma es rendimiento (0125): se pierde sobre lo
+                              que se compra. La receta se carga en cantidad
+                              limpia y el sistema saca del stock el bruto. */}
+                          <p className="text-[11px] leading-snug text-zinc-500">
+                            Cuánto se pierde al limpiarlo, sobre lo que comprás.
+                            Con 20 %, para servir 200 g salen 250 g del stock.
+                          </p>
                           <FormMessage />
                         </FormItem>
                       )}

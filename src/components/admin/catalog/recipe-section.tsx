@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { saveRecipe } from "@/lib/ingredients/actions";
 import type { FoodCostResult, RecipeLine } from "@/lib/ingredients/types";
 import { cn } from "@/lib/utils";
+import { factorDeMerma } from "@/lib/ingredients/factor-de-merma";
 
 type IngredientOption = {
   id: string;
@@ -63,7 +64,7 @@ export function RecipeSection({
 
     const costLines = lines.map((line) => {
       const costPerUnit = line.costPerUnit ?? 0;
-      const lineCost = line.quantity * costPerUnit * (1 + line.wastePercent / 100);
+      const lineCost = line.quantity * costPerUnit * factorDeMerma(line.wastePercent);
       return {
         ingredientId: line.ingredientId,
         ingredientName: line.ingredientName,
@@ -240,7 +241,7 @@ export function RecipeSection({
                     {(
                       (line.quantity *
                         line.costPerUnit *
-                        (1 + line.wastePercent / 100)) /
+                        factorDeMerma(line.wastePercent)) /
                       100
                     ).toFixed(2)}
                   </p>
