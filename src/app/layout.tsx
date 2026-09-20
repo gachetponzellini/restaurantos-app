@@ -90,13 +90,16 @@ export const metadata: Metadata = {
   description: "Pedidos online para tu negocio.",
   // Icono por defecto de la plataforma. Las rutas de negocio lo sobreescriben
   // con su propio favicon en `[business_slug]/layout.tsx`. Servimos SVG (modern)
-  // + PNG 32 (fallback) + apple-touch desde /public — NO usamos la convención
-  // de archivo `app/favicon.ico` porque se inyecta en todas las rutas y pisaría
-  // al favicon por-negocio (emitía dos <link rel=icon> que competían).
+  // + PNG 16 y 32 (fallback) + apple-touch desde /public — NO usamos la
+  // convención de archivo `app/favicon.ico` porque se inyecta en todas las
+  // rutas y pisaría al favicon por-negocio (emitía dos <link rel=icon> que
+  // competían). Los PNG se rasterizan a tamaño nativo desde `public/icon.svg`
+  // (no se reescalan): rsvg-convert -w 16 -h 16 public/icon.svg -o public/icon-16.png
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/icon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon-16.png", type: "image/png", sizes: "16x16" },
     ],
     apple: "/apple-icon.png",
   },

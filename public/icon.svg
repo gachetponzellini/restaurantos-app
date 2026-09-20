@@ -1,12 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="RestaurantOS">
-  <rect width="32" height="32" rx="7" fill="#e11d48"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Pedidos">
+  <!-- Isotipo de la plataforma. Toda la geometría cae en coordenadas PARES
+       sobre la grilla de 32 → a 16 px (pestaña), 32 px (retina) y 48 px cada
+       borde coincide con un píxel entero y el ícono sale nítido, sin el
+       antialiasing gris que tenía la versión anterior. Si se retoca, mantener
+       los valores pares. -->
+  <rect width="32" height="32" rx="8" fill="#e11d48"/>
   <g fill="#fff">
-    <!-- Tenedor -->
-    <rect x="9.5"  y="6" width="1.7" height="7" rx="0.85"/>
-    <rect x="12.15" y="6" width="1.7" height="7" rx="0.85"/>
-    <rect x="14.8" y="6" width="1.7" height="7" rx="0.85"/>
-    <path d="M9.5 12.2h7.5c0 2.05-1.25 3.35-2.75 3.6L13.6 25a1.1 1.1 0 0 1-2.2 0l-.65-9.2c-1.5-.25-2.75-1.55-2.75-3.6Z"/>
-    <!-- Cuchillo -->
-    <path d="M22.3 6c1.5 0 2.5 3 2.5 6.4 0 2.6-.95 4.35-2.3 4.75V25a1.1 1.1 0 0 1-2.2 0V12.4C20.3 8.7 20.9 6 22.3 6Z"/>
+    <!-- Tenedor: 3 dientes de 2 px separados por 2 px, cuello y mango -->
+    <rect x="6" y="6" width="2" height="8"/>
+    <rect x="10" y="6" width="2" height="8"/>
+    <rect x="14" y="6" width="2" height="8"/>
+    <rect x="6" y="12" width="10" height="4" rx="2"/>
+    <rect x="10" y="14" width="2" height="12" rx="1"/>
+    <!-- Cuchillo: lomo recto a la derecha, hoja hacia la izquierda -->
+    <path d="M26 6v20a1 1 0 0 1-2 0v-8h-2v-8a4 4 0 0 1 4-4Z"/>
   </g>
 </svg>
