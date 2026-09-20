@@ -287,9 +287,30 @@ export async function corregirCobro(
     await closeOrderIfFullyPaid(service, pago.order_id, input.slug);
   }
 
+  // El comprobante se emite sobre la cuenta MÁS el ajuste por método (#274 · 7).
+  // Si la corrección movió ese ajuste —cambió el método, 0120— y la cuenta ya
+  // tiene un comprobante vivo, lo declarado a ARCA dejó de coincidir con lo
+  // cobrado. No se bloquea (la plata es la que es), pero se dice: el arreglo es
+  // anular y re-facturar desde Facturación.
+  let advertencia: string | undefined;
+  if ((row.changed_fields ?? []).includes("adjustment_cents")) {
+    const { data: vivas } = await service
+      .from("invoices")
+      .select("id")
+      .eq("business_id", business.id)
+      .eq("order_id", pago.order_id)
+      .in("status", ["pending", "authorized"])
+      .in("tipo_comprobante", ["factura_a", "factura_b"])
+      .limit(1);
+    if (((vivas ?? []) as unknown[]).length > 0) {
+      advertencia =
+        "El recargo o descuento del cobro cambió y esta cuenta ya tiene comprobante: el importe facturado quedó distinto de lo cobrado. Anulá y volvé a facturar desde Facturación.";
+    }
+  }
+
   revalidatePath(`/${input.slug}/admin/operacion`);
   revalidatePath(`/${input.slug}/admin/caja/movimientos`);
-  return actionOk({ changedFields: row.changed_fields ?? [] });
+  return actionOk({ changedFields: row.changed_fields ?? [], advertencia });
 }
 
 /**

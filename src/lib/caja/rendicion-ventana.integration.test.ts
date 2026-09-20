@@ -118,25 +118,33 @@ describe.skipIf(!dbAvailable)("caja · la ventana de la rendición (integration)
   });
 
   it(
-    "un cobro posterior al corte no se cuenta en esta rendición ni se pierde en la próxima",
+    "un cobro que la rendición no puede ubicar en su período la frena, y no se pierde",
     { timeout: 30_000 },
     async () => {
+      // Historia: el #264 le puso un techo (la hora de Node) a la lectura, para
+      // que un cobro que cayera «en la ventana» no quedara huérfano. La 0124
+      // cerró el residual que eso dejaba —dependía de que Node y Postgres
+      // tuvieran la misma hora—: ahora la RPC vuelve a contar bajo su lock, con
+      // el reloj de la base, y si no ve los mismos cobros que la action leyó,
+      // rechaza. Un cobro fechado en el futuro es la forma de forzarlo acá.
       await cobro(ANTES);
-      // Un cobro fechado DESPUÉS del corte: es el que cae en la ventana.
       await cobro(DESPUES, new Date(Date.now() + 60_000).toISOString());
 
       CURRENT_USER_ID = encargadoId;
-      const r = await registrarRendicionMozo(mozoId, ANTES, null, businessSlug);
-      expect(r.ok, r.ok ? "" : r.error).toBe(true);
-      if (!r.ok) return;
+      const r = await registrarRendicionMozo(mozoId, ANTES + DESPUES, null, businessSlug);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toMatch(/Entró un cobro/);
 
-      // Sin techo, el de la ventana entraba acá: la rendición pedía $52.000 y el
-      // mozo sólo tenía $40.000 encima.
-      expect(r.data.rendicion.expected_cash_cents).toBe(ANTES);
+      // No se guardó una rendición a medias…
+      const { count } = await supabase
+        .from("mozo_rendiciones")
+        .select("id", { count: "exact", head: true })
+        .eq("mozo_id", mozoId);
+      expect(count).toBe(0);
 
-      // Y sigue pendiente para la próxima: no se pierde.
+      // …y la plata sigue entera esperando que se rinda: no se perdió nada.
       const siguiente = await getRendicionPendienteMozo(mozoId, businessId, "Mozo");
-      expect(siguiente.efectivo_cents).toBe(DESPUES);
+      expect(siguiente.efectivo_cents).toBe(ANTES + DESPUES);
     },
   );
 });

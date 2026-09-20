@@ -612,6 +612,9 @@ function DetalleSheet({
         return;
       }
       toast.success(anular ? "Movimiento anulado" : "Línea corregida");
+      // El comprobante quedó desfasado de lo cobrado: se avisa, no se esconde.
+      const aviso = (r.data as { advertencia?: string } | undefined)?.advertencia;
+      if (aviso) toast.warning(aviso, { duration: 12_000 });
       onDone();
     });
   }

@@ -139,6 +139,16 @@ export function CosteoTab() {
       cell: (r) => (
         <span className="text-[12.5px] text-zinc-600 tabular-nums">
           {r.hasRecipe ? formatCurrency(r.foodCostCents) : "—"}
+          {/* Un insumo sin precio suma $0: el costo está subestimado y el
+              plato se ve más rentable de lo que es. Se dice al lado del número. */}
+          {r.hasRecipe && r.lineasSinCosto > 0 && (
+            <span
+              className="ml-1 font-semibold text-amber-700"
+              title={`${r.lineasSinCosto} insumo(s) de la receta no tienen precio: el costo real es mayor.`}
+            >
+              ⚠
+            </span>
+          )}
         </span>
       ),
     },

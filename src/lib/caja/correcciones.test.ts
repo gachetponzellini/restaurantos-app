@@ -331,7 +331,7 @@ describe("caja / mapCorreccionError", () => {
   it("traduce el error de cobertura", () => {
     expect(
       mapCorreccionError('error: ORDER_WOULD_BE_UNCOVERED'),
-    ).toContain("no alcanza a cubrir la cuenta");
+    ).toContain("quedaría sin cubrir");
   });
 
   it("cae en un mensaje genérico si no lo conoce", () => {

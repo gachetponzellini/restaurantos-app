@@ -164,8 +164,10 @@ export function IngredientRecipeSection({
       </div>
 
       <p className="text-[11px] text-zinc-500">
-        Definí los ingredientes que componen este insumo compuesto. El costo se
-        calcula recursivamente a partir de los sub-ingredientes.
+        Definí los ingredientes que componen este insumo compuesto. Las
+        cantidades son <strong>por cada 1 unidad</strong> de este insumo (si se
+        mide en kg: lo que lleva 1 kg), no las de la tanda entera — con esas
+        cantidades se calcula el costo y se descuenta el stock.
       </p>
 
       {/* Cost summary */}

@@ -135,6 +135,13 @@ export type ProductCosteo = {
   marginPercent: number;
   marginCents: number;
   hasRecipe: boolean;
+  /**
+   * Líneas de la receta cuyo insumo no tiene un costo usable (sin presentación
+   * default, con precio $0 o con contenido neto 0). Esas líneas suman $0, así
+   * que con alguna el costo está SUBESTIMADO y el margen miente para arriba:
+   * el plato se ve más rentable de lo que es.
+   */
+  lineasSinCosto: number;
 };
 
 // ── Ingredient consumption log entry ────────────────────────────

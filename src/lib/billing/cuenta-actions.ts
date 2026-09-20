@@ -9,6 +9,7 @@ import { requireMozoActionContext } from "@/lib/mozo/auth";
 import { notifyItemCancelled } from "@/lib/notifications/events";
 import { canApplyDiscount, canCancelItem } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { formatCurrency } from "@/lib/currency";
 import { getBusiness } from "@/lib/tenant";
 import { closeOrderIfFullyPaid } from "./cobro-actions";
 
@@ -123,7 +124,7 @@ async function recalcOrderTotals(
     tip_cents,
     discount_cents,
   });
-  await service
+  const { error } = await service
     .from("orders")
     .update({
       total_cents: totals.total_cents,
@@ -132,6 +133,10 @@ async function recalcOrderTotals(
       ...(patch.discount_reason !== undefined && { discount_reason: patch.discount_reason }),
     })
     .eq("id", orderId);
+  // 0124 — este error se descartaba. Con la guarda `TOTAL_BELOW_PAID` (0121) un
+  // descuento rechazado por la base devolvía el total NUEVO como si se hubiera
+  // aplicado: la pantalla mostraba un número que la cuenta no tenía.
+  if (error) throw new Error(error.message);
   return { total_cents: totals.total_cents };
 }
 
@@ -219,12 +224,17 @@ export async function aplicarPropinaYDescuento(
     return actionError("La orden ya está cerrada.");
   }
 
-  // #357 — con cobros registrados, propina y descuento quedan fijos: la
-  // propina ya viajó en esos pagos (#353) y un descuento podía dejar el total
-  // por debajo de lo cobrado.
-  if ((await cobradoDeLaOrden(service, orderId)).pagos > 0) {
+  // #357 (revisado, 0124) — con cobros registrados se puede subir la propina o
+  // aplicar un descuento, con dos límites: la propina no baja de la que ya
+  // viajó en un pago (el mozo la cobra de ahí), y el total no baja de lo
+  // cobrado (eso lo garantiza la base, `TOTAL_BELOW_PAID`). Bloquear todo —la
+  // primera versión— trababa «Pasar a cobro»: la pantalla maneja el descuento
+  // en % y lo recalcula en pesos, así que agregar un plato después de un pago
+  // parcial ya contaba como «cambio».
+  const yaCobrado = await cobradoDeLaOrden(service, orderId);
+  if (yaCobrado.pagos > 0 && input.tip_cents < yaCobrado.propina_cents) {
     return actionError(
-      "Ya hay cobros registrados en esta cuenta: para cambiar la propina o el descuento, anulá el cobro primero.",
+      `Ya se cobraron ${formatCurrency(yaCobrado.propina_cents)} de propina en esta cuenta: no puede quedar por debajo. Si estuvo mal, corregí el cobro.`,
     );
   }
 
@@ -249,11 +259,18 @@ export async function aplicarPropinaYDescuento(
       ? input.discount_reason.trim()
       : null;
 
-  const { total_cents } = await recalcOrderTotals(service, orderId, {
-    tip_cents: input.tip_cents,
-    discount_cents: input.discount_cents,
-    discount_reason: reason,
-  });
+  let total_cents: number;
+  try {
+    ({ total_cents } = await recalcOrderTotals(service, orderId, {
+      tip_cents: input.tip_cents,
+      discount_cents: input.discount_cents,
+      discount_reason: reason,
+    }));
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg.includes("TOTAL_BELOW_PAID")) return actionError(TOTAL_BAJO_LO_COBRADO);
+    return actionError(`No se pudo actualizar la cuenta: ${msg}`);
+  }
 
   // Si había splits, los invalidamos: hay que volver a dividir con los
   // nuevos números (R8 de CU-03 — la última división gana, pero un cambio
@@ -334,7 +351,14 @@ export async function cancelarItemEnCuenta(
 
   // Splits previos quedan inválidos.
   await deleteSplitsAndItems(service, orderId);
-  const { total_cents } = await recalcOrderTotals(service, orderId, {});
+  let total_cents: number;
+  try {
+    ({ total_cents } = await recalcOrderTotals(service, orderId, {}));
+  } catch (e) {
+    // El ítem ya quedó cancelado (la guarda de la base lo dejó pasar), así que
+    // esto sólo puede ser un fallo de escritura: se dice, no se esconde.
+    return actionError(`El ítem se canceló pero no se pudo recalcular la cuenta: ${(e as Error).message}`);
+  }
 
   // #357 — si lo que se sacó era justo lo que faltaba pagar, la cuenta quedó
   // cubierta: se cierra como cualquier cobro completo (mesa libre,

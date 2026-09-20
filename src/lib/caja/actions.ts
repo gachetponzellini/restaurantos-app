@@ -869,6 +869,13 @@ export async function registrarRendicionMozo(
   // pide mover la rendición entera a una RPC transaccional —como
   // `registrar_pago_tx`— y eso es otra tanda: no se hace acá para no duplicar la
   // aritmética de la rendición en SQL, que es justo lo que causó el #253.
+  //
+  // 0124 — cerrado del todo. El techo ya no sale del reloj de Node: la action
+  // lee TODO lo cobrado hasta ahora y le pasa a `registrar_rendicion_tx` cuántos
+  // cobros leyó. La RPC toma el lock exclusivo del mozo (los cobros toman el
+  // compartido), vuelve a contar y fija la hora con el reloj de la base: si
+  // entró un cobro en el medio, rechaza y se vuelve a leer. La aritmética sigue
+  // acá, en TS; la base sólo verifica que se hizo sobre los mismos cobros.
   const corteIso = new Date().toISOString();
 
   const pendiente = await getRendicionPendienteMozo(
@@ -876,7 +883,7 @@ export async function registrarRendicionMozo(
     business.id,
     (mozoUser as { full_name: string | null }).full_name ?? "Sin nombre",
     undefined,
-    corteIso,
+    undefined,
     // Spec 203 — con el rol, el encargado rinde sólo takeaway y delivery.
     (mozoUser as { role: string | null }).role ?? undefined,
   );
@@ -965,12 +972,13 @@ export async function registrarRendicionMozo(
     // (spec 139) arma sus renglones con `reason` y sin esto la línea diría
     // sólo «Propina», que en una lista de seis es inútil.
     p_propina_reason: `Propina · ${(mozoUser as { full_name: string | null }).full_name ?? "Mozo"}`,
+    p_pagos_leidos: pendiente.pagos_leidos ?? null,
   });
 
   if (error) {
     if (error.message.includes("RENDICION_CONCURRENTE")) {
       return actionError(
-        "Alguien acaba de registrar una rendición de este mozo. Actualizá la pantalla para ver lo que queda.",
+        "Entró un cobro de este mozo (o alguien registró su rendición) mientras cargabas. Actualizá la pantalla y volvé a rendir con el número al día.",
       );
     }
     return actionError(`No se pudo registrar la rendición: ${error.message}`);

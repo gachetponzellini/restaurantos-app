@@ -108,4 +108,35 @@ describe.skipIf(!dbAvailable)("corregir un cobro (integration · #356)", () => {
     expect(r.error?.message).toContain("TOTAL_BELOW_PAID");
     expect((await pago(p.payment.id)).tip_cents).toBe(200_000);
   });
+
+  it("subir la propina junto con el monto le sube propina y total a la cuenta", async () => {
+    // 0124 — el cliente dejó $500 de más en la tarjeta y se cargó sin propina.
+    // Corregirlo es declarar un excedente tarde: tiene que quedar igual que si
+    // se hubiera cobrado bien. Antes sólo crecía `payments.tip_cents` y la
+    // venta del negocio bajaba por una propina.
+    const orderId = await f.orden(1_000_000);
+    const p = await f.pagarOk(orderId, { amount: 1_000_000, method: "transfer" });
+    await f.cerrarOrden(orderId);
+
+    const r = await f.corregir(p.payment.id, { amount_cents: 1_050_000, tip_cents: 50_000 });
+    expect(r.error).toBeNull();
+    const x = await pago(p.payment.id);
+    expect(x.tip_cents).toBe(50_000);
+    expect(x.extra_tip_cents).toBe(50_000);
+    const o = await f.leerOrden(orderId);
+    expect(o.tip_cents).toBe(50_000);
+    expect(o.total_cents).toBe(1_050_000);
+    expect(o.total_paid_cents).toBe(1_050_000);
+    expect(o.payment_status).toBe("paid");
+  });
+
+  it("subir sólo la propina de una cuenta cerrada la dejaría descubierta: se rechaza", async () => {
+    const orderId = await f.orden(1_000_000);
+    const p = await f.pagarOk(orderId, { amount: 1_000_000, method: "transfer" });
+    await f.cerrarOrden(orderId);
+    const r = await f.corregir(p.payment.id, { tip_cents: 50_000 });
+    expect(r.error?.message).toContain("ORDER_WOULD_BE_UNCOVERED");
+    expect((await pago(p.payment.id)).tip_cents).toBe(0);
+    expect((await f.leerOrden(orderId)).total_cents).toBe(1_000_000);
+  });
 });

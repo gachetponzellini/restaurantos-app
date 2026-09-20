@@ -281,13 +281,12 @@ describe.skipIf(!ready)("registrar_items_comprobante_tx", () => {
   });
 
   it(
-    "sin presentación, units ya viene en unidad base y el costo NO se toca",
+    "sin presentación, units ya viene en unidad base y el costo por unidad llega a la default",
     async () => {
       const invoiceId = await nuevoComprobante(businessId, supplierId);
       const antes = await stockDe(ingredientId);
-      const costoAntes = await costoDe(presentationId);
 
-      await db.rpc("registrar_items_comprobante_tx", {
+      const { error } = await db.rpc("registrar_items_comprobante_tx", {
         p_business_id: businessId,
         p_invoice_id: invoiceId,
         p_created_by: null,
@@ -296,16 +295,19 @@ describe.skipIf(!ready)("registrar_items_comprobante_tx", () => {
             ingredient_id: ingredientId,
             presentation_id: null,
             units: 5,
-            unit_cost_cents: 999_999_00,
+            unit_cost_cents: 21_000_00,
           },
         ],
       });
+      expect(error).toBeNull();
 
       // Sin envase no hay factor de conversión: 5 son 5 kg, no 50.
       expect(await stockDe(ingredientId)).toBeCloseTo(antes + 5, 3);
-      // Y el precio del envase queda intacto — es la rama que el lector de
-      // facturas NO puede usar si quiere que el costo se actualice.
-      expect(await costoDe(presentationId)).toBe(costoAntes);
+      // 0124 — antes el precio quedaba intacto, y una compra a granel dejaba a
+      // todas las recetas del insumo costeadas con un precio viejo. El precio
+      // viene por unidad base ($21.000 el kilo): el envase default, de 10 kg,
+      // pasa a costar $210.000.
+      expect(await costoDe(presentationId)).toBe(210_000_00);
     },
   );
 
@@ -367,5 +369,78 @@ describe.skipIf(!ready)("registrar_items_comprobante_tx", () => {
       .select("*", { count: "exact", head: true })
       .eq("invoice_id", invoiceId);
     expect(count).toBe(0);
+  });
+
+  it(
+    "comprar otra presentación también le actualiza el costo a la default (0124)",
+    async () => {
+      // La receta cuesta con la presentación `default`. Si el proveedor trae el
+      // insumo en otro envase —o a granel— el costo de la receta no se
+      // enteraba nunca: se seguía costeando con el precio de la última vez que
+      // se compró justo ese envase.
+      const { data: chica } = await db
+        .from("ingredient_presentations")
+        .insert({
+          ingredient_id: ingredientId,
+          name: "Bandeja 2kg",
+          net_quantity: 2,
+          cost_cents: 30_000_00,
+          is_default: false,
+        })
+        .select("id")
+        .single();
+      const invoiceId = await nuevoComprobante(businessId, supplierId);
+
+      // La bandeja de 2 kg a $50.000 → $25.000 el kilo.
+      const { error } = await db.rpc("registrar_items_comprobante_tx", {
+        p_business_id: businessId,
+        p_invoice_id: invoiceId,
+        p_created_by: null,
+        p_items: [
+          {
+            ingredient_id: ingredientId,
+            presentation_id: chica!.id,
+            units: 3,
+            unit_cost_cents: 50_000_00,
+          },
+        ],
+      });
+      expect(error).toBeNull();
+      expect(await costoDe(chica!.id)).toBe(50_000_00);
+      // El envase default es de 10 kg: $25.000 × 10.
+      expect(await costoDe(presentationId)).toBe(250_000_00);
+    },
+  );
+
+  it("una compra a granel (sin presentación) lleva su precio por unidad a la default", async () => {
+    const invoiceId = await nuevoComprobante(businessId, supplierId);
+    // 5 kg sueltos a $30.000 el kilo.
+    const { error } = await db.rpc("registrar_items_comprobante_tx", {
+      p_business_id: businessId,
+      p_invoice_id: invoiceId,
+      p_created_by: null,
+      p_items: [{ ingredient_id: ingredientId, units: 5, unit_cost_cents: 30_000_00 }],
+    });
+    expect(error).toBeNull();
+    expect(await costoDe(presentationId)).toBe(300_000_00);
+  });
+
+  it("un renglón de más de $21 millones entra: la plata ya no es de 32 bits (0124)", async () => {
+    const invoiceId = await nuevoComprobante(businessId, supplierId);
+    const { error } = await db.rpc("registrar_items_comprobante_tx", {
+      p_business_id: businessId,
+      p_invoice_id: invoiceId,
+      p_created_by: null,
+      // 100 envases a $300.000: $30.000.000 en un renglón.
+      p_items: [
+        { ingredient_id: ingredientId, presentation_id: presentationId, units: 100, unit_cost_cents: 300_000_00 },
+      ],
+    });
+    expect(error).toBeNull();
+    const { error: facturaErr } = await db
+      .from("supplier_invoices")
+      .update({ total_cents: 3_000_000_000 })
+      .eq("id", invoiceId);
+    expect(facturaErr).toBeNull();
   });
 });

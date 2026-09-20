@@ -397,6 +397,12 @@ export type RendicionMozoPendiente = {
    * medio, esta rendición ya no es sobre lo que se leyó.
    */
   desde_rendicion_id?: string | null;
+  /**
+   * Cuántos cobros se leyeron para armar esto, ANTES de filtrar por rol
+   * (0124). La RPC los vuelve a contar bajo su lock: si entró uno en el medio,
+   * rechaza en vez de dejarlo huérfano entre dos períodos.
+   */
+  pagos_leidos?: number;
 };
 
 export type CajaUserAssignment = {

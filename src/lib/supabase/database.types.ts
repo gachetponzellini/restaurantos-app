@@ -5195,6 +5195,7 @@ export type Database = {
           p_expected_cash_cents: number;
           p_mozo_id: string;
           p_notes: string | null;
+          p_pagos_leidos?: number | null;
           p_por_canal: Json;
           p_por_metodo: Json;
           p_propina_pagada_cents: number;

@@ -32,6 +32,7 @@ const ITEMS: ProductCosteo[] = [
     marginPercent: 70,
     marginCents: 7_000,
     hasRecipe: true,
+    lineasSinCosto: 0,
   },
   {
     productId: "p2",
@@ -42,6 +43,7 @@ const ITEMS: ProductCosteo[] = [
     marginPercent: -20,
     marginCents: -2_000,
     hasRecipe: true,
+    lineasSinCosto: 0,
   },
   {
     productId: "p3",
@@ -52,6 +54,7 @@ const ITEMS: ProductCosteo[] = [
     marginPercent: 40,
     marginCents: 4_000,
     hasRecipe: true,
+    lineasSinCosto: 0,
   },
   {
     productId: "p4",
@@ -62,6 +65,7 @@ const ITEMS: ProductCosteo[] = [
     marginPercent: 0,
     marginCents: 0,
     hasRecipe: false,
+    lineasSinCosto: 0,
   },
 ];
 

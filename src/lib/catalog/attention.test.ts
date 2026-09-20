@@ -11,6 +11,7 @@ const costeo = (marginCents: number, hasRecipe = true) => ({
   marginPercent: 0,
   marginCents,
   hasRecipe,
+  lineasSinCosto: 0,
 });
 
 const bebida = (isLow: boolean) => ({

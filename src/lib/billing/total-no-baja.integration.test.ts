@@ -77,15 +77,58 @@ describe.skipIf(!dbAvailable)("el total no baja de lo cobrado (integration · #3
     expect(o.payment_status).toBe("paid");
   });
 
-  it("propina y descuento no se cambian con cobros registrados", async () => {
+  it("con cobros registrados se puede SUBIR la propina o descontar, mientras la cuenta no quede bajo lo cobrado", async () => {
+    // La primera versión de #357 bloqueaba cualquier cambio con cobros. Era
+    // demasiado: el descuento se guarda en pesos pero la pantalla lo maneja en
+    // %, así que agregar un plato después de un pago parcial lo «ensuciaba» y
+    // «Pasar a cobro» quedaba trabado pidiendo anular el cobro. La regla real
+    // es la de la base: el total no baja de lo cobrado, y la propina no baja de
+    // la que ya viajó en un pago.
     const { orderId } = await s.mesa([1_000_000]);
     expect((await cobrar(orderId, 300_000)).ok).toBe(true);
-    const r = await aplicarPropinaYDescuento(
+
+    const sube = await aplicarPropinaYDescuento(
       orderId,
       { tip_cents: 100_000, discount_cents: 0, discount_reason: null },
       s.ctx.slug,
     );
+    expect(sube.ok).toBe(true);
+    expect((await s.orden(orderId)).total_cents).toBe(1_100_000);
+
+    const descuenta = await aplicarPropinaYDescuento(
+      orderId,
+      { tip_cents: 100_000, discount_cents: 200_000, discount_reason: "cliente frecuente" },
+      s.ctx.slug,
+    );
+    expect(descuenta.ok).toBe(true);
+    expect((await s.orden(orderId)).total_cents).toBe(900_000);
+  });
+
+  it("un descuento que deja la cuenta bajo lo cobrado se rechaza con motivo", async () => {
+    const { orderId } = await s.mesa([1_000_000]);
+    expect((await cobrar(orderId, 900_000)).ok).toBe(true);
+    // El 25 % es el techo del encargado, y alcanza para pasarse.
+    const r = await aplicarPropinaYDescuento(
+      orderId,
+      { tip_cents: 0, discount_cents: 250_000, discount_reason: "error" },
+      s.ctx.slug,
+    );
     expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/por debajo de lo que ya se cobró/);
+    expect((await s.orden(orderId)).total_cents).toBe(1_000_000);
+  });
+
+  it("la propina no baja de la que ya viajó en un pago", async () => {
+    const { orderId } = await s.mesa([1_000_000], { tip: 100_000 });
+    // Pago que cubre la propina entera (la base se la asigna, #353).
+    expect((await cobrar(orderId, 500_000)).ok).toBe(true);
+    const r = await aplicarPropinaYDescuento(
+      orderId,
+      { tip_cents: 20_000, discount_cents: 0, discount_reason: null },
+      s.ctx.slug,
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/propina/i);
   });
 
   it("la base rechaza bajar el total de una cuenta por debajo de lo cobrado, venga de donde venga", async () => {

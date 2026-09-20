@@ -252,6 +252,35 @@ export async function anularCobranza(
   }
   if (row.cancelled_at) return actionError("Esa cobranza ya está anulada.");
 
+  // Un arqueo firmado no se reescribe (spec 098 · H-35). Si la cobranza fue en
+  // efectivo, su ingreso entró al cajón: si ese cajón ya se contó y se cerró,
+  // anularla metería un movimiento anulado adentro de un cierre firmado — la
+  // misma frontera que ya respetan corregir y anular un cobro.
+  if (row.caja_movimiento_id) {
+    const { data: mov } = await service
+      .from("caja_movimientos")
+      .select("caja_id, created_at")
+      .eq("id", row.caja_movimiento_id)
+      .maybeSingle();
+    const m = mov as { caja_id: string; created_at: string } | null;
+    if (m) {
+      const { data: corte } = await service
+        .from("caja_cortes")
+        .select("created_at")
+        .eq("caja_id", m.caja_id)
+        .eq("business_id", business.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const ultimo = (corte as { created_at: string } | null)?.created_at;
+      if (ultimo && new Date(m.created_at).getTime() <= new Date(ultimo).getTime()) {
+        return actionError(
+          "Esa cobranza ya entró en un arqueo cerrado: anularla cambiaría una caja que ya se contó. Si hay que devolverle la plata al cliente, registrala como un movimiento del período actual.",
+        );
+      }
+    }
+  }
+
   const ahora = new Date().toISOString();
   const { error } = await service
     .from("customer_credit_settlements")

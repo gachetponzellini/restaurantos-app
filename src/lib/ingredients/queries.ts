@@ -397,6 +397,7 @@ export async function getCosteoOverview(
     const hasRecipe = recipeLines.length > 0;
 
     let totalCost = 0;
+    let lineasSinCosto = 0;
     for (const rec of recipeLines) {
       const ing = rec.ingredients as any;
       const wastePercent = Number(ing?.waste_percent ?? 0);
@@ -409,9 +410,14 @@ export async function getCosteoOverview(
         const defaultPres = (ing?.ingredient_presentations ?? []).find(
           (pr: any) => pr.is_default,
         );
-        if (!defaultPres || Number(defaultPres.net_quantity) <= 0) continue;
+        if (!defaultPres || Number(defaultPres.net_quantity) <= 0) {
+          lineasSinCosto += 1;
+          continue;
+        }
         costPerUnit = defaultPres.cost_cents / Number(defaultPres.net_quantity);
       }
+      // Un insumo a $0 (o un compuesto sin sub-receta) suma $0 en silencio.
+      if (!(costPerUnit > 0)) lineasSinCosto += 1;
 
       totalCost += Number(rec.quantity) * costPerUnit * (1 + wastePercent / 100);
     }
@@ -430,6 +436,7 @@ export async function getCosteoOverview(
       marginPercent: Math.round(marginPercent * 100) / 100,
       marginCents,
       hasRecipe,
+      lineasSinCosto,
     };
   });
 }

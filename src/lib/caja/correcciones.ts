@@ -351,7 +351,7 @@ const ERRORES_RPC: Record<string, string> = {
   CAJA_INVALID: "La caja destino no existe o está inactiva.",
   MOZO_INVALID: "Ese empleado no puede recibir la atribución del cobro.",
   ORDER_WOULD_BE_UNCOVERED:
-    "El monto corregido no alcanza a cubrir la cuenta. Si el cliente pagó menos, anulá el cobro y volvé a cobrar.",
+    "Con esa corrección la cuenta quedaría sin cubrir. Si el cliente pagó menos, anulá el cobro y volvé a cobrar; si lo que cambió es la propina, corregí también el monto.",
   // #357 — p. ej. bajar sólo la propina de un cobro con excedente: el total
   // de la cuenta bajaría y lo cobrado no.
   TOTAL_BELOW_PAID:
