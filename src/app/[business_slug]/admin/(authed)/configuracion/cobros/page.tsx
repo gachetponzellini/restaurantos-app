@@ -45,9 +45,10 @@ export default async function ConfiguracionCobrosPage({
         slug={business_slug}
         businessId={business.id}
         initial={{
-          mp_access_token: business.mp_access_token ?? "",
+          // #113 · 1: los secretos NUNCA van al cliente — sólo si están cargados.
+          hasAccessToken: Boolean(business.mp_access_token),
+          hasWebhookSecret: Boolean(business.mp_webhook_secret),
           mp_public_key: business.mp_public_key ?? "",
-          mp_webhook_secret: business.mp_webhook_secret ?? "",
           mp_accepts_payments: business.mp_accepts_payments,
         }}
       />

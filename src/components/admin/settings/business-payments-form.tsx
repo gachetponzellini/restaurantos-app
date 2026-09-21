@@ -34,6 +34,11 @@ const Schema = z.object({
 
 type Values = z.infer<typeof Schema>;
 
+/**
+ * #113 · 1: los secretos (Access Token, Webhook Secret) son de sólo escritura.
+ * El server manda sólo si están cargados; el input arranca vacío y guardarlo
+ * vacío deja el valor como estaba (ver `planPaymentsUpdate`).
+ */
 export function BusinessPaymentsForm({
   slug,
   businessId,
@@ -41,8 +46,19 @@ export function BusinessPaymentsForm({
 }: {
   slug: string;
   businessId: string;
-  initial: Values;
+  initial: {
+    hasAccessToken: boolean;
+    hasWebhookSecret: boolean;
+    mp_public_key: string;
+    mp_accepts_payments: boolean;
+  };
 }) {
+  const defaults: Values = {
+    mp_access_token: "",
+    mp_webhook_secret: "",
+    mp_public_key: initial.mp_public_key,
+    mp_accepts_payments: initial.mp_accepts_payments,
+  };
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [origin, setOrigin] = useState("");
@@ -51,7 +67,7 @@ export function BusinessPaymentsForm({
   }, []);
   const form = useForm<Values>({
     resolver: zodResolver(Schema),
-    defaultValues: initial,
+    defaultValues: defaults,
   });
 
   const onSubmit = async (values: Values) => {
@@ -66,7 +82,9 @@ export function BusinessPaymentsForm({
         return;
       }
       toast.success("Configuración guardada.");
-      form.reset(values);
+      // Los secretos no se vuelven a mostrar: el campo queda vacío y el
+      // `router.refresh()` trae el «cargado» nuevo.
+      form.reset({ ...values, mp_access_token: "", mp_webhook_secret: "" });
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -76,7 +94,7 @@ export function BusinessPaymentsForm({
   const mpEnabled = form.watch("mp_accepts_payments");
   const mpAccess = form.watch("mp_access_token");
   const mpPublic = form.watch("mp_public_key");
-  const mpReady = Boolean(mpAccess && mpPublic);
+  const mpReady = Boolean((initial.hasAccessToken || mpAccess) && mpPublic);
 
   return (
     <Form {...form}>
@@ -148,15 +166,19 @@ export function BusinessPaymentsForm({
                   <FormControl>
                     <Input
                       type="password"
-                      placeholder="APP_USR-..."
-                      autoComplete="off"
+                      placeholder={
+                        initial.hasAccessToken ? "•••••••• (cargado)" : "APP_USR-..."
+                      }
+                      autoComplete="new-password"
                       {...field}
                       value={field.value ?? ""}
                     />
                   </FormControl>
                   <FormMessage />
                   <p className="text-xs text-zinc-500">
-                    Secreto · se usa server-side para crear el pago.
+                    {initial.hasAccessToken
+                      ? "Secreto · no se muestra. Dejalo vacío para mantener el cargado."
+                      : "Secreto · se usa server-side para crear el pago."}
                   </p>
                 </FormItem>
               )}
@@ -202,8 +224,12 @@ export function BusinessPaymentsForm({
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder="Clave secreta del webhook"
-                        autoComplete="off"
+                        placeholder={
+                          initial.hasWebhookSecret
+                            ? "•••••••• (cargado · vacío = no cambia)"
+                            : "Clave secreta del webhook"
+                        }
+                        autoComplete="new-password"
                         {...field}
                         value={field.value ?? ""}
                       />
@@ -227,7 +253,7 @@ export function BusinessPaymentsForm({
         <SaveBar
           dirty={form.formState.isDirty}
           submitting={submitting}
-          onDiscard={() => form.reset(initial)}
+          onDiscard={() => form.reset(defaults)}
         />
       </form>
     </Form>

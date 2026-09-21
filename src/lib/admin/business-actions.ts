@@ -16,6 +16,7 @@ import {
 import { RESERVED_SLUGS, SLUG_PATTERN } from "@/lib/reserved-slugs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { planPaymentsUpdate } from "./payments-secrets";
 
 const HexColor = z
   .string()
@@ -393,28 +394,27 @@ export async function updateBusinessPayments(
     mp_accepts_payments,
   } = parsed.data;
 
-  // Guardrail: can't enable MP without the 2 credentials needed to create
-  // preferences + reconcile payments on redirect. The webhook_secret is
-  // optional (only needed if you wire up the /api/mp/webhook endpoint in
-  // production for edge cases like closed tabs or refunds).
-  if (mp_accepts_payments && (!mp_access_token || !mp_public_key)) {
-    return actionError(
-      "Para activar Mercado Pago necesitás cargar Access Token y Public Key.",
-    );
-  }
-
   const guard = await assertCanManage(business_slug);
   if (!guard.ok) return actionError(guard.error);
 
   const service = createSupabaseServiceClient();
+
+  // #113 · 1: los secretos son de sólo escritura — vacío = «no lo toques».
+  // Para validar «MP activo necesita token» hay que saber si ya hay uno.
+  const { data: actual } = await service
+    .from("businesses")
+    .select("mp_access_token")
+    .eq("id", guard.businessId)
+    .maybeSingle();
+  const plan = planPaymentsUpdate(
+    { mp_access_token, mp_public_key, mp_webhook_secret, mp_accepts_payments },
+    { hasAccessToken: Boolean(actual?.mp_access_token) },
+  );
+  if (!plan.ok) return actionError(plan.error);
+
   const { error } = await service
     .from("businesses")
-    .update({
-      mp_access_token,
-      mp_public_key,
-      mp_webhook_secret,
-      mp_accepts_payments,
-    })
+    .update(plan.update)
     .eq("id", guard.businessId);
 
   if (error) {
