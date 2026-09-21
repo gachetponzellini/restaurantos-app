@@ -379,6 +379,24 @@ describe.skipIf(!dbAvailable)("traslado de mesa (integration · spec 048)", () =
     expect(ob!.table_id).toBe(B);
   });
 
+  it("destino ocupada SIN cuenta abierta (recién sentados) → DESTINATION_OCCUPIED (#148 · H-53)", async () => {
+    // La RPC sólo miraba si el destino tenía orden abierta; una mesa ocupada
+    // que todavía no cargó nada pasaba, y el traslado le pisaba el estado,
+    // el mozo y el opened_at al grupo que ya estaba sentado ahí.
+    CURRENT_USER_ID = encargadoId;
+    const { tableId: A, orderId: orderA } = await seedOccupied();
+    const B = await seedTable({ status: "ocupada", mozoId: mozoAId, openedAt: new Date().toISOString() });
+
+    const res = await trasladarMesa(A, B, businessSlug);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/ocupada/i);
+
+    const { data: oa } = await supabase.from("orders").select("table_id").eq("id", orderA).single();
+    const { data: tb } = await supabase.from("tables").select("operational_status, current_order_id").eq("id", B).single();
+    expect(oa!.table_id).toBe(A);
+    expect(tb).toEqual({ operational_status: "ocupada", current_order_id: null });
+  });
+
   it("misma mesa (A===A) → error", async () => {
     CURRENT_USER_ID = encargadoId;
     const { tableId: A } = await seedOccupied();
