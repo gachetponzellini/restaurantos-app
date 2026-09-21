@@ -112,6 +112,10 @@ function fakeService(opts: {
 }) {
   const updates: Record<string, unknown>[] = [];
   const selects: { table: string; filters: Record<string, unknown> }[] = [];
+  /** `order()` de cada consulta, en orden de llamada (H-43). */
+  const orders: { col: string; opts: unknown }[][] = [];
+  /** Updates por lote (`.in("id", …)`): el sello de «consultada» (H-43). */
+  const polled: { patch: Record<string, unknown>; ids: unknown[] }[] = [];
   let selectCall = 0;
   // El resultado del UPDATE se consume una sola vez: la relectura posterior
   // (cuando el update no devolvió fila) tiene que ver la fila fresca.
@@ -120,15 +124,26 @@ function fakeService(opts: {
   const service = {
     from(table: string) {
       const filters: Record<string, unknown> = {};
+      const misOrders: { col: string; opts: unknown }[] = [];
+      let patchActual: Record<string, unknown> | null = null;
       const chain: Record<string, unknown> = {
         select() {
           selects.push({ table, filters });
           return chain;
         },
         update(patch: Record<string, unknown>) {
+          // El sello de consulta va aparte: no es un cambio de estado.
+          if ("last_polled_at" in patch) {
+            patchActual = patch;
+            return chain;
+          }
           updates.push(patch);
           updatePendiente = true;
           return chain;
+        },
+        in(_col: string, ids: unknown[]) {
+          if (patchActual) polled.push({ patch: patchActual, ids });
+          return Promise.resolve({ data: null, error: null });
         },
         eq(col: string, val: unknown) {
           filters[col] = val;
@@ -143,7 +158,9 @@ function fakeService(opts: {
         lt() {
           return chain;
         },
-        order() {
+        order(col: string, opts: unknown) {
+          if (misOrders.length === 0) orders.push(misOrders);
+          misOrders.push({ col, opts });
           return chain;
         },
         limit() {
@@ -181,7 +198,7 @@ function fakeService(opts: {
       return chain;
     },
   };
-  return { service: service as never, updates, selects };
+  return { service: service as never, updates, selects, orders, polled };
 }
 
 beforeEach(() => {
@@ -521,5 +538,43 @@ describe("reconcilePendingInvoices", () => {
     expect(r.considered).toBe(1);
     expect(r.failed).toBe(0);
     expect(updates).toHaveLength(0);
+  });
+
+  // #148 · H-43 — el lote de viejas era FIFO fijo por `created_at` con limit 5:
+  // cinco facturas en 404 permanente ocupaban los cinco cupos en cada tick, y
+  // ninguna otra vieja se volvía a consultar. Ahora rota: primero las que hace
+  // más que no se consultan (las nunca consultadas, antes que nada).
+  it("el lote de viejas rota: ordena por última consulta, las nunca consultadas primero", async () => {
+    const { service, orders } = fakeService({ rows: { fresh: [], stale: [] } });
+    await reconcilePendingInvoices({ service, resolveProvider: async () => providerWith(PENDING) });
+
+    const viejas = orders[1];
+    expect(viejas[0]).toEqual({
+      col: "last_polled_at",
+      opts: { ascending: true, nullsFirst: true },
+    });
+  });
+
+  it("sella la hora de consulta de cada factura que le preguntó al gateway", async () => {
+    const a = invoice({ id: "a" });
+    const b = invoice({ id: "b", created_at: "2026-08-01T00:00:00Z" });
+    const { service, polled, updates } = fakeService({ rows: { fresh: [a], stale: [b] } });
+
+    await reconcilePendingInvoices({
+      service,
+      resolveProvider: async () => providerWith(PENDING),
+      now: () => Date.parse("2026-09-21T12:00:00Z"),
+    });
+
+    expect(polled).toHaveLength(1);
+    expect(polled[0].patch).toEqual({ last_polled_at: "2026-09-21T12:00:00.000Z" });
+    expect(new Set(polled[0].ids)).toEqual(new Set(["a", "b"]));
+    expect(updates).toHaveLength(0); // el estado no se toca
+  });
+
+  it("un negocio sin credencial no se sella: no se le preguntó a nadie", async () => {
+    const { service, polled } = fakeService({ rows: { fresh: [invoice()], stale: [] } });
+    await reconcilePendingInvoices({ service, resolveProvider: async () => null });
+    expect(polled).toHaveLength(0);
   });
 });

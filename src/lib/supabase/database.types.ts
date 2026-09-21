@@ -2232,6 +2232,7 @@ export type Database = {
           error_message: string | null;
           fiscal_entity_id: string | null;
           id: string;
+          last_polled_at: string | null;
           idempotency_key: string | null;
           iva_cents: number;
           iva_rate: number;
@@ -2264,6 +2265,7 @@ export type Database = {
           error_message?: string | null;
           fiscal_entity_id?: string | null;
           id?: string;
+          last_polled_at?: string | null;
           idempotency_key?: string | null;
           iva_cents: number;
           iva_rate?: number;
@@ -2296,6 +2298,7 @@ export type Database = {
           error_message?: string | null;
           fiscal_entity_id?: string | null;
           id?: string;
+          last_polled_at?: string | null;
           idempotency_key?: string | null;
           iva_cents?: number;
           iva_rate?: number;

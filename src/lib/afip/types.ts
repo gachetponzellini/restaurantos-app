@@ -136,6 +136,8 @@ export type Invoice = {
   provider: string;
   /** job_id del gateway; se pollea hasta estado terminal. */
   provider_job_id: string | null;
+  /** Última consulta del cron de conciliación (0129 · #148 H-43). */
+  last_polled_at?: string | null;
   provider_response: unknown;
   created_at: string;
   /** Motivo de anulación (presente cuando `status = 'cancelled'`). */

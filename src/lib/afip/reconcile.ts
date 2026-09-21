@@ -390,6 +390,11 @@ export async function reconcilePendingInvoices(
       .eq("provider", "gateway")
       .not("provider_job_id", "is", null)
       .lt("created_at", cutoff)
+      // #148 · H-43: rota. Con FIFO fijo por `created_at`, cinco facturas en
+      // 404 permanente ocupaban los cinco cupos en cada tick y ninguna otra
+      // vieja se volvía a consultar. Primero las que hace más que no se
+      // consultan; las nunca consultadas, antes que nada.
+      .order("last_polled_at", { ascending: true, nullsFirst: true })
       .order("created_at", { ascending: true })
       .limit(staleLimit),
   ]);
@@ -418,6 +423,7 @@ export async function reconcilePendingInvoices(
     else porNegocio.set(inv.business_id, [inv]);
   }
 
+  const consultadas: string[] = [];
   for (const [businessId, facturas] of porNegocio) {
     const provider = await resolveProvider(service, businessId);
     if (!provider) {
@@ -425,12 +431,24 @@ export async function reconcilePendingInvoices(
       continue;
     }
     for (const inv of facturas) {
+      consultadas.push(inv.id);
       const { outcome } = await applyGatewayStatus(service, inv, provider);
       if (outcome === "authorized") result.authorized += 1;
       else if (outcome === "failed") result.failed += 1;
       else if (outcome === "unknown_job") result.unknownJob += 1;
       else result.stillPending += 1;
     }
+  }
+
+  // Sello de «consultada» (H-43): es lo que hace rotar el lote de viejas. Va
+  // aparte del estado —no lo toca— y no puede tirar el tick: si falla, lo peor
+  // es que el próximo lote repite las mismas.
+  if (consultadas.length > 0) {
+    const { error } = await service
+      .from("invoices")
+      .update({ last_polled_at: new Date(now()).toISOString() })
+      .in("id", consultadas);
+    if (error) console.error("reconcilePendingInvoices · last_polled_at", error);
   }
 
   return result;
