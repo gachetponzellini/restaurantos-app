@@ -19,6 +19,9 @@ type GenericClient = SupabaseClient;
  * directo, sin comanda impresa).
  *
  * Devuelve los ids de las comandas creadas, en el orden del Map.
+ *
+ * Todo o nada (issue #126): corre en una sola transacción de Postgres
+ * (`crear_comandas_tx`). Si falla un sector no queda creado ninguno.
  */
 export async function createComandasForItems(
   service: GenericClient,
@@ -57,65 +60,27 @@ export async function createComandasForItems(
     notes?: string | null;
   } = {},
 ): Promise<{ ok: true; comanda_ids: string[] } | { ok: false; error: string }> {
-  const comandaIds: string[] = [];
+  // Issue #126: todo el envío es una transacción (`crear_comandas_tx`, 0127).
+  // Antes era un loop de inserts sueltos: si fallaba el sector N, los sectores
+  // 1..N-1 ya estaban creados e impresos. Ahora o salen todos o ninguno, y el
+  // print-agent no puede ver una comanda a medio crear.
+  const grupos = Array.from(itemsByStation, ([station_id, order_item_ids]) => ({
+    station_id,
+    order_item_ids,
+  })).filter((g) => g.order_item_ids.length > 0);
 
-  for (const [stationId, orderItemIds] of itemsByStation) {
-    if (orderItemIds.length === 0) continue;
+  if (grupos.length === 0) return { ok: true, comanda_ids: [] };
 
-    let nextBatch = 1;
-    if (!opts.primeraRuteada) {
-      const { data: lastBatch } = await service
-        .from("comandas")
-        .select("batch")
-        .eq("order_id", orderId)
-        .eq("station_id", stationId)
-        .order("batch", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      nextBatch = ((lastBatch as { batch: number } | null)?.batch ?? 0) + 1;
-    }
-
-    const { data: comanda, error: comandaErr } = await service
-      .from("comandas")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert({
-        order_id: orderId,
-        station_id: stationId,
-        batch: nextBatch,
-        status: "pendiente",
-        notes: opts.notes ?? null,
-      } as any)
-      .select("id")
-      .single();
-    if (comandaErr || !comanda) {
-      // 23505 sobre la primera ruteada = otra pestaña ganó la carrera y esta
-      // comanda ya existe. No es un error: es la idempotencia funcionando, y
-      // seguir sería mandarle el mismo plato dos veces a la cocina.
-      if (opts.primeraRuteada && comandaErr?.code === "23505") {
-        continue;
-      }
-      console.error("createComandasForItems · comanda insert", comandaErr);
-      return { ok: false, error: "No pudimos crear la comanda." };
-    }
-    const comandaId = (comanda as { id: string }).id;
-    comandaIds.push(comandaId);
-
-    const { error: linkErr } = await service.from("comanda_items").insert(
-      orderItemIds.map((oid) => ({
-        comanda_id: comandaId,
-        order_item_id: oid,
-      })),
-    );
-    if (linkErr) {
-      console.error("createComandasForItems · link insert", linkErr);
-      // La comanda ya está insertada: sin sus links queda como una comanda vacía
-      // que cocina ve sin items y que el print-agent saltea (ver el filtro del
-      // `GET /api/print-agent`). Se borra para sostener el invariante «toda
-      // comanda tiene al menos un item».
-      await service.from("comandas").delete().eq("id", comandaId);
-      return { ok: false, error: "No pudimos vincular items a la comanda." };
-    }
+  const { data, error } = await service.rpc("crear_comandas_tx", {
+    p_order_id: orderId,
+    p_grupos: grupos,
+    p_primera_ruteada: opts.primeraRuteada ?? false,
+    p_notes: opts.notes ?? null,
+  });
+  if (error) {
+    console.error("createComandasForItems · crear_comandas_tx", error);
+    return { ok: false, error: "No pudimos crear la comanda." };
   }
 
-  return { ok: true, comanda_ids: comandaIds };
+  return { ok: true, comanda_ids: (data as string[] | null) ?? [] };
 }

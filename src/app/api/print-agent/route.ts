@@ -753,11 +753,11 @@ type ItemDePedido = {
 /**
  * Ventana para considerar que dos comandas salieron en el MISMO envío.
  *
- * `createComandasForItems` crea una comanda por sector en un loop secuencial
- * (dos viajes a Supabase por sector), así que las del mismo envío quedan
- * separadas por cientos de ms — no por un timestamp idéntico. 10 s cubre un
- * envío lento de 5 sectores y, para la cocina, dos envíos separados por menos
- * de 10 s son el mismo momento de servicio igual.
+ * `createComandasForItems` crea una comanda por sector (en una transacción
+ * desde #126, con `emitted_at = clock_timestamp()`), así que las del mismo
+ * envío quedan separadas por algo de tiempo — no por un timestamp idéntico. 10 s
+ * sobra para un envío de 5 sectores y, para la cocina, dos envíos separados por
+ * menos de 10 s son el mismo momento de servicio igual.
  */
 const VENTANA_ENVIO_MS = 10_000;
 
