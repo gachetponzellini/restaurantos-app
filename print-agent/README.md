@@ -24,10 +24,14 @@ visita.
 
 ## Config (`config.json`)
 
+`config.json` **no se commitea** (#113): para desarrollo, copiá
+`config.example.json` a `config.json` y completá la key y el negocio. En una
+instalación real, el `config.json` lo genera el panel.
+
 | campo | qué es |
 |---|---|
 | `serverUrl` | base de la app (ej. `http://localhost:3000`) |
-| `printAgentKey` | debe coincidir con `PRINT_AGENT_KEY` del `.env.local` del server |
+| `printAgentKey` | key del agente en `print_agent_credentials` (la genera el panel; la `PRINT_AGENT_KEY` global ya no existe) |
 | `businessId` | UUID del negocio cuyas comandas imprime |
 | `transport` | `windows` (driver/Out-Printer) o `network` (socket TCP ESC/POS) |
 | `printerName` | sólo para `windows`: nombre exacto de la impresora instalada |
@@ -93,7 +97,7 @@ order by b.slug;
 Dos corridas seguidas: si el staleness pasea entre 0 y ~3s en vez de quedarse
 abajo de 1,3s, el local tomó los 3000.
 
-> El `print-agent/config.json` del repo es la config de **desarrollo**
+> El `print-agent/config.example.json` del repo es la config de **desarrollo**
 > (`serverUrl: localhost`). Sigue en `pollMs: 1000` a propósito: contra tu
 > propia máquina no cuesta nada y probar impresión con 3s de espera es
 > molesto. El valor que importa es el de `buildAgentConfig`.

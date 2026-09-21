@@ -69,3 +69,6 @@ backups/
 
 # Basura de builds que caen dentro del repo por una ruta relativa
 /private/
+
+# Config local del print-agent (la de cada instalación la genera el panel). #113
+print-agent/config.json

@@ -1,7 +1,7 @@
 {
   "serverUrl": "http://localhost:3000",
-  "printAgentKey": "dev-print-key-2026",
-  "businessId": "0257f0ec-931f-498e-9ba0-5cf85b82d74c",
+  "printAgentKey": "<key del agente — la genera el panel>",
+  "businessId": "<uuid del negocio>",
   "transport": "windows",
   "printerName": "HP LaserJet P1005",
   "pollMs": 1000
