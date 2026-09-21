@@ -71,11 +71,18 @@ export async function cancelarOrden(
     actorUserId: string | null;
     /** ISO del momento de la anulación. Se comparte entre las tres escrituras. */
     nowIso?: string;
+    /**
+     * Sólo cancelar si, **en el momento de escribir**, el pedido sigue sin
+     * aceptar (`status = 'pending'`) y sin pagar. Para el barrido de vencidos
+     * (#148 · H-20/H-45): decide con lo que leyó al principio del tick, y un
+     * pago de MP o un «Aceptar» del local pueden entrar entre medio.
+     */
+    soloSiPendienteImpago?: boolean;
   },
 ): Promise<CancelarOrdenResult> {
   const nowIso = params.nowIso ?? new Date().toISOString();
 
-  const { data: cancelled } = await service
+  let update = service
     .from("orders")
     .update({
       // Los dos ejes, siempre. Es el punto de toda la spec.
@@ -92,8 +99,11 @@ export async function cancelarOrden(
     // del caller y este UPDATE la orden puede haberse cerrado, y anular algo ya
     // cobrado es una decisión con plata adentro que le corresponde a la spec 092
     // (guardas de `payments` e `invoices`), no a este helper.
-    .eq("lifecycle_status", "open")
-    .select("id");
+    .eq("lifecycle_status", "open");
+  if (params.soloSiPendienteImpago) {
+    update = update.eq("status", "pending").neq("payment_status", "paid");
+  }
+  const { data: cancelled } = await update.select("id");
 
   const didCancel = ((cancelled ?? []) as { id: string }[]).length > 0;
 

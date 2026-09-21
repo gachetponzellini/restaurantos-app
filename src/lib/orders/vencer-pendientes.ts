@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createNotification } from "@/lib/notifications/create";
+import { notifyPagoSobrePedidoCancelado } from "@/lib/notifications/events";
 import { cancelarOrden } from "@/lib/orders/cancel-order";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -155,8 +156,14 @@ export async function vencerPedidosSinResolver(
           decision === "cancelar_impago" ? MOTIVO_IMPAGO : MOTIVO_NO_CONFIRMADO,
         actorUserId: null,
         nowIso,
+        // Guarda en la misma escritura: si se pagó o se aceptó desde que se
+        // armó la lista, no se cancela.
+        soloSiPendienteImpago: true,
       });
-      if (r.cancelled) result.cancelados += 1;
+      if (r.cancelled) {
+        result.cancelados += 1;
+        await avisarSiEntroPlata(service, f);
+      }
     } else if (decision === "avisar") {
       // Un solo aviso por pedido: el cron pasa cada 5 min.
       const { count } = await service
@@ -182,4 +189,33 @@ export async function vencerPedidosSinResolver(
   }
 
   return result;
+}
+
+/**
+ * Red de la carrera con el webhook de MP: el webhook marca primero la fila de
+ * `payments` y después la orden. Si el pago quedó acreditado justo cuando se
+ * cancelaba, la guarda de la orden no lo ve — pero la plata está. Se avisa
+ * para devolverla, con el mismo `paymentId` que usa el webhook (un aviso).
+ */
+async function avisarSiEntroPlata(
+  service: SupabaseClient,
+  f: { id: string; business_id: string },
+): Promise<void> {
+  const { data } = await service
+    .from("payments")
+    .select("id, mp_payment_id, amount_cents")
+    .eq("order_id", f.id)
+    .eq("payment_status", "paid");
+  for (const p of (data ?? []) as {
+    id: string;
+    mp_payment_id: string | null;
+    amount_cents: number;
+  }[]) {
+    await notifyPagoSobrePedidoCancelado({
+      businessId: f.business_id,
+      orderId: f.id,
+      paymentId: p.mp_payment_id ?? p.id,
+      amountCents: p.amount_cents,
+    });
+  }
 }

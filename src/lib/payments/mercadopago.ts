@@ -38,6 +38,20 @@ export type MpPreferenceResult = {
  * Creates a Checkout Pro preference in the business's MP account and returns
  * the init_point URL the customer must be redirected to.
  */
+/** Un 400 de MP que nombra los campos de vencimiento (y nada más amplio). */
+function esRechazoDelVencimiento(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const status = (e as { status?: unknown }).status;
+  if (status !== 400) return false;
+  let texto = "";
+  try {
+    texto = JSON.stringify(e);
+  } catch {
+    return false;
+  }
+  return /expir|date_of_expiration/i.test(texto);
+}
+
 export async function createPreference(
   args: CreatePreferenceArgs,
 ): Promise<MpPreferenceResult> {
@@ -91,16 +105,19 @@ export async function createPreference(
   };
 
   // #148 · H-20: el link vence a los 90 min (y sus cupones offline), así el
-  // barrido que cancela los impagos a las 2 h nunca cancela algo pagable. Si
-  // MP llegara a rechazar el vencimiento, el checkout no se rompe: se reintenta
-  // sin él y queda el error en el log (el barrido igual tiene la red del aviso
-  // «pago sobre pedido cancelado» en el webhook).
+  // barrido que cancela los impagos a las 2 h nunca cancela algo pagable.
+  //
+  // Se reintenta sin vencimiento **sólo** si MP rechazó explícitamente esos
+  // campos (un 400 que los nombra): ahí no se creó nada y el checkout no se
+  // rompe. Cualquier otro error —timeout, 5xx— falla como antes: reintentar a
+  // ciegas podía dejar una preferencia creada y guardar otra SIN vencimiento.
   let result;
   try {
     result = await preferenceApi.create({
       body: { ...body, ...vencimientoPreferencia() },
     });
   } catch (e) {
+    if (!esRechazoDelVencimiento(e)) throw e;
     console.error("MP createPreference · rechazó el vencimiento, sin él", e);
     result = await preferenceApi.create({ body });
   }

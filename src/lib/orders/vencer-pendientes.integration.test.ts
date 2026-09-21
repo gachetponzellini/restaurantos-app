@@ -18,6 +18,7 @@ const { vencerPedidosSinResolver, TIPO_AVISO_POR_VENCER } = await import(
   "./vencer-pendientes"
 );
 const { notifyPagoSobrePedidoCancelado } = await import("@/lib/notifications/events");
+const { cancelarOrden } = await import("./cancel-order");
 
 describe.skipIf(!dbAvailable)("vencer pedidos sin resolver (integration · #148)", () => {
   const supabase = createClient(supabaseUrl!, serviceKey!, {
@@ -148,5 +149,24 @@ describe.skipIf(!dbAvailable)("vencer pedidos sin resolver (integration · #148)
       .eq("business_id", businessId)
       .eq("type", "mp.pago_sobre_cancelado");
     expect(count).toBe(1);
+  });
+
+  // Revisión adversarial: el barrido decide con lo que leyó al principio del
+  // tick; si MP acredita el pago mientras tanto, la cancelación tiene que
+  // frenarse en la misma escritura, no en la lectura previa.
+  it("la cancelación del barrido no pisa un pedido que se pagó o se aceptó entre medio", async () => {
+    const pagado = await pedido({ payment_method: "mp", created_at: hace(130), payment_status: "paid" });
+    const aceptado = await pedido({ payment_method: "cash", created_at: hace(600), status: "confirmed" });
+    for (const id of [pagado, aceptado]) {
+      const r = await cancelarOrden(supabase as never, {
+        orderId: id,
+        businessId,
+        motivo: "Pago no completado",
+        actorUserId: null,
+        soloSiPendienteImpago: true,
+      });
+      expect(r.cancelled).toBe(false);
+      expect((await estado(id))?.lifecycle_status).toBe("open");
+    }
   });
 });
