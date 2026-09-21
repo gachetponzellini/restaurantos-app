@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 import { MercadoPagoConfig, Payment, Preference } from "mercadopago";
+import { vencimientoPreferencia } from "./mp-vencimiento";
 
 export type CreatePreferenceArgs = {
   accessToken: string;
@@ -55,41 +56,54 @@ export async function createPreference(
   // MP's "search payment by external_reference" API.
   const isHttps = args.siteUrl.startsWith("https://");
 
-  const result = await preferenceApi.create({
-    body: {
-      items: args.items.map((it) => ({
-        id: it.id,
-        title: it.title,
-        quantity: it.quantity,
-        unit_price: it.unit_price,
-        currency_id: "ARS",
-      })),
-      // Payer intentionally omitted in dev to avoid MP's "self-payment"
-      // rejection when the customer's email (e.g. their Google login) equals
-      // the seller's MP account email. MP will prompt the user for payer
-      // details on the checkout screen instead.
-      external_reference: args.orderId,
-      // Scoped per-business so the webhook handler knows which access_token
-      // to use when fetching payment details. Only set when HTTPS — MP
-      // rejects http notification_urls.
-      ...(isHttps
-        ? {
-            notification_url: `${args.siteUrl}/api/mp/webhook?business_id=${args.businessId}`,
-          }
-        : {}),
-      back_urls: {
-        success: backBase,
-        pending: `${backBase}?mp=pending`,
-        failure: `${backBase}?mp=failed`,
-      },
-      ...(isHttps ? { auto_return: "approved" as const } : {}),
-      metadata: {
-        order_id: args.orderId,
-        order_number: args.orderNumber,
-        business_id: args.businessId,
-      },
+  const body = {
+    items: args.items.map((it) => ({
+      id: it.id,
+      title: it.title,
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      currency_id: "ARS",
+    })),
+    // Payer intentionally omitted in dev to avoid MP's "self-payment"
+    // rejection when the customer's email (e.g. their Google login) equals
+    // the seller's MP account email. MP will prompt the user for payer
+    // details on the checkout screen instead.
+    external_reference: args.orderId,
+    // Scoped per-business so the webhook handler knows which access_token
+    // to use when fetching payment details. Only set when HTTPS — MP
+    // rejects http notification_urls.
+    ...(isHttps
+      ? {
+          notification_url: `${args.siteUrl}/api/mp/webhook?business_id=${args.businessId}`,
+        }
+      : {}),
+    back_urls: {
+      success: backBase,
+      pending: `${backBase}?mp=pending`,
+      failure: `${backBase}?mp=failed`,
     },
-  });
+    ...(isHttps ? { auto_return: "approved" as const } : {}),
+    metadata: {
+      order_id: args.orderId,
+      order_number: args.orderNumber,
+      business_id: args.businessId,
+    },
+  };
+
+  // #148 · H-20: el link vence a los 90 min (y sus cupones offline), así el
+  // barrido que cancela los impagos a las 2 h nunca cancela algo pagable. Si
+  // MP llegara a rechazar el vencimiento, el checkout no se rompe: se reintenta
+  // sin él y queda el error en el log (el barrido igual tiene la red del aviso
+  // «pago sobre pedido cancelado» en el webhook).
+  let result;
+  try {
+    result = await preferenceApi.create({
+      body: { ...body, ...vencimientoPreferencia() },
+    });
+  } catch (e) {
+    console.error("MP createPreference · rechazó el vencimiento, sin él", e);
+    result = await preferenceApi.create({ body });
+  }
 
   if (!result.id || !result.init_point) {
     throw new Error("MP no devolvió un init_point válido.");

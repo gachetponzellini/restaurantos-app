@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { closeOrderIfFullyPaid } from "@/lib/billing/cobro-actions";
 import { getDefaultCaja } from "@/lib/caja/queries";
 import { notifyScheduledConfirmed } from "@/lib/notifications/delivery-notify";
+import { notifyPagoSobrePedidoCancelado } from "@/lib/notifications/events";
 import { routeOrderToCocina } from "@/lib/orders/route-to-cocina";
 import { isScheduledForLater } from "@/lib/orders/scheduled";
 import { fetchPayment, verifySignature } from "@/lib/payments/mercadopago";
@@ -344,6 +345,19 @@ export async function POST(req: Request) {
       console.warn("MP webhook: pago aprobado sobre pedido cancelado", {
         orderId: order.id,
       });
+      // #148 · H-20: con el barrido que vence impagos esto deja de ser raro.
+      // Que se entere alguien que puede devolver la plata.
+      await notifyPagoSobrePedidoCancelado({
+        businessId: order.business_id,
+        orderId: order.id,
+        paymentId: String(payment.id),
+        amountCents:
+          payment.transactionAmount != null
+            ? Math.round(payment.transactionAmount * 100)
+            : null,
+      }).catch((e) =>
+        console.error("MP webhook: aviso de pago sobre cancelado", e),
+      );
     } else if (isScheduledForLater(scheduledAt)) {
       await notifyScheduledConfirmed({ orderId: order.id });
     } else {

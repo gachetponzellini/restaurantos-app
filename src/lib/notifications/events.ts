@@ -216,3 +216,48 @@ export async function notifyInvoiceFailed(params: {
     },
   });
 }
+
+/**
+ * #148 · H-20 — Mercado Pago acreditó un pago de un pedido ya cancelado.
+ *
+ * Pasa con los medios offline (se aprueban horas después) o con un link que
+ * quedó abierto. La plata entró y el pedido no se cocina: alguien tiene que
+ * devolverla. Antes era un `console.warn` que nadie leía. MP reintenta los
+ * webhooks, así que el aviso es uno por pago.
+ */
+export async function notifyPagoSobrePedidoCancelado(params: {
+  businessId: string;
+  orderId: string;
+  paymentId: string;
+  amountCents: number | null;
+}): Promise<void> {
+  const service = createSupabaseServiceClient();
+
+  const { count } = await service
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", params.businessId)
+    .eq("type", "mp.pago_sobre_cancelado")
+    .eq("payload->>paymentId", params.paymentId);
+  if ((count ?? 0) > 0) return;
+
+  const { data: order } = await service
+    .from("orders")
+    .select("order_number")
+    .eq("id", params.orderId)
+    .maybeSingle();
+
+  await createNotification({
+    businessId: params.businessId,
+    targetRole: "encargado",
+    type: "mp.pago_sobre_cancelado",
+    payload: {
+      orderId: params.orderId,
+      paymentId: params.paymentId,
+      orderNumber:
+        (order as { order_number: number | null } | null)?.order_number ??
+        undefined,
+      amountCents: params.amountCents ?? undefined,
+    },
+  });
+}

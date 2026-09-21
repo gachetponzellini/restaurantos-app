@@ -23,6 +23,9 @@ describe("viewForNotification (spec 27)", () => {
     "order.cancelled_by_customer",
     "mesa.pidio_cuenta",
     "item.cancelado",
+    // #148 · H-20 + H-45
+    "pedido.programado_por_vencer",
+    "mp.pago_sobre_cancelado",
   ];
 
   it("cada tipo nuevo tiene una view específica (no el fallback genérico)", () => {
@@ -60,5 +63,23 @@ describe("viewForNotification (spec 27)", () => {
       noti("order.pending", { orderNumber: 13, deliveryType: "pickup" }),
     );
     expect(pick.title).toContain("Take-away");
+  });
+
+  it("el programado por vencer dice cuándo se cancela y cómo evitarlo (#148)", () => {
+    const v = viewForNotification(
+      noti("pedido.programado_por_vencer", { orderNumber: 42, customerName: "Ana" }),
+    );
+    expect(v.title).toContain("#42");
+    expect(v.body).toMatch(/30 min/);
+    expect(v.tone).toBe("warning");
+  });
+
+  it("un pago de MP sobre un pedido cancelado pide devolverlo (#148)", () => {
+    const v = viewForNotification(
+      noti("mp.pago_sobre_cancelado", { orderNumber: 42, amountCents: 1_250_000 }),
+    );
+    expect(v.title).toContain("#42");
+    expect(v.body).toMatch(/devol/i);
+    expect(v.tone).toBe("danger");
   });
 });

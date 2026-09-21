@@ -244,6 +244,38 @@ export function viewForNotification(n: Notification): NotiView {
     };
   }
 
+  // ── #148 · H-20 + H-45 ────────────────────────────────────────────
+  //
+  // El barrido de pedidos online sin resolver (`vencer-pendientes.ts`) avisa
+  // 30 min antes de cancelar un programado en efectivo que nadie aceptó.
+  if (n.type === "pedido.programado_por_vencer") {
+    const orderNumber = p.orderNumber as number | undefined;
+    const customerName = p.customerName as string | undefined;
+    return {
+      tone: "warning",
+      icon: CalendarX2,
+      title: `Programado sin confirmar${orderNumber ? ` · #${orderNumber}` : ""}`,
+      body: `${
+        customerName ? `El pedido de ${customerName}` : "Un pedido programado"
+      } pasó su horario y nadie lo aceptó. Si no lo confirmás, se cancela solo en 30 min.`,
+    };
+  }
+
+  // Entró un pago de MP sobre un pedido ya cancelado (medios offline, o un
+  // link abierto): la plata está en la cuenta de MP y hay que devolverla.
+  if (n.type === "mp.pago_sobre_cancelado") {
+    const orderNumber = p.orderNumber as number | undefined;
+    const amountCents = p.amountCents as number | undefined;
+    return {
+      tone: "danger",
+      icon: Wallet,
+      title: `Pago sobre pedido cancelado${orderNumber ? ` · #${orderNumber}` : ""}`,
+      body: `Mercado Pago acreditó ${
+        amountCents ? formatCurrency(amountCents) : "un pago"
+      } de un pedido que ya estaba cancelado. No se cocina: hay que devolverle la plata al cliente desde Mercado Pago.`,
+    };
+  }
+
   // ── issue #274 ────────────────────────────────────────────────────
   //
   // ARCA autorizó una factura de una venta que ya no existe: la orden se anuló

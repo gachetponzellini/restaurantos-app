@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { marchDueScheduledOrders } from "@/lib/orders/march-scheduled";
+import { vencerPedidosSinResolver } from "@/lib/orders/vencer-pendientes";
 
 // Marcha programada de pedidos diferidos (spec 31). Lo dispara `pg_cron` vía
 // `pg_net` cada pocos minutos (ver migración del cron), o se puede curl-ear a
@@ -24,7 +25,18 @@ export async function POST(req: Request) {
   }
 
   const result = await marchDueScheduledOrders();
-  return NextResponse.json({ ok: true, ...result });
+
+  // #148 · H-20 + H-45 — vencer los pedidos online que nadie resolvió. Va en
+  // este mismo tick (cada 5 min) para no sumar invocaciones, y aislado: si
+  // falla, la marcha ya corrió y se loguea.
+  let vencimiento: Awaited<ReturnType<typeof vencerPedidosSinResolver>> | null = null;
+  try {
+    vencimiento = await vencerPedidosSinResolver();
+  } catch (e) {
+    console.error("cron march-scheduled · vencerPedidosSinResolver", e);
+  }
+
+  return NextResponse.json({ ok: true, ...result, vencimiento });
 }
 
 export const dynamic = "force-dynamic";
