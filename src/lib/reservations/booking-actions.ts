@@ -1270,7 +1270,9 @@ export async function cancelOwnReservation(
   if (r.user_id !== user.id) return actionError("Permiso denegado.");
   // Spec 131 — `pending` SÍ se puede cancelar (el cliente se arrepiente antes
   // de que el local conteste); `rejected` y `expired` son terminales.
-  if (["cancelled", "completed", "no_show", "rejected", "expired"].includes(r.status)) {
+  // Auditoría de reservas · baja — `seated` tampoco: el cliente ya está
+  // sentado; cancelarla desde el celular dejaba la mesa sin su reserva.
+  if (["cancelled", "completed", "no_show", "rejected", "expired", "seated"].includes(r.status)) {
     return actionError("La reserva ya no está activa.");
   }
 
@@ -1284,7 +1286,9 @@ export async function cancelOwnReservation(
     .from("reservations")
     .update({ status: "cancelled" })
     .eq("id", r.id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    // Guarda en la escritura: si el local la sentó en el medio, no se cancela.
+    .in("status", ["pending", "confirmed"]);
   if (error) return actionError("No pudimos cancelar la reserva.");
 
   // spec 27 — avisar al encargado que el cliente canceló su reserva.

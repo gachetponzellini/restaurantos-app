@@ -231,10 +231,12 @@ function ReservationCard({
     { locale: es },
   );
   const timeLabel = formatInTimeZone(new Date(row.starts_at), timezone, "HH:mm");
+  // Auditoría de reservas · baja — no ofrecer «Cancelar» en una reserva ya
+  // sentada ni en una que ya pasó: el server la rechaza y el cliente sólo veía
+  // un error. (El plazo exacto de anticipación lo sigue validando el server.)
   const canCancel =
-    row.status === "pending" ||
-    row.status === "confirmed" ||
-    row.status === "seated";
+    (row.status === "pending" || row.status === "confirmed") &&
+    new Date(row.starts_at).getTime() > Date.now();
   const isClosed = [
     "completed",
     "no_show",
