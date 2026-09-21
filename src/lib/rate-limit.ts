@@ -15,6 +15,14 @@ function getRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   redis = url && token ? new Redis({ url, token }) : null;
+  // Issue #79: en producción, sin Upstash no hay techo en pedidos, chatbot,
+  // login por PIN ni fichaje. Sigue dejando pasar —cerrarlo bloquearía la
+  // operación—, pero no en silencio: un error visible, una vez por proceso.
+  if (!redis && process.env.VERCEL_ENV === "production") {
+    console.error(
+      "[rate-limit] RATE LIMIT DESACTIVADO en producción: faltan UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN. Pedidos, chatbot, login por PIN y fichaje no tienen techo.",
+    );
+  }
   return redis;
 }
 

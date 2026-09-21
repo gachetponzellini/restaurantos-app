@@ -102,3 +102,30 @@ describe("limitChatbotTurn", () => {
 //     expect((await limitPhoneVerificationSend("user-1")).success).toBe(true);
 //   });
 // });
+
+// Issue #79 — sin Upstash, en producción no hay techo en pedidos, chatbot,
+// login por PIN ni fichaje. Sigue dejando pasar (cerrarlo bloquearía la
+// operación), pero no en silencio: un error visible en los logs, una sola vez.
+describe("sin Upstash en producción (#79)", () => {
+  it("avisa una sola vez en los logs y sigue dejando pasar", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("VERCEL_ENV", "production");
+    const { limitLogin, limitCreateOrder } = await load({ upstash: false });
+
+    expect(await limitLogin("1.2.3.4")).toEqual({ success: true });
+    expect(await limitCreateOrder("1.2.3.4")).toEqual({ success: true });
+
+    const avisos = error.mock.calls.filter((c) => String(c[0]).includes("RATE LIMIT DESACTIVADO"));
+    expect(avisos).toHaveLength(1);
+    error.mockRestore();
+  });
+
+  it("fuera de producción no hace ruido", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("VERCEL_ENV", "");
+    const { limitLogin } = await load({ upstash: false });
+    await limitLogin("1.2.3.4");
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
