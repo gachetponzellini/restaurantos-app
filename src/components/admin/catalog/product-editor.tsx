@@ -285,7 +285,7 @@ function ProductEditorForm({
               <>
                 <EditorSectionHeading
                   title="Visibilidad"
-                  description="Tres cosas distintas, de más operativa a más definitiva."
+                  description="Si hoy se puede vender, si se ve en la carta online y si sigue en uso."
                 />
                 <ProductVisibilityFields />
               </>

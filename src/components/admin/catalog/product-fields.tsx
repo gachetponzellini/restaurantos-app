@@ -529,25 +529,37 @@ export function ProductKitchenFields({
 
 // ─── Visibilidad ────────────────────────────────────────────────────────────
 
+// Issue #365: los encargados no distinguían los tres. Cada uno dice cuándo
+// usarlo y, debajo, qué pasa **ahora** según su estado (cambia al tocarlo).
+// Lo que describen es el comportamiento real:
+// - `is_available` off → el catálogo del mozo lo filtra (`mozo/catalog-query.ts`)
+//   y la carta online lo muestra «agotado» (`menu/product-card.tsx`).
+// - `show_online` off → sólo lo saca de la carta online (`lib/menu.ts`).
+// - `is_active` off → sale de todos lados; las ventas viejas quedan.
 const VISIBILITY = [
   {
     name: "is_available",
-    title: "Disponible ahora",
+    title: "Hay para vender hoy",
     description:
-      "Para el servicio: «se acabó el salmón». El mozo lo ve tachado y no lo puede cargar.",
+      "Apagalo cuando se acaba en el servicio («se terminó el salmón») y prendelo de nuevo cuando vuelva.",
+    on: "El mozo lo carga y la carta lo ofrece.",
+    off: "El mozo no lo ve; en la carta online sale como «agotado».",
     highlight: true,
   },
   {
     name: "show_online",
-    title: "En la carta online",
-    description:
-      "Si lo apagás, el cliente no lo ve en la carta pública; el mozo lo sigue cargando.",
+    title: "Se ve en la carta online (QR y pedidos)",
+    description: "Apagalo para lo que sólo se pide en el salón.",
+    on: "Los clientes lo ven en la carta online.",
+    off: "Los clientes no lo ven; el mozo lo carga igual.",
   },
   {
     name: "is_active",
-    title: "Activo",
+    title: "Sigue en la carta del local",
     description:
-      "Apagalo para dar de baja el producto sin perder su historial de ventas.",
+      "Apagalo sólo si ya no se vende más. Las ventas viejas no se pierden.",
+    on: "Está en uso.",
+    off: "No aparece para el mozo ni en la carta. Queda guardado por su historial.",
   },
 ] as const;
 
@@ -563,7 +575,14 @@ export function ProductVisibilityFields() {
           render={({ field }) => (
             <EditorToggle
               title={v.title}
-              description={v.description}
+              description={
+                <>
+                  {v.description}
+                  <span className="mt-1 block font-medium text-zinc-700">
+                    Ahora: {field.value ? v.on : v.off}
+                  </span>
+                </>
+              }
               highlight={"highlight" in v}
               control={
                 <Switch
