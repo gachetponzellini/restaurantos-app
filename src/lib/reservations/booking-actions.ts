@@ -8,9 +8,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { createNotification } from "@/lib/notifications/create";
 import {
+  notifyReservationCancelledByLocal,
   notifyReservationConfirmed,
   notifyReservationRejected,
   notifyReservationRequested,
+  notifyReservationUpdated,
 } from "@/lib/notifications/reservation-notify";
 import { canDecideReservation, canManageReservations } from "@/lib/permissions/can";
 import { customerPhoneKey } from "@/lib/phone";
@@ -689,6 +691,11 @@ export async function updateReservationStatus(
     console.error("updateReservationStatus", error);
     return actionError("No pudimos actualizar el estado.");
   }
+  // Auditoría de reservas · media — el local canceló una reserva tomada: el
+  // cliente se entera (antes no salía nada).
+  if (parsed.data.status === "cancelled" && estadoActual !== "cancelled") {
+    await notifyReservationCancelledByLocal({ reservationId: parsed.data.id });
+  }
   revalidatePath(`/${parsed.data.business_slug}/admin/reservas`);
   return actionOk(null);
 }
@@ -1215,6 +1222,19 @@ export async function updateReservationDetails(
     }
     console.error("updateReservationDetails", error);
     return actionError("No pudimos actualizar la reserva.");
+  }
+
+  // Auditoría de reservas · media — si cambió el día/hora o las personas, el
+  // cliente se entera (antes llegaba a la hora vieja). Cambiar sólo la mesa no
+  // le importa: no se avisa. Una solicitud todavía pendiente tampoco: su aviso
+  // es el de la decisión.
+  const cambioHora = windowChanged && starts.toISOString() !== new Date(reservation.starts_at).toISOString();
+  const cambioPersonas = newPartySize !== reservation.party_size;
+  if ((cambioHora || cambioPersonas) && reservation.status !== "pending") {
+    await notifyReservationUpdated({
+      reservationId: reservation.id,
+      antes: { starts_at: reservation.starts_at, party_size: reservation.party_size },
+    });
   }
 
   const slug = parsed.data.business_slug;

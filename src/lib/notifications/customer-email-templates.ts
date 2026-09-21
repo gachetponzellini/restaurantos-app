@@ -389,6 +389,59 @@ export function reservationRejectedEmail(input: {
   };
 }
 
+/** Auditoría de reservas · media — el local canceló una reserva tomada. */
+export function reservationCancelledByLocalEmail(input: {
+  brand: BusinessBrand;
+  customerName: string;
+  whenLabel: string;
+}): CustomerEmail {
+  const text =
+    `¡Hola ${input.customerName}! ${input.brand.name} canceló tu reserva ` +
+    `del ${input.whenLabel}. Si querés, hacé una nueva o escribinos y ` +
+    `buscamos otro día u horario.`;
+  return {
+    subject: `Tu reserva fue cancelada — ${input.brand.name}`,
+    text,
+    html: layout({
+      brand: input.brand,
+      heading: "Tu reserva fue cancelada",
+      preheader: text,
+      bodyHtml: paragraph(escapeHtml(text)),
+    }),
+  };
+}
+
+/**
+ * Auditoría de reservas · media — el local cambió el día, la hora o las
+ * personas de una reserva: antes el cliente no se enteraba y llegaba a la
+ * hora vieja.
+ */
+export function reservationUpdatedEmail(input: {
+  brand: BusinessBrand;
+  customerName: string;
+  whenLabel: string;
+  partySize: number;
+  antesWhenLabel: string;
+  antesPartySize: number;
+}): CustomerEmail {
+  const personas = (n: number) => `${n} ${n === 1 ? "persona" : "personas"}`;
+  const text =
+    `¡Hola ${input.customerName}! ${input.brand.name} actualizó tu reserva: ` +
+    `ahora es el ${input.whenLabel} para ${personas(input.partySize)} ` +
+    `(antes: ${input.antesWhenLabel}, ${personas(input.antesPartySize)}). ` +
+    `Si no te sirve, escribinos.`;
+  return {
+    subject: `Tu reserva cambió — ${input.brand.name}`,
+    text,
+    html: layout({
+      brand: input.brand,
+      heading: "Tu reserva cambió",
+      preheader: text,
+      bodyHtml: paragraph(escapeHtml(text)),
+    }),
+  };
+}
+
 /** Spec 131 — venció sin que el local la respondiera. */
 export function reservationExpiredEmail(input: {
   brand: BusinessBrand;

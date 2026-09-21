@@ -4,6 +4,8 @@ import {
   escapeHtml,
   invoiceIssuedEmail,
   orderScheduledEmail,
+  reservationCancelledByLocalEmail,
+  reservationUpdatedEmail,
   orderStatusEmail,
   reservationConfirmedEmail,
   reservationExpiredEmail,
@@ -318,5 +320,30 @@ describe("orderScheduledEmail · delivery vs retiro", () => {
   it("retiro: te avisamos cuando esté para retirar", () => {
     const e = orderScheduledEmail({ brand, customerName: "Ana", orderNumber: 7, whenLabel: "21/09 a las 21:00 hs", deliveryType: "pickup" });
     expect(e.text).toMatch(/para retirar/);
+  });
+});
+
+// Auditoría de reservas · MEDIA — el cliente se entera si el local cancela o
+// mueve su reserva (antes: el encargado pasaba de 21:00 a 22:30 y el cliente
+// llegaba a las 21:00).
+describe("reserva cancelada / cambiada por el local", () => {
+  it("cancelada: dice cuál y ofrece otra", () => {
+    const e = reservationCancelledByLocalEmail({ brand: GOLF, customerName: "Ana", whenLabel: "26/09 a las 21:00 hs" });
+    expect(e.text).toMatch(/cancel/i);
+    expect(e.text).toContain("26/09 a las 21:00 hs");
+  });
+
+  it("cambiada: muestra el antes y el después", () => {
+    const e = reservationUpdatedEmail({
+      brand: GOLF,
+      customerName: "Ana",
+      whenLabel: "26/09 a las 22:30 hs",
+      partySize: 4,
+      antesWhenLabel: "26/09 a las 21:00 hs",
+      antesPartySize: 2,
+    });
+    expect(e.text).toContain("22:30");
+    expect(e.text).toContain("4 personas");
+    expect(e.text).toMatch(/antes.*21:00/i);
   });
 });

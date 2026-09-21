@@ -46,9 +46,11 @@ vi.mock("./customer-dispatch", () => ({
 
 const { dispatchCustomerMessage } = await import("./customer-dispatch");
 const {
+  notifyReservationCancelledByLocal,
   notifyReservationConfirmed,
   notifyReservationRequested,
   notifyReservationReminder,
+  notifyReservationUpdated,
 } = await import("./reservation-notify");
 
 function baseReservation(overrides: Record<string, unknown> = {}) {
@@ -158,5 +160,46 @@ describe("notifyReservationReminder · el recordatorio no tiene WhatsApp propio"
     const call = (dispatchCustomerMessage as ReturnType<typeof vi.fn>).mock
       .calls[0][0];
     expect(call.channel).toBe("email");
+  });
+});
+
+// Auditoría de reservas · MEDIA — el local cancela o mueve la reserva.
+describe("avisos cuando el local cancela o cambia la reserva", () => {
+  const llamada = () =>
+    (dispatchCustomerMessage as ReturnType<typeof vi.fn>).mock.calls[0][0];
+
+  it("cancelada por el local: sale por email", async () => {
+    channelFromDb = "email";
+    await notifyReservationCancelledByLocal({ reservationId: "res-1" });
+    expect(llamada()).toMatchObject({ event: "reservation_cancelled", refId: "res-1" });
+    expect(llamada().email.text).toMatch(/cancel/i);
+  });
+
+  it("cambiada: el aviso cuenta el antes, y cada cambio distinto sale (refId por cambio)", async () => {
+    channelFromDb = "email";
+    reservationRow = baseReservation({ starts_at: "2026-09-27T01:30:00Z", party_size: 4 }); // 22:30 AR
+    await notifyReservationUpdated({
+      reservationId: "res-1",
+      antes: { starts_at: "2026-09-27T00:00:00Z", party_size: 2 }, // 21:00 AR
+    });
+    const c = llamada();
+    expect(c.event).toBe("reservation_updated");
+    // ref_id es uuid en el log: uno determinístico por cambio.
+    expect(c.refId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    vi.clearAllMocks();
+    await notifyReservationUpdated({
+      reservationId: "res-1",
+      antes: { starts_at: "2026-09-27T00:00:00Z", party_size: 2 },
+    });
+    expect(llamada().refId).toBe(c.refId); // mismo cambio → mismo ref
+    vi.clearAllMocks();
+    reservationRow = baseReservation({ starts_at: "2026-09-27T02:00:00Z", party_size: 4 });
+    await notifyReservationUpdated({
+      reservationId: "res-1",
+      antes: { starts_at: "2026-09-27T01:30:00Z", party_size: 4 },
+    });
+    expect(llamada().refId).not.toBe(c.refId); // otro cambio → otro aviso
+    expect(c.email.text).toContain("22:30");
+    expect(c.email.text).toMatch(/antes.*21:00/);
   });
 });

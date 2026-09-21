@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { formatInTimeZone } from "date-fns-tz";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -14,7 +16,9 @@ import {
 import {
   reservationConfirmedEmail,
   reservationExpiredEmail,
+  reservationCancelledByLocalEmail,
   reservationRejectedEmail,
+  reservationUpdatedEmail,
   reservationReminderEmail,
   reservationRequestedEmail,
   resolveBusinessBrand,
@@ -51,6 +55,7 @@ async function loadReservationContext(reservationId: string): Promise<{
   /** Día y hora por separado: los usa el cuerpo de WhatsApp (spec 132). */
   dateLabel: string;
   timeLabel: string;
+  tz: string;
 } | null> {
   const service = createSupabaseServiceClient();
   const { data: reservation } = await service
@@ -80,6 +85,7 @@ async function loadReservationContext(reservationId: string): Promise<{
     whenLabel,
     dateLabel: formatInTimeZone(startsAt, tz, "dd/MM"),
     timeLabel: formatInTimeZone(startsAt, tz, "HH:mm"),
+    tz,
   };
 }
 
@@ -455,4 +461,109 @@ export async function notifyReservationReminder(params: {
   } catch (err) {
     console.error("notifyReservationReminder", err);
   }
+}
+
+/**
+ * Auditoría de reservas · media — el local canceló una reserva tomada. Antes
+ * no salía nada: el cliente se enteraba al llegar. Sin template de WhatsApp
+ * para este evento: cae a email por `resolveDispatchChannel`.
+ */
+export async function notifyReservationCancelledByLocal(params: {
+  reservationId: string;
+}): Promise<void> {
+  try {
+    const ctx = await loadReservationContext(params.reservationId);
+    if (!ctx) return;
+    const email = reservationCancelledByLocalEmail({
+      brand: ctx.brand,
+      customerName: ctx.reservation.customer_name,
+      whenLabel: ctx.whenLabel,
+    });
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa: undefined,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+    await dispatchCustomerMessage({
+      businessId: ctx.reservation.business_id,
+      event: "reservation_cancelled",
+      refId: ctx.reservation.id,
+      channel,
+      recipient: {
+        name: ctx.reservation.customer_name,
+        email: ctx.reservation.customer_email,
+        phone: ctx.reservation.customer_phone,
+      },
+      whatsapp: null,
+      email: {
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        fromName: ctx.brand.name,
+      },
+    });
+  } catch (err) {
+    console.error("notifyReservationCancelledByLocal", err);
+  }
+}
+
+/**
+ * Auditoría de reservas · media — el local cambió día, hora o personas. El
+ * `refId` lleva el estado nuevo: cada cambio distinto avisa (la idempotencia
+ * del log es por evento + ref), y reintentar el mismo cambio no repite.
+ * `ref_id` es `uuid` en `customer_message_log`: se deriva uno determinístico.
+ */
+export async function notifyReservationUpdated(params: {
+  reservationId: string;
+  antes: { starts_at: string; party_size: number };
+}): Promise<void> {
+  try {
+    const ctx = await loadReservationContext(params.reservationId);
+    if (!ctx) return;
+    const email = reservationUpdatedEmail({
+      brand: ctx.brand,
+      customerName: ctx.reservation.customer_name,
+      whenLabel: ctx.whenLabel,
+      partySize: ctx.reservation.party_size,
+      antesWhenLabel: formatInTimeZone(
+        new Date(params.antes.starts_at),
+        ctx.tz,
+        "dd/MM 'a las' HH:mm 'hs'",
+      ),
+      antesPartySize: params.antes.party_size,
+    });
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa: undefined,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+    await dispatchCustomerMessage({
+      businessId: ctx.reservation.business_id,
+      event: "reservation_updated",
+      refId: uuidDeTexto(
+        `${ctx.reservation.id}:${ctx.reservation.starts_at}:${ctx.reservation.party_size}`,
+      ),
+      channel,
+      recipient: {
+        name: ctx.reservation.customer_name,
+        email: ctx.reservation.customer_email,
+        phone: ctx.reservation.customer_phone,
+      },
+      whatsapp: null,
+      email: {
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        fromName: ctx.brand.name,
+      },
+    });
+  } catch (err) {
+    console.error("notifyReservationUpdated", err);
+  }
+}
+
+/** UUID determinístico (formato v4-like sobre un md5) para usar de `ref_id`. */
+function uuidDeTexto(texto: string): string {
+  const h = createHash("md5").update(texto).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
