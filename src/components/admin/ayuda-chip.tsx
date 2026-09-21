@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { CircleHelp } from "lucide-react";
 
+import { IntentLink } from "@/components/ui/intent-link";
 import { useAyudaTema } from "@/components/admin/ayuda-progreso";
 
 /**
@@ -26,7 +26,7 @@ export function AyudaChip({ slug, tema }: { slug: string; tema: string }) {
   // abre lo decide el rol (spec 170 · D5): la terminal cae en el suyo.
   const { tema: destino, pendiente } = useAyudaTema(tema);
   return (
-    <Link
+    <IntentLink
       href={`/${slug}/admin/ayuda/${destino}`}
       aria-label={
         pendiente
@@ -44,6 +44,6 @@ export function AyudaChip({ slug, tema }: { slug: string; tema: string }) {
           style={{ background: "var(--brand)" }}
         />
       )}
-    </Link>
+    </IntentLink>
   );
 }

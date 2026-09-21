@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { IntentLink } from "@/components/ui/intent-link";
 import type { BusinessRole } from "@/lib/admin/context";
 import { canSee, type AdminSection } from "@/lib/permissions/sections";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -559,7 +560,7 @@ function BusinessMark({
       .map((s) => s[0]?.toUpperCase() ?? "")
       .join("") || "?";
   return (
-    <Link
+    <IntentLink
       href={`/${slug}/admin`}
       aria-label={name}
       title={name}
@@ -584,7 +585,7 @@ function BusinessMark({
       ) : (
         <span className="text-xs font-bold tracking-tight">{initials}</span>
       )}
-    </Link>
+    </IntentLink>
   );
 }
 
@@ -757,7 +758,7 @@ function NavIcon({
 }) {
   if (expanded) {
     return (
-      <Link
+      <IntentLink
         href={href}
         className={cn(
           "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition",
@@ -789,13 +790,13 @@ function NavIcon({
             style={{ background: "var(--brand)" }}
           />
         ) : null}
-      </Link>
+      </IntentLink>
     );
   }
 
   return (
     <div className="group relative">
-      <Link
+      <IntentLink
         href={href}
         aria-label={label}
         className={cn(
@@ -817,7 +818,7 @@ function NavIcon({
             {badge > 99 ? "99+" : badge}
           </span>
         )}
-      </Link>
+      </IntentLink>
       <Tooltip label={badge ? `${label} (${badge})` : label} />
     </div>
   );

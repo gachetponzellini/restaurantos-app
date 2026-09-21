@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { IntentLink } from "@/components/ui/intent-link";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { CerrarCajaModal } from "@/components/admin/local/cerrar-caja-modal";
 import {
@@ -232,7 +232,7 @@ export function CajaAdminBoard({
                 Creá una caja desde la configuración para empezar a operar.
               </p>
             </div>
-            <Link
+            <IntentLink
               href={`/${slug}/admin/caja`}
               className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition hover:brightness-95"
               style={{
@@ -242,7 +242,7 @@ export function CajaAdminBoard({
             >
               <Settings className="size-4" />
               Configurar cajas
-            </Link>
+            </IntentLink>
           </div>
         </Surface>
       </div>
@@ -310,13 +310,13 @@ export function CajaAdminBoard({
       />
 
       <div className="pt-1 text-center">
-        <Link
+        <IntentLink
           href={`/${slug}/admin/caja`}
           className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
         >
           <Settings className="size-3" />
           Configurar cajas
-        </Link>
+        </IntentLink>
       </div>
     </div>
   );
@@ -416,12 +416,12 @@ function CajaCard({
             {caja.ultimo_corte && (
               <>
                 <span className="mx-1 text-muted-foreground/50">·</span>
-                <Link
+                <IntentLink
                   href={`/${slug}/admin/caja/cierres?caja=${caja.id}`}
                   className="font-medium underline underline-offset-2 transition hover:text-foreground"
                 >
                   ver cierres anteriores
-                </Link>
+                </IntentLink>
               </>
             )}
           </p>
@@ -527,12 +527,12 @@ function CajaCard({
             <div className="flex items-baseline gap-2">
               {/* El período es el hot path del turno; el libro (spec 070) es el
                   histórico con filtros, los anulados y la corrección. */}
-              <Link
+              <IntentLink
                 href={`/${slug}/admin/caja/movimientos?caja=${caja.id}`}
                 className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground/90 hover:underline"
               >
                 Ver todos
-              </Link>
+              </IntentLink>
               <p className="text-xs font-semibold tabular-nums text-foreground/80">
                 {entries.length}
               </p>
@@ -629,7 +629,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
   });
   return (
     <li>
-      <Link
+      <IntentLink
         href={href}
         className={cn(
           "flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50",
@@ -661,7 +661,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
         </div>
         {mov.reason && <p className="mt-0.5 truncate text-xs text-muted-foreground">{mov.reason}</p>}
       </div>
-      </Link>
+      </IntentLink>
     </li>
   );
 }
@@ -683,7 +683,7 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
   return (
     <li>
       {/* La línea es accionable: lleva al libro, que es donde se corrige. */}
-      <Link
+      <IntentLink
         href={href}
         className="flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50"
       >
@@ -722,7 +722,7 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
           )}
         </div>
       </div>
-      </Link>
+      </IntentLink>
     </li>
   );
 }
@@ -794,12 +794,12 @@ export function CuentasConSaldoAviso({
                   {formatCurrency(c.saldoCents)}
                 </p>
               </div>
-              <Link
+              <IntentLink
                 href={href}
                 className="shrink-0 rounded-full bg-amber-900 px-3 py-1.5 text-xs font-semibold text-amber-50 transition hover:bg-amber-800"
               >
                 {c.cerrada ? "Ver pedido" : "Cobrar"}
-              </Link>
+              </IntentLink>
             </li>
           );
         })}
