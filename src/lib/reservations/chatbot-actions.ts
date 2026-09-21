@@ -3,7 +3,7 @@ import "server-only";
 import { fromZonedTime } from "date-fns-tz";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { normalizePhone } from "@/lib/phone";
+import { mismoTelefono, normalizePhone } from "@/lib/phone";
 import {
   getAvailability,
   getBusinessSalones,
@@ -482,14 +482,17 @@ export async function listChatbotReservationsByPhone(
   >;
   count: number;
 }> {
-  const normalized = normalizePhone(phone);
   const service = createSupabaseServiceClient() as unknown as GenericClient;
   const nowIso = new Date().toISOString();
   const { data } = await service
     .from("reservations")
     .select("id, starts_at, ends_at, party_size, status, customer_name, customer_phone, client_confirmed_at")
     .eq("business_id", businessId)
-    .in("status", ["confirmed", "seated"])
+    // Auditoría de reservas · media — `pending` también: un cliente con una
+    // solicitud sin confirmar preguntaba «¿tengo reserva?», el bot decía que
+    // no y le ofrecía reservar de nuevo (otro duplicado). Va con su estado
+    // para que el bot diga «pendiente de confirmación».
+    .in("status", ["pending", "confirmed", "seated"])
     .gte("starts_at", nowIso)
     .order("starts_at", { ascending: true });
 
@@ -498,9 +501,9 @@ export async function listChatbotReservationsByPhone(
   >;
 
   // Filter client-side by normalized phone (the DB stores it raw).
-  const filtered = rows.filter(
-    (r) => normalizePhone(r.customer_phone) === normalized,
-  );
+  // Número nacional (últimos 10 dígitos): el WhatsApp llega con 549 y la web
+  // no (auditoría de reservas · media).
+  const filtered = rows.filter((r) => mismoTelefono(r.customer_phone, phone));
 
   return {
     count: filtered.length,
@@ -549,7 +552,7 @@ export async function confirmReservationByChatbot(
 
   if (!r) return { ok: false, error: "reservation_not_found" };
   if (r.business_id !== businessId) return { ok: false, error: "reservation_not_found" };
-  if (normalizePhone(r.customer_phone) !== normalized) {
+  if (!mismoTelefono(r.customer_phone, contactPhone)) {
     return { ok: false, error: "reservation_not_found" };
   }
   if (r.status !== "confirmed" && r.status !== "seated") {

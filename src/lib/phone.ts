@@ -32,3 +32,21 @@ export function normalizePhone(raw: string | null | undefined): string {
 export function customerPhoneKey(raw: string | null | undefined): string {
   return normalizePhone(raw) || (raw ?? "").trim();
 }
+
+/**
+ * ¿Son el mismo teléfono? Compara el número nacional argentino: los últimos
+ * 10 dígitos (auditoría de reservas · media). El WhatsApp llega con 549
+ * (5493511234567) y en la web se tipea «351 1234567» o «0351 …»: comparar
+ * todos los dígitos hacía que el bot no encontrara las reservas hechas por la
+ * web. Con menos de 10 dígitos se compara exacto; vacío nunca matchea.
+ */
+export function mismoTelefono(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const da = normalizePhone(a);
+  const db = normalizePhone(b);
+  if (!da || !db) return false;
+  if (da.length >= 10 && db.length >= 10) return da.slice(-10) === db.slice(-10);
+  return da === db;
+}

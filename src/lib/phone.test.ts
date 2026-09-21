@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { customerPhoneKey, normalizePhone } from "./phone";
+import { customerPhoneKey, mismoTelefono, normalizePhone } from "./phone";
 
 /**
  * `customerPhoneKey` es la identidad de `customers` (UNIQUE business_id+phone).
@@ -53,5 +53,26 @@ describe("customerPhoneKey", () => {
     expect(customerPhoneKey("+543415068633")).not.toBe(
       customerPhoneKey("3415068633"),
     );
+  });
+});
+
+// Auditoría de reservas · MEDIA — el teléfono de WhatsApp llega con 549
+// (5493511234567) y en la web el cliente tipea «351 1234567»: el bot no
+// encontraba sus reservas. Se compara el número nacional (últimos 10 dígitos).
+describe("mismoTelefono", () => {
+  it("WhatsApp con 549 y web sin prefijo son el mismo", () => {
+    expect(mismoTelefono("5493511234567", "351 1234567")).toBe(true);
+    expect(mismoTelefono("+54 9 351 123-4567", "0351 1234567")).toBe(true);
+  });
+  it("números distintos no", () => {
+    expect(mismoTelefono("5493511234567", "3517654321")).toBe(false);
+  });
+  it("números cortos (menos de 10 dígitos) comparan exacto", () => {
+    expect(mismoTelefono("4123456", "4123456")).toBe(true);
+    expect(mismoTelefono("4123456", "94123456")).toBe(false);
+  });
+  it("vacío nunca matchea", () => {
+    expect(mismoTelefono("", "")).toBe(false);
+    expect(mismoTelefono(null, "3511234567")).toBe(false);
   });
 });
