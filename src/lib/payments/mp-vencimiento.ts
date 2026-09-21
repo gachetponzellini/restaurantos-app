@@ -18,8 +18,14 @@ function isoAR(d: Date): string {
   return local.toISOString().replace("Z", "-03:00");
 }
 
-export function vencimientoPreferencia(now: Date = new Date()) {
-  const hasta = new Date(now.getTime() + MP_PREFERENCIA_VENCE_MIN * 60_000);
+export function vencimientoPreferencia(
+  now: Date = new Date(),
+  /** Vencimiento explícito (el reintento de pago lo acota al barrido, #368). */
+  hastaExplicito?: Date,
+) {
+  const hasta =
+    hastaExplicito ??
+    new Date(now.getTime() + MP_PREFERENCIA_VENCE_MIN * 60_000);
   return {
     expires: true as const,
     expiration_date_from: isoAR(now),

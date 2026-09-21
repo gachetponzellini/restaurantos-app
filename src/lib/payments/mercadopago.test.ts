@@ -64,4 +64,13 @@ describe("createPreference · vencimiento", () => {
     await expect(createPreference(args as never)).rejects.toMatchObject({ status: 400 });
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it("acepta un vencimiento explícito para el reintento (#368)", async () => {
+    create.mockResolvedValueOnce(ok);
+    const venceEl = new Date("2026-09-21T15:20:00Z");
+    await createPreference({ ...args, venceEl } as never);
+    expect(create.mock.calls[0][0].body.expiration_date_to).toBe(
+      "2026-09-21T12:20:00.000-03:00",
+    );
+  });
 });

@@ -21,6 +21,8 @@ export type CreatePreferenceArgs = {
     quantity: number;
     unit_price: number; // pesos, not cents
   }>;
+  /** Vencimiento del link; sin él, 90 min (ver `vencimientoPreferencia`). */
+  venceEl?: Date;
   payer?: {
     name?: string;
     email?: string;
@@ -114,7 +116,7 @@ export async function createPreference(
   let result;
   try {
     result = await preferenceApi.create({
-      body: { ...body, ...vencimientoPreferencia() },
+      body: { ...body, ...vencimientoPreferencia(new Date(), args.venceEl) },
     });
   } catch (e) {
     if (!esRechazoDelVencimiento(e)) throw e;

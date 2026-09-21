@@ -20,4 +20,13 @@ describe("vencimientoPreferencia", () => {
     const v = vencimientoPreferencia(new Date("2026-09-22T02:00:00Z")); // 23:00 AR del 21
     expect(v.expiration_date_to).toBe("2026-09-22T00:30:00.000-03:00");
   });
+
+  it("con un vencimiento explícito (reintento #368) usa ese", () => {
+    const v = vencimientoPreferencia(
+      new Date("2026-09-21T15:00:00Z"),
+      new Date("2026-09-21T15:20:00Z"),
+    );
+    expect(v.expiration_date_to).toBe("2026-09-21T12:20:00.000-03:00");
+    expect(v.date_of_expiration).toBe("2026-09-21T12:20:00.000-03:00");
+  });
 });

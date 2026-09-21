@@ -49,7 +49,7 @@ export type CreateOrderResult = {
   mp_init_point?: string;
 };
 
-function getSiteUrl(): string {
+export function getSiteUrl(): string {
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL;
   if (envUrl) return envUrl.replace(/\/$/, "");
   const rootDomain = process.env.ROOT_DOMAIN ?? "localhost:3000";
