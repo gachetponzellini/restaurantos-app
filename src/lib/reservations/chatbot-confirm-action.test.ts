@@ -10,30 +10,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const getReservationIntentByTokenMock = vi.fn();
-const consumeReservationIntentMock = vi.fn(async () => {});
+const {
+  getReservationIntentByTokenMock,
+  claimReservationIntentMock,
+  getBusinessBySlugMock,
+  getReservationSettingsMock,
+  createReservationFromCustomerMock,
+} = vi.hoisted(() => ({
+  getReservationIntentByTokenMock: vi.fn((_token: string) => Promise.resolve<unknown>(null)),
+  claimReservationIntentMock: vi.fn((_token: string) => Promise.resolve(true)),
+  getBusinessBySlugMock: vi.fn((_slug: string) => Promise.resolve<unknown>(null)),
+  getReservationSettingsMock: vi.fn((_businessId: string, _opts?: unknown) =>
+    Promise.resolve<unknown>(null),
+  ),
+  createReservationFromCustomerMock: vi.fn((_input: unknown) =>
+    Promise.resolve({ ok: true as const, data: { id: "res-1" } }),
+  ),
+}));
+
 vi.mock("./chatbot-actions", () => ({
-  getReservationIntentByToken: (...args: unknown[]) =>
-    getReservationIntentByTokenMock(...args),
-  consumeReservationIntent: (...args: unknown[]) =>
-    consumeReservationIntentMock(...args),
+  getReservationIntentByToken: getReservationIntentByTokenMock,
+  claimReservationIntent: claimReservationIntentMock,
 }));
 
-const getBusinessBySlugMock = vi.fn(async () => null);
-const getReservationSettingsMock = vi.fn();
 vi.mock("./queries", () => ({
-  getBusinessBySlug: (...args: unknown[]) => getBusinessBySlugMock(...args),
-  getReservationSettings: (...args: unknown[]) =>
-    getReservationSettingsMock(...args),
+  getBusinessBySlug: getBusinessBySlugMock,
+  getReservationSettings: getReservationSettingsMock,
 }));
 
-const createReservationFromCustomerMock = vi.fn(async () => ({
-  ok: true,
-  data: { id: "res-1" },
-}));
 vi.mock("./booking-actions", () => ({
-  createReservationFromCustomer: (...args: unknown[]) =>
-    createReservationFromCustomerMock(...args),
+  createReservationFromCustomer: createReservationFromCustomerMock,
 }));
 
 const { confirmReservationFromIntent } = await import("./chatbot-confirm-action");
@@ -50,6 +56,7 @@ beforeEach(() => {
     businessId: "b1",
     intent: { date: "2027-01-15", slot: "20:00", party_size: 2 },
   });
+  claimReservationIntentMock.mockResolvedValue(true);
 });
 
 describe("confirmReservationFromIntent · sin notas (bug #1)", () => {
@@ -109,5 +116,66 @@ describe("confirmReservationFromIntent · sin notas (bug #1)", () => {
     >;
     expect(forwarded.notes).toBe("Mesa cerca de la ventana");
     expect(CreateReservationInputSchema.safeParse(forwarded).success).toBe(true);
+  });
+});
+
+describe("confirmReservationFromIntent · consumo atómico del intent (bug #2)", () => {
+  it("pierde la carrera del claim → no crea la reserva y avisa 'ya fue usado'", async () => {
+    claimReservationIntentMock.mockResolvedValue(false);
+
+    const res = await confirmReservationFromIntent({
+      business_slug: "biz-test",
+      token: "abcd12345678",
+      customer_name: "Ana",
+      customer_phone: "+5491100000000",
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("ya fue usado");
+    expect(claimReservationIntentMock).toHaveBeenCalledWith("abcd12345678");
+    // La garantía central del fix: sin claim ganado, jamás se llega a crear.
+    expect(createReservationFromCustomerMock).not.toHaveBeenCalled();
+  });
+
+  it("gana el claim → crea la reserva normalmente", async () => {
+    const res = await confirmReservationFromIntent({
+      business_slug: "biz-test",
+      token: "abcd12345678",
+      customer_name: "Ana",
+      customer_phone: "+5491100000000",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(claimReservationIntentMock).toHaveBeenCalledWith("abcd12345678");
+    expect(createReservationFromCustomerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("el claim se intenta DESPUÉS de leer el intent pero ANTES de crear la reserva", async () => {
+    const order: string[] = [];
+    getReservationIntentByTokenMock.mockImplementation(async () => {
+      order.push("read-intent");
+      return {
+        conversationId: "c1",
+        businessId: "b1",
+        intent: { date: "2027-01-15", slot: "20:00", party_size: 2 },
+      };
+    });
+    claimReservationIntentMock.mockImplementation(async () => {
+      order.push("claim");
+      return true;
+    });
+    createReservationFromCustomerMock.mockImplementation(async () => {
+      order.push("create");
+      return { ok: true, data: { id: "res-1" } };
+    });
+
+    await confirmReservationFromIntent({
+      business_slug: "biz-test",
+      token: "abcd12345678",
+      customer_name: "Ana",
+      customer_phone: "+5491100000000",
+    });
+
+    expect(order).toEqual(["read-intent", "claim", "create"]);
   });
 });

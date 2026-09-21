@@ -416,15 +416,54 @@ export async function getReservationIntentByToken(token: string): Promise<
 }
 
 /**
- * Clear the intent payload after a successful reservation creation. Keeps
- * the token around for audit ("which conversation generated which booking").
+ * Devuelve el intent a la conversación si la reserva no se pudo crear (el
+ * horario se llenó, una validación falló…): el claim lo consume ANTES de crear,
+ * y sin esto el link quedaba quemado y el cliente no podía reintentar. Sólo
+ * restaura si sigue vacío — no pisa un intent nuevo que haya generado el bot.
  */
-export async function consumeReservationIntent(token: string): Promise<void> {
+export async function releaseReservationIntent(
+  token: string,
+  intent: ReservationIntent,
+): Promise<void> {
   const service = createSupabaseServiceClient() as unknown as GenericClient;
-  await service
+  const { error } = await service
+    .from("chatbot_conversations")
+    .update({ reservation_intent: intent })
+    .eq("reservation_token", token)
+    .is("reservation_intent", null);
+  if (error) console.error("releaseReservationIntent", error);
+}
+
+/**
+ * Auditoría de reservas del cliente (bug #2) — consumo atómico del intent.
+ *
+ * Un doble click en el link de confirmación del bot dispara dos llamadas a
+ * `confirmReservationFromIntent` casi simultáneas. Antes, las dos leían el
+ * mismo intent (todavía no nulo) vía `getReservationIntentByToken`, las dos
+ * pasaban la validación, y recién DESPUÉS de crear la reserva se llamaba
+ * `consumeReservationIntent` — que no protegía nada, sólo limpiaba. Resultado:
+ * dos reservas por un solo click.
+ *
+ * Este `UPDATE ... WHERE reservation_token = $1 AND reservation_intent IS NOT
+ * NULL` es atómico a nivel fila (Postgres serializa los UPDATE concurrentes
+ * sobre la misma fila): sólo el primero en llegar ve `reservation_intent IS
+ * NOT NULL` y gana la carrera; el segundo no actualiza ninguna fila y
+ * `claimed` sale `false`. El caller tiene que llamarlo ANTES de crear la
+ * reserva y abortar si `claimed` es `false`.
+ */
+export async function claimReservationIntent(token: string): Promise<boolean> {
+  const service = createSupabaseServiceClient() as unknown as GenericClient;
+  const { data, error } = await service
     .from("chatbot_conversations")
     .update({ reservation_intent: null })
-    .eq("reservation_token", token);
+    .eq("reservation_token", token)
+    .not("reservation_intent", "is", null)
+    .select("id");
+  if (error) {
+    console.error("claimReservationIntent", error);
+    return false;
+  }
+  return ((data ?? []) as { id: string }[]).length > 0;
 }
 
 /**

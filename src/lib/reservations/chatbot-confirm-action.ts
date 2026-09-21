@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { actionError, type ActionResult } from "@/lib/actions";
 import { createReservationFromCustomer } from "@/lib/reservations/booking-actions";
 import {
-  consumeReservationIntent,
+  claimReservationIntent,
   getReservationIntentByToken,
+  releaseReservationIntent,
 } from "@/lib/reservations/chatbot-actions";
 import { getBusinessBySlug, getReservationSettings } from "@/lib/reservations/queries";
 
@@ -20,6 +21,13 @@ import { getBusinessBySlug, getReservationSettings } from "@/lib/reservations/qu
  *
  * If the intent has already been consumed (NULL after a prior success), we
  * still return an error so the UI shows the "already used" state.
+ *
+ * Auditoría de reservas del cliente (bug #2) — el consumo del intent
+ * (`claimReservationIntent`) pasa a ser ATÓMICO y se ejecuta ANTES de crear
+ * la reserva: un doble click en el link del bot dispara dos llamadas casi
+ * simultáneas, y sin esto las dos alcanzaban a leer el mismo intent (todavía
+ * no nulo) y las dos creaban una reserva. Con el claim atómico, sólo la
+ * primera gana la fila; la segunda corta acá con "ya fue usado".
  */
 
 const InputSchema = z.object({
@@ -56,6 +64,13 @@ export async function confirmReservationFromIntent(
     }
   }
 
+  // Claim atómico: sólo una llamada concurrente gana la fila (bug #2). Si
+  // perdemos la carrera (o ya se usó antes), no llegamos a crear la reserva.
+  const claimed = await claimReservationIntent(parsed.data.token);
+  if (!claimed) {
+    return actionError("Este link ya fue usado. Si ya reservaste, revisá tus reservas.");
+  }
+
   const result = await createReservationFromCustomer({
     business_slug: parsed.data.business_slug,
     date: intent.intent.date,
@@ -77,9 +92,11 @@ export async function confirmReservationFromIntent(
   });
 
   if (result.ok) {
-    await consumeReservationIntent(parsed.data.token);
     revalidatePath(`/${parsed.data.business_slug}/admin/reservas`);
     revalidatePath(`/${parsed.data.business_slug}/perfil/reservas`);
+  } else {
+    // No se creó: el link tiene que seguir sirviendo para reintentar.
+    await releaseReservationIntent(parsed.data.token, intent.intent);
   }
   return result;
 }
