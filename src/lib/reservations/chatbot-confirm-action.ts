@@ -63,7 +63,10 @@ export async function confirmReservationFromIntent(
     party_size: intent.intent.party_size,
     customer_name: parsed.data.customer_name,
     customer_phone: parsed.data.customer_phone,
-    notes: parsed.data.notes ?? null,
+    // `CreateReservationInputSchema.notes` es `.optional()` (no `.nullable()`):
+    // zod 4 rechaza `null` con "Invalid input" y la reserva no se crea cuando
+    // el cliente confirma el link del bot sin dejar notas.
+    notes: parsed.data.notes || undefined,
     // Marca el canal: la reserva nace del handoff del chatbot (spec 22).
     source: "chatbot",
     // Forward the salón the chatbot chose (if any). Intents creados antes de
