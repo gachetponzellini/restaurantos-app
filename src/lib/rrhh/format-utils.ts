@@ -39,16 +39,28 @@ export function elapsedSince(iso: string): string {
 
 /**
  * `new Date("2026-09-03")` es medianoche UTC, que en AR es el 2 a las 21:00:
- * una fecha sin hora (`YYYY-MM-DD`) se ancla al mediodía para que ningún
- * timezone la mueva de día. Un timestamp completo (ya trae su propia hora)
- * se deja como está.
+ * una fecha sin hora (`YYYY-MM-DD`) se ancla al **mediodía UTC** (09:00 en AR)
+ * y todo se formatea en `TZ_AR`, así ningún timezone la mueve de día — ni el
+ * del server ni el de una tablet mal configurada. Un timestamp completo (ya trae
+ * su propia hora) se deja como está.
  */
 function parseLocalDay(iso: string): Date {
-  return iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  return iso.length === 10 ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
+}
+
+/** El día calendario argentino de un instante, como `YYYY-MM-DD`. */
+function diaAR(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ_AR,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 export function formatDateShort(iso: string): string {
   return parseLocalDay(iso).toLocaleDateString("es-AR", {
+    timeZone: TZ_AR,
     day: "2-digit",
     month: "short",
   });
@@ -70,11 +82,16 @@ export function formatMonthName(iso: string): string {
   });
 }
 
-export function relativeDate(iso: string): string {
-  const now = new Date();
-  const date = new Date(iso);
-  const diffDays = Math.floor(
-    (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
+/**
+ * «Hoy / Ayer / Hace Nd» en **días de calendario argentinos**, no en bloques de
+ * 24 h: un fichaje de las 23:50 visto a las 00:10 es de «Ayer».
+ */
+export function relativeDate(iso: string, now: Date = new Date()): string {
+  // `Date.parse("YYYY-MM-DD")` es medianoche UTC de ese día: la resta da días
+  // enteros exactos, sin horario de verano ni zona de por medio.
+  const diffDays = Math.round(
+    (Date.parse(diaAR(now)) - Date.parse(diaAR(new Date(iso)))) /
+      (1000 * 60 * 60 * 24),
   );
   if (diffDays === 0) return "Hoy";
   if (diffDays === 1) return "Ayer";
