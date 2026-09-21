@@ -207,6 +207,45 @@ export async function findPaymentByExternalRef(
 }
 
 /**
+ * ¿MP ya tiene un pago aprobado o en curso para este pedido? (auditoría de
+ * pedidos · MEDIA). El reintento de pago (#368) no puede abrir un segundo
+ * cobro mientras el primero sigue vivo: un cupón de Rapipago/Pago Fácil queda
+ * `pending` horas, y si se aprobaban los dos entraban dos pagos sin aviso.
+ *
+ * Si la búsqueda falla devuelve `null` (no bloquea al cliente) y lo loguea.
+ */
+export async function pagoEnCursoPorReferencia(
+  accessToken: string,
+  externalReference: string,
+): Promise<"aprobado" | "en_proceso" | null> {
+  const url = new URL("https://api.mercadopago.com/v1/payments/search");
+  url.searchParams.set("external_reference", externalReference);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      console.error("MP · buscar pagos en curso", res.status, await res.text());
+      return null;
+    }
+    const json = (await res.json()) as { results?: Array<{ status?: string }> };
+    const estados = (json.results ?? []).map((p) => p.status);
+    if (estados.includes("approved")) return "aprobado";
+    if (estados.some((e) => e === "pending" || e === "in_process" || e === "authorized")) {
+      return "en_proceso";
+    }
+    return null;
+  } catch (err) {
+    console.error("MP · buscar pagos en curso", err);
+    return null;
+  }
+}
+
+/**
  * Issue a full refund for a MP payment. Used when the customer cancels an
  * order that was already paid.
  *

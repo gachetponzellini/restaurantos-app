@@ -6,7 +6,7 @@ import { z } from "zod";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { getSiteUrl } from "@/lib/orders/persist-order";
 import { evaluarReintentoPago } from "@/lib/orders/reintentar-pago";
-import { createPreference } from "@/lib/payments/mercadopago";
+import { createPreference, pagoEnCursoPorReferencia } from "@/lib/payments/mercadopago";
 import { limitCreateOrder } from "@/lib/rate-limit";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
@@ -68,6 +68,19 @@ export async function reintentarPagoMp(
   }
   const totalCents = Number(order.total_cents);
   if (totalCents <= 0) return actionError("El total del pedido es 0.");
+
+  // Auditoría de pedidos · MEDIA — no abrir un segundo cobro con el primero
+  // vivo (un cupón de Rapipago queda pending horas; si se aprobaban los dos,
+  // entraban dos pagos).
+  const enCurso = await pagoEnCursoPorReferencia(business.mp_access_token, order.id);
+  if (enCurso === "aprobado") {
+    return actionError("Ya recibimos tu pago: en unos segundos se confirma. Recargá la página.");
+  }
+  if (enCurso === "en_proceso") {
+    return actionError(
+      "Tenés un pago en proceso (por ejemplo, un cupón de Rapipago o Pago Fácil). Esperá a que se acredite antes de generar otro.",
+    );
+  }
 
   let pref;
   try {

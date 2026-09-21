@@ -14,7 +14,7 @@ vi.mock("mercadopago", () => ({
   Payment: class {},
 }));
 
-const { createPreference } = await import("./mercadopago");
+const { createPreference, pagoEnCursoPorReferencia } = await import("./mercadopago");
 
 const args = {
   accessToken: "APP_USR-x",
@@ -72,5 +72,37 @@ describe("createPreference · vencimiento", () => {
     expect(create.mock.calls[0][0].body.expiration_date_to).toBe(
       "2026-09-21T12:20:00.000-03:00",
     );
+  });
+});
+
+// Auditoría de pedidos · MEDIA — el reintento no puede abrir un segundo cobro
+// mientras el primero sigue en proceso (un cupón de Rapipago, un in_process).
+describe("pagoEnCursoPorReferencia", () => {
+  const conResultados = (results: { id: string; status: string }[]) =>
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ results }), { status: 200 }),
+    );
+
+  it("un pago aprobado manda", async () => {
+    conResultados([{ id: "1", status: "rejected" }, { id: "2", status: "approved" }]);
+    expect(await pagoEnCursoPorReferencia("tok", "o1")).toBe("aprobado");
+  });
+
+  it("pending / in_process / authorized cuentan como en proceso", async () => {
+    for (const status of ["pending", "in_process", "authorized"]) {
+      conResultados([{ id: "1", status }]);
+      expect(await pagoEnCursoPorReferencia("tok", "o1")).toBe("en_proceso");
+    }
+  });
+
+  it("sólo rechazados o cancelados: nada en curso", async () => {
+    conResultados([{ id: "1", status: "rejected" }, { id: "2", status: "cancelled" }]);
+    expect(await pagoEnCursoPorReferencia("tok", "o1")).toBeNull();
+  });
+
+  it("si MP no contesta, no bloquea (null) — se loguea", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    vi.spyOn(console, "error").mockImplementationOnce(() => {});
+    expect(await pagoEnCursoPorReferencia("tok", "o1")).toBeNull();
   });
 });

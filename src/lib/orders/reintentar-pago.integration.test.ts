@@ -19,11 +19,16 @@ const createPreference = vi.fn(async () => ({
   initPoint: "https://mp/checkout/pref-nueva",
   sandboxInitPoint: "https://mp/checkout/pref-nueva",
 }));
+const pagoEnCurso = vi.fn(async (): Promise<"aprobado" | "en_proceso" | null> => null);
 vi.mock("@/lib/payments/mercadopago", async () => {
   const actual = await vi.importActual<typeof import("@/lib/payments/mercadopago")>(
     "@/lib/payments/mercadopago",
   );
-  return { ...actual, createPreference: (...a: unknown[]) => createPreference(...(a as [])) };
+  return {
+    ...actual,
+    createPreference: (...a: unknown[]) => createPreference(...(a as [])),
+    pagoEnCursoPorReferencia: (...a: unknown[]) => pagoEnCurso(...(a as [])),
+  };
 });
 vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "x-forwarded-for": "1.2.3.4" }),
@@ -82,7 +87,11 @@ describe.skipIf(!dbAvailable)("reintentar pago MP (integration · #368)", () => 
   afterAll(async () => {
     if (businessId) await supabase.from("businesses").delete().eq("id", businessId);
   });
-  beforeEach(() => createPreference.mockClear());
+  beforeEach(() => {
+    createPreference.mockClear();
+    pagoEnCurso.mockReset();
+    pagoEnCurso.mockResolvedValue(null);
+  });
 
   it("un MP que falló devuelve un link nuevo por el total, lo guarda y vuelve a pending", async () => {
     const creado = new Date(Date.now() - 100 * 60_000);
@@ -124,6 +133,25 @@ describe.skipIf(!dbAvailable)("reintentar pago MP (integration · #368)", () => 
     const id = await pedido({});
     const r = await reintentarPagoMp({ business_slug: "demo", order_id: id });
     expect(r.ok).toBe(false);
+    expect(createPreference).not.toHaveBeenCalled();
+  });
+
+  // Auditoría de pedidos · MEDIA — doble cobro.
+  it("con un pago todavía en proceso en MP no abre un segundo cobro", async () => {
+    const id = await pedido({});
+    pagoEnCurso.mockResolvedValueOnce("en_proceso");
+    const r = await reintentarPagoMp({ business_slug: TEST_TAG, order_id: id });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/en proceso/i);
+    expect(createPreference).not.toHaveBeenCalled();
+  });
+
+  it("si MP ya tiene el pago aprobado, avisa que se está confirmando", async () => {
+    const id = await pedido({});
+    pagoEnCurso.mockResolvedValueOnce("aprobado");
+    const r = await reintentarPagoMp({ business_slug: TEST_TAG, order_id: id });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/ya recibimos/i);
     expect(createPreference).not.toHaveBeenCalled();
   });
 });
