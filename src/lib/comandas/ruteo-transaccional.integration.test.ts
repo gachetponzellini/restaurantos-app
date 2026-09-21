@@ -194,4 +194,16 @@ describe.skipIf(!dbAvailable)("comandas · ruteo transaccional (integration · #
       ].sort(),
     );
   });
+
+  it("dos envíos simultáneos de la misma mesa salen los dos, con batches consecutivos", async () => {
+    const { orderId, bife, flan } = await nuevaOrden();
+    const [a, b] = await Promise.all([
+      createComandasForItems(supabase as never, orderId, new Map([[parrilla, [bife]]])),
+      createComandasForItems(supabase as never, orderId, new Map([[parrilla, [flan]]])),
+    ]);
+
+    expect(a.ok && b.ok).toBe(true);
+    const comandas = await comandasDe(orderId);
+    expect(comandas.map((c) => c.batch)).toEqual([1, 2]);
+  });
 });

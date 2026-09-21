@@ -21,6 +21,8 @@
 -- - Con `p_primera_ruteada` (confirmar un pedido online, issue #259) el batch
 --   es 1 y el unique arbitra: si ese sector ya tiene su batch 1, se saltea
 --   sin error (idempotencia), igual que el `continue` sobre 23505.
+-- - Los envíos de una misma orden se serializan (advisory lock): dos envíos
+--   simultáneos salen los dos, con batches consecutivos.
 -- - `p_notes` se copia igual en todas las comandas del envío (spec 128).
 -- - `emitted_at` = clock_timestamp(), NO el default now(): now() es el mismo
 --   para toda la transacción y las comandas del envío empatarían. El agente y
@@ -49,6 +51,14 @@ declare
   v_comanda_id uuid;
   v_ids uuid[] := '{}';
 begin
+  -- Un envío por orden a la vez. Dos envíos simultáneos de la misma mesa (dos
+  -- terminales, doble click) leían el mismo max(batch)+1 y el segundo chocaba
+  -- con el unique; siendo todo o nada, perdía el envío entero. Con el lock el
+  -- segundo espera al primero y toma el batch siguiente. Es un advisory lock
+  -- de la transacción, no un `for update` sobre `orders`: no se cruza con los
+  -- locks de cobros ni del recálculo de totales.
+  perform pg_advisory_xact_lock(hashtextextended('crear_comandas_tx:' || p_order_id::text, 0));
+
   for v_grupo in
     select g.value
       from jsonb_array_elements(coalesce(p_grupos, '[]'::jsonb)) with ordinality as g(value, ord)
