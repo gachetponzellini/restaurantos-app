@@ -519,6 +519,20 @@ export async function createFlexibleReservation(
     return actionError("Ese horario ya pasó, elegí uno más tarde.");
   }
 
+  // Mismo criterio que el modo estricto (createReservationCommon): lead time
+  // y horizonte de antelación se validan para el cliente final, no para el
+  // walk-in de admin.
+  if (data.source !== "admin") {
+    const leadCutoff = new Date(Date.now() + settings.lead_time_min * 60_000);
+    if (starts.getTime() < leadCutoff.getTime()) {
+      return actionError("Necesitamos un poco más de antelación para ese horario.");
+    }
+    const horizonMs = settings.advance_days_max * 24 * 60 * 60 * 1000;
+    if (starts.getTime() - Date.now() > horizonMs) {
+      return actionError(`Solo aceptamos reservas con hasta ${settings.advance_days_max} días de antelación.`);
+    }
+  }
+
   // Mesa opcional. Con mesa: valida y deriva la zona. Genérica: usa la zona pedida.
   let tableId: string | null = null;
   let floorPlanId: string | null = data.floor_plan_id ?? null;
