@@ -2,7 +2,7 @@
 //
 // #148 · H-20 + H-45 — el barrido de pedidos online sin resolver, contra
 // Postgres: cancela lo vencido, no toca lo que tiene plata y avisa una vez.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,6 +13,13 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const dbAvailable = Boolean(supabaseUrl && serviceKey);
 
 const TEST_TAG = `test-vencer-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+// El aviso al cliente se verifica por llamada: no se mandan mails desde tests.
+const notifyDeliveryStatusChange = vi.fn(async () => {});
+vi.mock("@/lib/notifications/delivery-notify", () => ({
+  notifyDeliveryStatusChange: (...a: unknown[]) => notifyDeliveryStatusChange(...(a as [])),
+  notifyScheduledConfirmed: vi.fn(async () => {}),
+}));
 
 const { vencerPedidosSinResolver, TIPO_AVISO_POR_VENCER } = await import(
   "./vencer-pendientes"
@@ -118,6 +125,17 @@ describe.skipIf(!dbAvailable)("vencer pedidos sin resolver (integration · #148)
     expect(await estado(programadoVencido)).toMatchObject({
       lifecycle_status: "cancelled",
       cancelled_reason: "No confirmado",
+    });
+    // Auditoría de pedidos · MEDIA — el cliente se entera de por qué.
+    expect(notifyDeliveryStatusChange).toHaveBeenCalledWith({
+      orderId: mpVencido,
+      toStatus: "cancelled",
+      motivo: "No se completó el pago a tiempo",
+    });
+    expect(notifyDeliveryStatusChange).toHaveBeenCalledWith({
+      orderId: programadoVencido,
+      toStatus: "cancelled",
+      motivo: "El local no llegó a confirmarlo",
     });
     for (const id of [mpReciente, mpConPago, programadoPorVencer]) {
       expect((await estado(id))?.lifecycle_status).toBe("open");

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createNotification } from "@/lib/notifications/create";
+import { notifyDeliveryStatusChange } from "@/lib/notifications/delivery-notify";
 import { notifyPagoSobrePedidoCancelado } from "@/lib/notifications/events";
 import { cancelarOrden } from "@/lib/orders/cancel-order";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -32,6 +33,9 @@ const PROGRAMADO_CANCELA_MIN = 60;
 export const MOTIVO_IMPAGO = "Pago no completado";
 export const MOTIVO_NO_CONFIRMADO = "No confirmado";
 export const TIPO_AVISO_POR_VENCER = "pedido.programado_por_vencer";
+/** Lo que lee el cliente en el aviso de «cancelado» (`{motivo}`). */
+export const AVISO_CLIENTE_IMPAGO = "No se completó el pago a tiempo";
+export const AVISO_CLIENTE_NO_CONFIRMADO = "El local no llegó a confirmarlo";
 
 export type CandidatoVencimiento = {
   payment_method: string | null;
@@ -163,6 +167,16 @@ export async function vencerPedidosSinResolver(
       if (r.cancelled) {
         result.cancelados += 1;
         await avisarSiEntroPlata(service, f);
+        // Auditoría de pedidos · MEDIA — el cliente que espera su pedido se
+        // entera de que se canceló y por qué (antes: silencio).
+        await notifyDeliveryStatusChange({
+          orderId: f.id,
+          toStatus: "cancelled",
+          motivo:
+            decision === "cancelar_impago"
+              ? AVISO_CLIENTE_IMPAGO
+              : AVISO_CLIENTE_NO_CONFIRMADO,
+        });
       }
     } else if (decision === "avisar") {
       // Un solo aviso por pedido: el cron pasa cada 5 min.
