@@ -142,6 +142,14 @@ export async function cancelDownstream(
 ): Promise<CancelDownstreamResult> {
   const nowIso = params.nowIso ?? new Date().toISOString();
 
+  // 0) El cupón vuelve (auditoría de pedidos · media, 0130): un pedido
+  //    cancelado no gasta el cupón. Idempotente en la base — si la cascada
+  //    corre dos veces, resta una sola.
+  const { error: promoErr } = await service.rpc("devolver_uso_promo", {
+    p_order_id: params.orderId,
+  });
+  if (promoErr) console.error("cancelDownstream · devolver_uso_promo", promoErr);
+
   // 1) Todos los ítems vivos. Dispara el trigger de la 089 → vuelve el stock
   //    de lo que no se entregó.
   const { data: items } = await service

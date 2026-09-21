@@ -2932,6 +2932,7 @@ export type Database = {
           payment_method: string;
           payment_status: string;
           promo_code_id: string | null;
+          promo_use_returned_at: string | null;
           promo_code_snapshot: string | null;
           scheduled_at: string | null;
           status: string;
@@ -2981,6 +2982,7 @@ export type Database = {
           payment_method?: string;
           payment_status?: string;
           promo_code_id?: string | null;
+          promo_use_returned_at?: string | null;
           promo_code_snapshot?: string | null;
           scheduled_at?: string | null;
           status?: string;
@@ -3030,6 +3032,7 @@ export type Database = {
           payment_method?: string;
           payment_status?: string;
           promo_code_id?: string | null;
+          promo_use_returned_at?: string | null;
           promo_code_snapshot?: string | null;
           scheduled_at?: string | null;
           status?: string;
@@ -5116,6 +5119,7 @@ export type Database = {
         Args: { p_order_item_id: string };
         Returns: undefined;
       };
+      devolver_uso_promo: { Args: { p_order_id: string }; Returns: boolean };
       increment_promo_use: {
         Args: { p_business_id: string; p_promo_id: string };
         Returns: boolean;
