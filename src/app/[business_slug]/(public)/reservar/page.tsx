@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 // SPEC 25 (PENDING): banner "Verificá tu cuenta" desactivado.
 // import { VerifyAccountBanner } from "@/components/public/verify-account-banner";
 import { ReservarFlow } from "@/components/reservations/reservar-flow";
+import { parseReservaInicial } from "@/lib/reservations/reserva-inicial";
 import {
   getBusinessSalones,
   getReservationServices,
@@ -15,10 +16,13 @@ export const dynamic = "force-dynamic";
 
 export default async function ReservarPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ business_slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { business_slug } = await params;
+  const sp = await searchParams;
   const business = await getBusiness(business_slug);
   if (!business) notFound();
 
@@ -77,6 +81,10 @@ export default async function ReservarPage({
       }}
       salones={salones}
       mode={reservationSettings.mode ?? "estricto"}
+      // Auditoría de reservas · media — lo elegido antes del login.
+      inicial={parseReservaInicial(sp, {
+        maxParty: reservationSettings.max_party_size,
+      })}
       services={services}
       // Spec 080 — teléfono del negocio para el botón de WhatsApp del aviso
       // de invitados (sólo se usa en los negocios que tienen política).

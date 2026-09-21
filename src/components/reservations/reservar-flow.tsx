@@ -27,6 +27,7 @@ import type {
   ReservationService,
   ReservationSettings,
 } from "@/lib/reservations/types";
+import type { ReservaInicial } from "@/lib/reservations/reserva-inicial";
 
 type Slot = { slot: string; starts_at: string; ends_at: string };
 
@@ -53,6 +54,8 @@ type Props = {
     phone: string | null;
     email: string | null;
   };
+  /** Lo que había elegido antes de ir a loguearse (auditoría de reservas). */
+  inicial?: ReservaInicial;
 };
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
@@ -149,6 +152,7 @@ export function ReservarFlow({
   services,
   businessPhone,
   user,
+  inicial,
 }: Props) {
   const router = useRouter();
   const isFlexible = mode === "flexible";
@@ -157,16 +161,21 @@ export function ReservarFlow({
   // muestra picker y el server filtra por el primer floor_plan del negocio.
   // Con más de un salón forzamos al cliente a elegir antes de ver horarios.
   const [salonId, setSalonId] = useState<string | null>(
-    multiSalon ? null : (salones[0]?.id ?? null),
+    multiSalon
+      ? (salones.find((s) => s.id === inicial?.salon)?.id ?? null)
+      : (salones[0]?.id ?? null),
   );
-  const [date, setDate] = useState<string>(todayInTz());
-  const [partySize, setPartySize] = useState<number>(2);
+  const [date, setDate] = useState<string>(inicial?.date ?? todayInTz());
+  const [partySize, setPartySize] = useState<number>(inicial?.party ?? 2);
+  // El horario que había elegido antes del login: se selecciona cuando llegan
+  // los horarios, si sigue disponible (una sola vez).
+  const slotPreferido = useRef<string | null>(inicial?.slot ?? null);
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [, startSlotsTransition] = useTransition();
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   // Flexible (spec 059): servicio + hora de llegada opcional + mesa opcional.
-  const [service, setService] = useState<string>("");
+  const [service, setService] = useState<string>(inicial?.service ?? "");
   const [arrivalTime, setArrivalTime] = useState<string>("");
   // Spec 077: veredicto de cupo del servicio (null = todavía sin consultar).
   const [flexAvail, setFlexAvail] = useState<{
@@ -266,8 +275,14 @@ export function ReservarFlow({
           party_size: partySize,
           ...(salonId ? { floor_plan_id: salonId } : {}),
         });
-        if (result.ok) setSlots(result.data);
-        else setSlots([]);
+        if (result.ok) {
+          setSlots(result.data);
+          const preferido = slotPreferido.current
+            ? result.data.find((s: Slot) => s.slot === slotPreferido.current)
+            : undefined;
+          slotPreferido.current = null;
+          if (preferido) setSelectedSlot(preferido);
+        } else setSlots([]);
         setLoadingSlots(false);
       });
     }, 120);
@@ -358,9 +373,11 @@ export function ReservarFlow({
     }
 
     if (!user.isLoggedIn) {
-      const q = isFlexible
-        ? `date=${date}&party=${partySize}&service=${encodeURIComponent(service)}`
-        : `date=${date}&party=${partySize}&slot=${selectedSlot!.slot}`;
+      const q =
+        (isFlexible
+          ? `date=${date}&party=${partySize}&service=${encodeURIComponent(service)}`
+          : `date=${date}&party=${partySize}&slot=${selectedSlot!.slot}`) +
+        (multiSalon && salonId ? `&salon=${salonId}` : "");
       router.push(
         `/${slug}/login?next=${encodeURIComponent(`/${slug}/reservar?${q}`)}`,
       );
