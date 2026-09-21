@@ -137,8 +137,10 @@ export async function notifyScheduledConfirmed(params: {
       )
       .eq("id", params.orderId)
       .maybeSingle();
+    // Auditoría de pedidos · media — antes sólo salía para retiro: un delivery
+    // programado nunca recibía «agendado».
     if (!order || !order.scheduled_at) return;
-    if (order.delivery_type !== "pickup") return;
+    if (order.delivery_type !== "pickup" && order.delivery_type !== "delivery") return;
 
     const { data: business } = await service
       .from("businesses")
@@ -156,7 +158,10 @@ export async function notifyScheduledConfirmed(params: {
     );
     const text =
       `¡Listo ${order.customer_name}! Tu pedido #${order.order_number} quedó ` +
-      `agendado para el ${whenLabel}. Te avisamos cuando esté para retirar. 🙌`;
+      `agendado para el ${whenLabel}. ` +
+      (order.delivery_type === "delivery"
+        ? "Te avisamos cuando salga para tu casa. 🙌"
+        : "Te avisamos cuando esté para retirar. 🙌");
 
     const hasPhone = Boolean(
       order.customer_phone && order.customer_phone.trim().length > 0,
@@ -166,6 +171,7 @@ export async function notifyScheduledConfirmed(params: {
       customerName: order.customer_name,
       orderNumber: order.order_number,
       whenLabel,
+      deliveryType: order.delivery_type,
     });
 
     await dispatchCustomerMessage({

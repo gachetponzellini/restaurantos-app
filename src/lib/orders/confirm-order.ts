@@ -11,6 +11,7 @@ import { getBusiness } from "@/lib/tenant";
 
 import { routeOrderToCocina, type RouteOrderResult } from "./route-to-cocina";
 import { esperaSuHoraDeMarcha, isScheduledForLater } from "./scheduled";
+import { notifyScheduledConfirmed } from "@/lib/notifications/delivery-notify";
 
 type GenericClient = SupabaseClient;
 
@@ -180,6 +181,11 @@ export async function aceptarPedidoProgramado(
     console.error("aceptarPedidoProgramado · update", error);
     return actionError("No pudimos aceptar el pedido.");
   }
+
+  // Auditoría de pedidos · media — aceptarlo no le avisaba al cliente, que se
+  // quedaba sin saber si su programado en efectivo estaba tomado. Si ya se le
+  // avisó al aprobarse un pago de MP, el log de mensajes no lo repite.
+  await notifyScheduledConfirmed({ orderId });
 
   revalidatePath(`/${slug}/admin/pedidos`);
   revalidatePath(`/${slug}/admin/operacion`);

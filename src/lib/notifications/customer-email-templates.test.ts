@@ -305,3 +305,18 @@ describe("orderScheduledEmail / invoiceIssuedEmail", () => {
     expect(mail.html).toContain("$12.500");
   });
 });
+
+// Auditoría de pedidos · MEDIA — el «agendado» también sale para delivery, y no
+// le dice a quien espera un envío que lo pase a retirar.
+describe("orderScheduledEmail · delivery vs retiro", () => {
+  const brand = GOLF;
+  it("delivery: te avisamos cuando salga", () => {
+    const e = orderScheduledEmail({ brand, customerName: "Ana", orderNumber: 7, whenLabel: "21/09 a las 21:00 hs", deliveryType: "delivery" });
+    expect(e.text).toMatch(/cuando salga/);
+    expect(e.text).not.toMatch(/retirar/);
+  });
+  it("retiro: te avisamos cuando esté para retirar", () => {
+    const e = orderScheduledEmail({ brand, customerName: "Ana", orderNumber: 7, whenLabel: "21/09 a las 21:00 hs", deliveryType: "pickup" });
+    expect(e.text).toMatch(/para retirar/);
+  });
+});

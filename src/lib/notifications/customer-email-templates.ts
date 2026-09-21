@@ -286,10 +286,16 @@ export function orderScheduledEmail(input: {
   customerName: string;
   orderNumber: number;
   whenLabel: string;
+  /** Auditoría de pedidos · media: el «agendado» también sale para delivery. */
+  deliveryType?: string;
 }): CustomerEmail {
+  const cierre =
+    input.deliveryType === "delivery"
+      ? "Te avisamos cuando salga para tu casa."
+      : "Te avisamos cuando esté para retirar.";
   const text =
     `¡Listo ${input.customerName}! Tu pedido #${input.orderNumber} quedó agendado ` +
-    `para el ${input.whenLabel}. Te avisamos cuando esté para retirar.`;
+    `para el ${input.whenLabel}. ${cierre}`;
   return {
     subject: `Pedido #${input.orderNumber} agendado — ${input.brand.name}`,
     text,
