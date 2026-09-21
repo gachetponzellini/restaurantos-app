@@ -129,6 +129,7 @@ import { useCatalogBundle } from "@/lib/mozo/use-catalog-bundle";
 import { useOnActivate } from "@/lib/ui/use-tab-param";
 import { cn } from "@/lib/utils";
 import { getSalonTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
+import { TZ_AR } from "@/lib/timezone";
 
 // ─── Types compartidos con la page (server) ────────────────────────────────
 
@@ -290,6 +291,7 @@ function formatMoney(cents: number): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

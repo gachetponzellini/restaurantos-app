@@ -57,6 +57,7 @@ import { getCajaTabData } from "@/app/[business_slug]/admin/(authed)/operacion/a
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { CuentaConSaldo } from "@/lib/caja/types";
+import { TZ_AR } from "@/lib/timezone";
 
 type Props = {
   slug: string;
@@ -622,6 +623,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
   // `+`: plata que salió del cajón figurando como que entró.
   const sale = saleDelCajon(mov.kind);
   const time = new Date(mov.created_at).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -668,6 +670,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
 function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
   const Icon = methodIcon(payment.method);
   const time = new Date(payment.created_at).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
   });

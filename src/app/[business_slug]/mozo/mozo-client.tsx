@@ -61,6 +61,7 @@ import {
 } from "@/lib/permissions/can";
 import type { FloorPlanWithTables } from "@/lib/admin/floor-plan/queries";
 import type { FloorTable } from "@/lib/reservations/types";
+import { TZ_AR } from "@/lib/timezone";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ function minutesSince(dateStr: string | null | undefined): number | null {
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

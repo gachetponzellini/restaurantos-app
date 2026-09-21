@@ -7,10 +7,12 @@ import { clockPunch, type PresentEmployee } from "@/lib/rrhh/clock-actions";
 
 import { ClockFeedback, type FeedbackState } from "./clock-feedback";
 import { PresentList } from "./present-list";
+import { TZ_AR } from "@/lib/timezone";
 
 function useLiveClock() {
   const [time, setTime] = useState(() =>
     new Date().toLocaleTimeString("es-AR", {
+      timeZone: TZ_AR,
       hour: "2-digit",
       minute: "2-digit",
     }),
@@ -20,6 +22,7 @@ function useLiveClock() {
       () =>
         setTime(
           new Date().toLocaleTimeString("es-AR", {
+            timeZone: TZ_AR,
             hour: "2-digit",
             minute: "2-digit",
           }),

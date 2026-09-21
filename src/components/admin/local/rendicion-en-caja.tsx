@@ -42,6 +42,7 @@ import {
   CANAL_LABEL,
   type CanalRendicion,
 } from "@/lib/caja/canal-rendicion";
+import { TZ_AR } from "@/lib/timezone";
 
 /**
  * Rendición de mozos dentro de la vista Caja (#351).
@@ -60,6 +61,8 @@ import {
 export type HistorialRendicion = MozoRendicion & {
   mozo_name: string;
   registered_by_name: string | null;
+  /** Ya tiene su papel (print_job de la rendición). Issue #297. */
+  ya_impresa?: boolean;
 };
 
 type AssignmentWithNames = CajaUserAssignment & {
@@ -419,6 +422,7 @@ function HistorialRendiciones({
                   </td>
                   <td className="text-muted-foreground px-3 py-2 tabular-nums">
                     {new Date(r.created_at).toLocaleTimeString("es-AR", {
+                      timeZone: TZ_AR,
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -428,6 +432,7 @@ function HistorialRendiciones({
                       slug={slug}
                       rendicionId={r.id}
                       mozoName={r.mozo_name}
+                      yaImpresa={r.ya_impresa ?? false}
                     />
                   </td>
                 </tr>
@@ -840,6 +845,3 @@ export function RendirModal({
     </Modal>
   );
 }
-  /** Ya tiene su papel (print_job de la rendición). Issue #297. */
-  ya_impresa?: boolean;
-                      yaImpresa={r.ya_impresa ?? false}

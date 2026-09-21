@@ -38,6 +38,7 @@ import {
 import type { Invoice } from "@/lib/afip/types";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { TZ_AR } from "@/lib/timezone";
 
 type Props = {
   invoice: Invoice | null;
@@ -84,6 +85,7 @@ export function InvoiceDetailSheet({
 
   const meta = INVOICE_STATUS_META[invoice.status];
   const dateStr = new Date(invoice.created_at).toLocaleString("es-AR", {
+    timeZone: TZ_AR,
     day: "2-digit",
     month: "short",
     year: "numeric",

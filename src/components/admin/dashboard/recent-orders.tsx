@@ -5,9 +5,11 @@ import { formatCurrency } from "@/lib/currency";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import { STATUS_META } from "@/lib/orders/status-meta";
 import { cn } from "@/lib/utils";
+import { TZ_AR } from "@/lib/timezone";
 
 function shortTime(iso: string): string {
   return new Intl.DateTimeFormat("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));

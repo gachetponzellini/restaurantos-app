@@ -10,6 +10,7 @@ import type {
   FloorTable,
   OperationalStatus,
 } from "@/lib/reservations/types";
+import { TZ_AR } from "@/lib/timezone";
 
 /**
  * Geometría del globo de demora (spec 193).
@@ -261,6 +262,7 @@ function GloboDeDemora({
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

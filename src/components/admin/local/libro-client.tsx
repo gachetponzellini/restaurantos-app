@@ -54,6 +54,7 @@ import { formatInvoiceNumber, tipoLabel } from "@/lib/afip/format";
 import type { TipoComprobante } from "@/lib/afip/types";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { TZ_AR } from "@/lib/timezone";
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: "Efectivo",
@@ -122,6 +123,7 @@ function iconoDe(entry: LibroEntry) {
 
 function hora(iso: string) {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -130,6 +132,7 @@ function hora(iso: string) {
 
 function fecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-AR", {
+    timeZone: TZ_AR,
     day: "2-digit",
     month: "2-digit",
   });

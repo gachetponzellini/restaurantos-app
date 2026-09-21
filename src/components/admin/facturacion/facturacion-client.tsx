@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
 import { InvoiceKpiStrip } from "./invoice-kpi-strip";
 import { PedidoFlashDialog } from "./pedido-flash-dialog";
+import { TZ_AR } from "@/lib/timezone";
 
 type RangeKey = "today" | "7d" | "30d" | "all";
 
@@ -232,10 +233,12 @@ export function FacturacionClient({
               const meta = INVOICE_STATUS_META[inv.status];
               const date = new Date(inv.created_at);
               const dateStr = date.toLocaleDateString("es-AR", {
+                timeZone: TZ_AR,
                 day: "2-digit",
                 month: "short",
               });
               const timeStr = date.toLocaleTimeString("es-AR", {
+                timeZone: TZ_AR,
                 hour: "2-digit",
                 minute: "2-digit",
               });

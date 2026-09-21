@@ -25,9 +25,11 @@ import { sentarReserva } from "@/lib/reservations/booking-actions";
 import { updateReservationStatus } from "@/lib/reservations/booking-actions";
 
 import type { SalonReservationRef, SalonRowProps } from "./salon-desktop";
+import { TZ_AR } from "@/lib/timezone";
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
   });

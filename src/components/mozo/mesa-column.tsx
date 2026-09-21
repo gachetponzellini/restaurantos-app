@@ -22,6 +22,7 @@ import {
   type LoPedido,
   type LoPedidoItem,
 } from "@/lib/mozo/lo-pedido";
+import { TZ_AR } from "@/lib/timezone";
 
 /**
  * La columna de **la mesa** (spec 111, fase 5): todo lo que pasa con ella, de
@@ -91,7 +92,7 @@ function horaDe(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("es-AR", { timeZone: TZ_AR, hour: "2-digit", minute: "2-digit" });
 }
 
 export function MesaColumn({

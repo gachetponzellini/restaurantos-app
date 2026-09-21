@@ -1,5 +1,8 @@
+import { TZ_AR } from "@/lib/timezone";
+
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: TZ_AR,
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -53,6 +56,7 @@ export function formatDateShort(iso: string): string {
 
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("es-AR", {
+    timeZone: TZ_AR,
     day: "2-digit",
     month: "2-digit",
   });
@@ -60,6 +64,7 @@ export function formatDate(iso: string): string {
 
 export function formatMonthName(iso: string): string {
   return new Date(iso).toLocaleDateString("es-AR", {
+    timeZone: TZ_AR,
     month: "long",
     year: "numeric",
   });
