@@ -46,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DividirModal, SplitsBanner } from "@/components/billing/dividir-modal";
+import { propinaPorPorcentaje } from "@/lib/billing/propina";
 
 const TIP_PRESETS = [0, 5, 10, 15];
 const DISCOUNT_REASONS = [
@@ -121,10 +122,6 @@ export function CuentaClient({
     cuenta.order.tip_cents === 0 ? 0 : "custom",
   );
   const [tipCustomCents, setTipCustomCents] = useState(cuenta.order.tip_cents);
-  const tipCents =
-    tipPercent === "custom"
-      ? tipCustomCents
-      : Math.round((subtotal * tipPercent) / 100);
 
   const [discountPercent, setDiscountPercent] = useState(
     subtotal === 0
@@ -149,6 +146,16 @@ export function CuentaClient({
 
   const discountCents =
     subtotal === 0 ? 0 : Math.round((subtotal * discountPercent) / 100);
+  // #189: el porcentaje de propina va sobre lo que se cobra, ya con el
+  // descuento aplicado — por eso se calcula después de `discountCents`.
+  const tipCents =
+    tipPercent === "custom"
+      ? tipCustomCents
+      : propinaPorPorcentaje({
+          subtotalCents: subtotal,
+          descuentoCents: discountCents,
+          porcentaje: tipPercent,
+        });
   const total = Math.max(0, subtotal + tipCents - discountCents);
 
   const [dividirOpen, setDividirOpen] = useState(false);
