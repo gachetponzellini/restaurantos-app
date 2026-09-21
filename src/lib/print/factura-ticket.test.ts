@@ -73,6 +73,13 @@ describe("buildFacturaTicketLines", () => {
     expect(t).toContain("14/08/2026");
   });
 
+  it("el vencimiento del CAE es el día que dice ARCA, no el anterior (columna date)", () => {
+    // `invoices.cae_vencimiento` es `date`: llega "YYYY-MM-DD", sin hora.
+    const t = text(base({ cae_vencimiento: "2026-09-26" } as Partial<FacturaTicketData>));
+    expect(t).toContain("26/09/2026");
+    expect(t).not.toContain("25/09/2026");
+  });
+
   it("sin CAE lo dice en vez de dejar un renglón que parezca un dato", () => {
     expect(text(base({ cae: null }))).toContain("(sin CAE)");
   });

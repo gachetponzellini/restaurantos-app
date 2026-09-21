@@ -38,7 +38,7 @@ import {
 import type { Invoice } from "@/lib/afip/types";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
-import { TZ_AR } from "@/lib/timezone";
+import { formatFechaAR, TZ_AR } from "@/lib/timezone";
 
 type Props = {
   invoice: Invoice | null;
@@ -255,7 +255,7 @@ export function InvoiceDetailSheet({
               </Row>
               {invoice.cae_vencimiento && (
                 <Row label="Vto. CAE">
-                  {new Date(invoice.cae_vencimiento).toLocaleDateString("es-AR")}
+                  {formatFechaAR(invoice.cae_vencimiento)}
                 </Row>
               )}
             </div>

@@ -26,11 +26,11 @@ import {
   renderEscPos,
   renderPlain,
   RULE,
-  TIMEZONE,
   toAscii,
   wrap,
   type Line,
 } from "./ticket";
+import { formatFechaAR } from "@/lib/timezone";
 
 export type FacturaTicketData = {
   print_job_id: string;
@@ -90,17 +90,10 @@ function comprobanteNumero(pv: number, numero: number | null): string {
 }
 
 /** "04/08/2026" en el TZ del local. Una fecha fiscal no se muestra en UTC. */
+// Fechas sin hora (`cae_vencimiento`, columna `date`) y timestamps: ver
+// `formatFechaAR` — la versión anterior corría un día las primeras.
 function fecha(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).formatToParts(d);
-  const pick = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${pick("day")}/${pick("month")}/${pick("year")}`;
+  return formatFechaAR(iso);
 }
 
 function row(label: string, value: string, cols = COLS.sm): string {
