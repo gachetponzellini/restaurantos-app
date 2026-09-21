@@ -83,6 +83,20 @@ vi.mock("@/lib/notifications/create", () => ({
   createNotification: (...args: unknown[]) => createNotificationMock(...args),
 }));
 
+// Espía sobre el resolver real de la ficha del cliente (auditoría de pedidos):
+// el fake de Supabase devuelve una ficha para cualquier consulta, así que lo que
+// se verifica acá es CON QUÉ CUENTA se resuelve; la lógica en sí la cubre
+// `resolver-cliente.integration.test.ts` contra Postgres.
+const resolverSpy = vi.hoisted(() => ({ fn: null as unknown }));
+vi.mock("@/lib/customers/resolver-cliente", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/customers/resolver-cliente")>(
+    "@/lib/customers/resolver-cliente",
+  );
+  const spy = vi.fn(actual.resolverClienteDelPedido);
+  resolverSpy.fn = spy;
+  return { ...actual, resolverClienteDelPedido: spy };
+});
+
 import { persistOrder } from "./persist-order";
 
 const items = [{ product_id: PRODUCT.id, quantity: 1, modifier_ids: [] }];
@@ -241,7 +255,8 @@ describe("persistOrder — el cliente no se liga a la cuenta del staff", () => {
       }),
       "comensal-1",
     );
-    expect(customerRow()).toMatchObject({ user_id: "comensal-1" });
+    const llamadas = (resolverSpy.fn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(llamadas.at(-1)?.[1]).toMatchObject({ userId: "comensal-1" });
   });
 
   it("checkout público sin login: no pisa con null el user_id ya ligado", async () => {

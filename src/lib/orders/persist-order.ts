@@ -35,6 +35,7 @@ import {
 
 import type { PersistableOrderInput } from "./schema";
 import { aceptaPedidoInmediato, type BusinessHour } from "@/lib/business-hours";
+import { clienteParaCupon, resolverClienteDelPedido } from "@/lib/customers/resolver-cliente";
 
 export type CreateOrderResult = {
   order_id: string;
@@ -611,19 +612,20 @@ export async function persistOrder(
     // Resolvemos el customer (por business+phone, la misma identidad que usa el
     // upsert de abajo) para validar códigos personales (spec 36 · R-D1). Cliente
     // nuevo = null → un código personal ajeno se rechaza, que es lo correcto.
-    const { data: existingCustomer } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("business_id", business.id)
-      .eq("phone", customerPhoneKey(data.customer_phone))
-      .maybeSingle();
+    // Auditoría de pedidos · ALTA: con cuenta, el cupón se valida contra la
+    // ficha de ESA cuenta, no contra el teléfono tipeado (que podía ser de otro).
+    const existingCustomerId = await clienteParaCupon(supabase, {
+      businessId: business.id,
+      userId: Boolean(userId) && !options?.mozoId ? (userId ?? null) : null,
+      phoneKey: customerPhoneKey(data.customer_phone),
+    });
 
     const validation = await validatePromoCode(supabase, {
       businessId: business.id,
       code: data.promo_code,
       subtotalCents,
       deliveryFeeCents,
-      customerId: (existingCustomer as { id: string } | null)?.id ?? null,
+      customerId: existingCustomerId,
     });
     if (!validation.ok) {
       return actionError(validation.error);
@@ -656,29 +658,19 @@ export async function persistOrder(
   // checkout público sin login tampoco desengancha la cuenta que ese cliente ya
   // tenía ligada de una compra anterior.
   const ligarCuenta = Boolean(userId) && !options?.mozoId;
-  const { data: customer, error: customerErr } = await supabase
-    .from("customers")
-    .upsert(
-      {
-        business_id: business.id,
-        ...(ligarCuenta ? { user_id: userId } : {}),
-        // Clave de identidad normalizada (issue #114): el checkout acepta
-        // "+54 341…", "341 506-8633", etc. Sin colapsarlas, el mismo cliente se
-        // duplica y no engancha su `user_id` (crítico con login Google, que no
-        // trae teléfono y deja el campo vacío). El valor tipeado se conserva en
-        // `orders.customer_phone` para mostrar/contactar.
-        phone: customerPhoneKey(data.customer_phone),
-        name: data.customer_name,
-        email: data.customer_email ?? null,
-      },
-      { onConflict: "business_id,phone" },
-    )
-    .select("id")
-    .single();
-  if (customerErr || !customer) {
-    console.error("customer upsert", customerErr);
-    return actionError("No pudimos guardar tus datos.");
-  }
+  // Auditoría de pedidos · ALTA — ver `resolverClienteDelPedido`: tipear el
+  // teléfono de otro ya no te da su ficha, y cambiar el propio no bloquea.
+  // Clave de identidad normalizada (issue #114); el valor tipeado se conserva
+  // en `orders.customer_phone` para mostrar/contactar.
+  const resuelto = await resolverClienteDelPedido(supabase, {
+    businessId: business.id,
+    userId: ligarCuenta ? (userId ?? null) : null,
+    phoneKey: customerPhoneKey(data.customer_phone),
+    name: data.customer_name,
+    email: data.customer_email ?? null,
+  });
+  if (!resuelto.ok) return actionError(resuelto.error);
+  const customer = { id: resuelto.id };
 
   // Cast: `promo_code_id`, `promo_code_snapshot`, `discount_cents` were added
   // by migration 0018. Once `database.types.ts` is regenerated this cast can
