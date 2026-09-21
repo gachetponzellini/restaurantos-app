@@ -4,7 +4,8 @@ import { formatInTimeZone } from "date-fns-tz";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
-import { dispatchCustomerMessage } from "./customer-dispatch";
+import type { CustomerChannel } from "./customer-channel";
+import { dispatchCustomerMessage, resolveCustomerChannel } from "./customer-dispatch";
 import {
   renderReservationBody,
   reservationWhatsappPayload,
@@ -19,6 +20,7 @@ import {
   resolveBusinessBrand,
   type BusinessBrand,
 } from "./customer-email-templates";
+import { isWhatsappConnected } from "./whatsapp-sender";
 
 const DEFAULT_TZ = "America/Argentina/Buenos_Aires";
 
@@ -142,9 +144,33 @@ async function loadReservationWhatsapp(params: {
 }
 
 /**
+ * Auditoría de reservas del cliente (bug #4) — fallback WhatsApp → email.
+ *
+ * `customer_channel` del negocio puede estar en `'whatsapp'` sin que haya
+ * forma real de mandarlo: sin credenciales cargadas en `whatsapp_credentials`,
+ * o sin `template_name` aprobado para el evento (ahí `wa` sale `undefined` de
+ * `loadReservationWhatsapp`, o directamente `null` como en el recordatorio,
+ * que todavía no tiene WhatsApp). `dispatchCustomerMessage` sólo intenta el
+ * canal configurado — nunca el otro — así que sin este fallback el cliente se
+ * queda sin NINGÚN aviso. Si tiene email, cae ahí en vez de quedar en silencio.
+ */
+async function resolveDispatchChannel(params: {
+  businessId: string;
+  wa: { body: string; template?: { name: string; lang: string; params: string[] } } | null | undefined;
+  hasEmail: boolean;
+}): Promise<CustomerChannel> {
+  const channel = await resolveCustomerChannel(params.businessId);
+  if (channel !== "whatsapp") return channel;
+  const deliverable =
+    Boolean(params.wa) && (await isWhatsappConnected(params.businessId));
+  if (deliverable) return channel;
+  return params.hasEmail ? "email" : channel;
+}
+
+/**
  * Acuse de reserva creada, al cliente, por el canal del negocio (spec 45).
- * Best-effort: nunca lanza. Sólo email hoy (no hay template de reserva por
- * WhatsApp) → negocios en `whatsapp` no reciben nada (igual que antes).
+ * Best-effort: nunca lanza. Sin WhatsApp deliverable (sin credenciales o sin
+ * template para el evento), cae a email si el cliente lo tiene (bug #4).
  */
 export async function notifyReservationConfirmed(params: {
   reservationId: string;
@@ -174,10 +200,17 @@ export async function notifyReservationConfirmed(params: {
       manageUrl,
     });
 
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+
     await dispatchCustomerMessage({
       businessId: ctx.reservation.business_id,
       event: "reservation_confirmed",
       refId: ctx.reservation.id,
+      channel,
       recipient: {
         name: ctx.reservation.customer_name,
         email: ctx.reservation.customer_email,
@@ -229,10 +262,17 @@ export async function notifyReservationRequested(params: {
       manageUrl,
     });
 
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+
     await dispatchCustomerMessage({
       businessId: ctx.reservation.business_id,
       event: "reservation_requested",
       refId: ctx.reservation.id,
+      channel,
       recipient: {
         name: ctx.reservation.customer_name,
         email: ctx.reservation.customer_email,
@@ -280,10 +320,17 @@ export async function notifyReservationRejected(params: {
       reason: params.reason ?? null,
     });
 
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+
     await dispatchCustomerMessage({
       businessId: ctx.reservation.business_id,
       event: "reservation_rejected",
       refId: ctx.reservation.id,
+      channel,
       recipient: {
         name: ctx.reservation.customer_name,
         email: ctx.reservation.customer_email,
@@ -328,10 +375,17 @@ export async function notifyReservationExpired(params: {
       whenLabel: ctx.whenLabel,
     });
 
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+
     await dispatchCustomerMessage({
       businessId: ctx.reservation.business_id,
       event: "reservation_expired",
       refId: ctx.reservation.id,
+      channel,
       recipient: {
         name: ctx.reservation.customer_name,
         email: ctx.reservation.customer_email,
@@ -371,10 +425,20 @@ export async function notifyReservationReminder(params: {
       confirmUrl,
     });
 
+    // El recordatorio todavía no tiene WhatsApp (sin template de este evento):
+    // `wa` es siempre null acá. Sin el fallback, un negocio en canal 'whatsapp'
+    // se quedaba sin ningún recordatorio (bug #4).
+    const channel = await resolveDispatchChannel({
+      businessId: ctx.reservation.business_id,
+      wa: null,
+      hasEmail: Boolean(ctx.reservation.customer_email),
+    });
+
     await dispatchCustomerMessage({
       businessId: ctx.reservation.business_id,
       event: "reservation_reminder",
       refId: ctx.reservation.id,
+      channel,
       recipient: {
         name: ctx.reservation.customer_name,
         email: ctx.reservation.customer_email,
