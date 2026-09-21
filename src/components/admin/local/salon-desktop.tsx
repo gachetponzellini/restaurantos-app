@@ -2228,10 +2228,17 @@ export function SalonDesktop({
             /* Lista de entrada del panel: demoras + reservas + mesas son UNA
                sola zona de teclado (spec 075, FR-006) — ↑/↓ la recorren entera
                de arriba a abajo y Enter abre. El `onKeyDown` va acá, en el
-               contenedor de las tres secciones. */
+               contenedor de las tres secciones.
+
+               Issue #288: demoras + reservas + el header de «Mesas» no se
+               achican, así que con poco alto (pantalla baja, muchas demoras)
+               empujaban la lista de mesas a 0 px y el `overflow-hidden` del
+               aside recortaba el resto: las últimas mesas quedaban sin forma
+               de abrirse. Con alto normal esto no cambia nada; cuando no entra,
+               el panel entero scrollea y la lista conserva su piso. */
             <div
               onKeyDown={lista.handleKeyDown}
-              className="flex min-h-0 flex-1 flex-col"
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto"
             >
               <DemorasPanel
                 demoras={demoras}
@@ -2755,7 +2762,7 @@ function ActiveTablesList({
           )}
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto pb-3">
+      <div className="min-h-40 flex-1 overflow-y-auto pb-3">
         {total === 0 ? (
           <p className="text-muted-foreground p-6 text-center text-sm">
             Sin mesas en el plano

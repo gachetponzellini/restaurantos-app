@@ -114,6 +114,33 @@ test.describe("P02 · el plano, la mesa y el cobro dicen lo mismo", () => {
     ).toBeVisible();
   });
 
+  test("con poco alto de pantalla, la última mesa de la lista se puede abrir (#288)", async ({
+    page,
+  }) => {
+    // Demoras + reservas + el header de «Mesas» no se achican: con poco alto
+    // (o con muchas demoras, que el seed sortea) empujaban la lista a 0 px y
+    // las últimas mesas quedaban recortadas, sin forma de abrirse. 500 px de
+    // alto reproduce el caso sin depender de cuántas demoras salieron.
+    await page.setViewportSize({ width: 1280, height: 500 });
+    const bizId = await businessId(SLUG);
+    const { data: orders } = await db
+      .from("orders")
+      .select("customer_name, tables!orders_table_id_fkey!inner(floor_plan_id)")
+      .eq("business_id", bizId)
+      .eq("lifecycle_status", "open")
+      .not("table_id", "is", null)
+      .eq("tables.floor_plan_id", await primerSalon(bizId));
+    const nombres = (orders ?? []).map((o) => escapeRe(o.customer_name as string));
+    expect(nombres.length, "el seed tiene que dejar mesas vivas").toBeGreaterThan(0);
+
+    await abrirSalon(page);
+    await page
+      .getByRole("button", { name: new RegExp(nombres.join("|")) })
+      .last()
+      .click();
+    await expect(page.getByText(/Total de la mesa/i).first()).toBeVisible();
+  });
+
   test("«Cobrar» abre la cuenta por el mismo total, sin recalcular nada", async ({
     page,
   }) => {
