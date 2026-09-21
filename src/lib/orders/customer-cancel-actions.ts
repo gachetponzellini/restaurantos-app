@@ -70,10 +70,43 @@ export async function cancelOrderByCustomer(
     );
   }
 
-  // Attempt a MP refund BEFORE marking cancelled, if the order was paid.
-  // We try once; regardless of outcome we still cancel the order so the
-  // customer isn't stuck waiting. If the refund failed the admin sees
-  // `payment_status: paid` + `status: cancelled` and can process it by hand.
+  const MOTIVO = "Cancelado por el cliente";
+  const nowIso = new Date().toISOString();
+
+  // Auditoría de pedidos · MEDIA — primero se cancela, con guarda de estado
+  // en la misma escritura: si el local lo pasó a cocina entre la lectura de
+  // arriba y acá, no se cancela. Y el reembolso va DESPUÉS: antes se
+  // reembolsaba primero, y si el update fallaba la plata ya se había devuelto
+  // con el pedido vivo.
+  const { data: cancelada, error } = await service
+    .from("orders")
+    .update({
+      status: "cancelled",
+      // spec 090 — los dos ejes y el timestamp. Antes se escribía sólo
+      // `status`, así que el pedido quedaba con la cuenta `open` y fuera del
+      // bloque de anulaciones del resumen de turno (que filtra por
+      // `cancelled_at`).
+      lifecycle_status: "cancelled",
+      cancelled_at: nowIso,
+      cancelled_reason: MOTIVO,
+      // spec 34 — quién anuló. Acá el actor es el propio cliente (auth.users).
+      cancelled_by: user.id,
+    })
+    .eq("id", order_id)
+    .in("status", Array.from(CUSTOMER_CANCELLABLE_STATUSES))
+    .select("id");
+  if (error) {
+    console.error("cancelOrderByCustomer", error);
+    return actionError("No pudimos cancelar el pedido.");
+  }
+  if (((cancelada ?? []) as { id: string }[]).length === 0) {
+    return actionError(
+      "Este pedido ya está en preparación. Contactá al local para cancelarlo.",
+    );
+  }
+
+  // Reembolso por MP, sólo con el pedido ya cancelado. Se intenta una vez; si
+  // falla, el encargado ve `paid` + `cancelled` y lo hace a mano.
   let refundOutcome: CancelResult["refund"] = "none";
   if (order.payment_status === "paid" && order.mp_payment_id) {
     const { data: biz } = await service
@@ -88,6 +121,10 @@ export async function cancelOrderByCustomer(
       );
       if (refund.ok) {
         refundOutcome = "refunded";
+        await service
+          .from("orders")
+          .update({ payment_status: "refunded" })
+          .eq("id", order_id);
       } else {
         console.error("MP refund failed on customer cancel", refund.error);
         refundOutcome = "manual";
@@ -96,39 +133,6 @@ export async function cancelOrderByCustomer(
       // Business has no MP token somehow — leave for manual handling.
       refundOutcome = "manual";
     }
-  }
-
-  const MOTIVO = "Cancelado por el cliente";
-  const nowIso = new Date().toISOString();
-  const update: {
-    status: string;
-    lifecycle_status: string;
-    cancelled_at: string;
-    cancelled_reason: string;
-    cancelled_by: string;
-    payment_status?: string;
-  } = {
-    status: "cancelled",
-    // spec 090 — los dos ejes y el timestamp. Antes se escribía sólo `status`,
-    // así que el pedido quedaba con la cuenta `open` y fuera del bloque de
-    // anulaciones del resumen de turno (que filtra por `cancelled_at`).
-    lifecycle_status: "cancelled",
-    cancelled_at: nowIso,
-    cancelled_reason: MOTIVO,
-    // spec 34 — quién anuló. Acá el actor es el propio cliente (auth.users).
-    cancelled_by: user.id,
-  };
-  if (refundOutcome === "refunded") {
-    update.payment_status = "refunded";
-  }
-
-  const { error } = await service
-    .from("orders")
-    .update(update)
-    .eq("id", order_id);
-  if (error) {
-    console.error("cancelOrderByCustomer", error);
-    return actionError("No pudimos cancelar el pedido.");
   }
 
   // issue #272 — la caja no lee `orders.payment_status`, lee `payments`.
