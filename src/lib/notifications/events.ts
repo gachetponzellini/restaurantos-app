@@ -261,3 +261,46 @@ export async function notifyPagoSobrePedidoCancelado(params: {
     },
   });
 }
+
+/**
+ * Revisión adversarial (auditoría de pedidos) — entró un SEGUNDO pago aprobado
+ * de un pedido que ya estaba pagado (el link viejo y el del reintento, o un
+ * cupón offline que se acreditó tarde). Se asentó en la caja porque la plata
+ * entró, pero el pedido no se cocina dos veces: hay que devolver uno. Un aviso
+ * por pago.
+ */
+export async function notifyPagoDuplicado(params: {
+  businessId: string;
+  orderId: string;
+  paymentId: string;
+  amountCents: number | null;
+}): Promise<void> {
+  const service = createSupabaseServiceClient();
+  const { count } = await service
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", params.businessId)
+    .eq("type", "mp.pago_duplicado")
+    .eq("payload->>paymentId", params.paymentId);
+  if ((count ?? 0) > 0) return;
+
+  const { data: order } = await service
+    .from("orders")
+    .select("order_number")
+    .eq("id", params.orderId)
+    .maybeSingle();
+
+  await createNotification({
+    businessId: params.businessId,
+    targetRole: "encargado",
+    type: "mp.pago_duplicado",
+    payload: {
+      orderId: params.orderId,
+      paymentId: params.paymentId,
+      orderNumber:
+        (order as { order_number: number | null } | null)?.order_number ??
+        undefined,
+      amountCents: params.amountCents ?? undefined,
+    },
+  });
+}

@@ -100,9 +100,9 @@ describe("pagoEnCursoPorReferencia", () => {
     expect(await pagoEnCursoPorReferencia("tok", "o1")).toBeNull();
   });
 
-  it("si MP no contesta, no bloquea (null) — se loguea", async () => {
+  it("si MP no contesta, falla cerrado: «desconocido» (revisión adversarial)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("boom", { status: 500 }));
     vi.spyOn(console, "error").mockImplementationOnce(() => {});
-    expect(await pagoEnCursoPorReferencia("tok", "o1")).toBeNull();
+    expect(await pagoEnCursoPorReferencia("tok", "o1")).toBe("desconocido");
   });
 });

@@ -26,6 +26,7 @@ describe("viewForNotification (spec 27)", () => {
     // #148 · H-20 + H-45
     "pedido.programado_por_vencer",
     "mp.pago_sobre_cancelado",
+    "mp.pago_duplicado",
   ];
 
   it("cada tipo nuevo tiene una view específica (no el fallback genérico)", () => {

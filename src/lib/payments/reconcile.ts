@@ -86,6 +86,9 @@ export async function reconcileMpPayment(args: {
     payment_status: nextPaymentStatus,
   };
 
+  const yaRegistrado =
+    order.payment_status === "paid" && order.mp_payment_id === args.paymentId;
+
   // Skip the write if nothing changed.
   if (
     order.payment_status !== nextPaymentStatus ||
@@ -114,6 +117,7 @@ export async function reconcileMpPayment(args: {
         total_cents: Number(order.total_cents),
       },
       paymentId: args.paymentId,
+      yaRegistrado,
     });
   }
 

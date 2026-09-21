@@ -261,6 +261,20 @@ export function viewForNotification(n: Notification): NotiView {
     };
   }
 
+  // Un segundo pago aprobado del mismo pedido: se asentó, hay que devolverlo.
+  if (n.type === "mp.pago_duplicado") {
+    const orderNumber = p.orderNumber as number | undefined;
+    const amountCents = p.amountCents as number | undefined;
+    return {
+      tone: "danger",
+      icon: Wallet,
+      title: `Pago duplicado${orderNumber ? ` · #${orderNumber}` : ""}`,
+      body: `Mercado Pago acreditó ${
+        amountCents ? formatCurrency(amountCents) : "un pago"
+      } más de un pedido que ya estaba pagado. El pedido no se cocina dos veces: devolvele uno al cliente desde Mercado Pago.`,
+    };
+  }
+
   // Entró un pago de MP sobre un pedido ya cancelado (medios offline, o un
   // link abierto): la plata está en la cuenta de MP y hay que devolverla.
   if (n.type === "mp.pago_sobre_cancelado") {

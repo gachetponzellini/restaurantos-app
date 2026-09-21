@@ -76,6 +76,11 @@ export async function reintentarPagoMp(
   if (enCurso === "aprobado") {
     return actionError("Ya recibimos tu pago: en unos segundos se confirma. Recargá la página.");
   }
+  if (enCurso === "desconocido") {
+    return actionError(
+      "No pudimos verificar el estado de tu pago con Mercado Pago. Probá de nuevo en un minuto.",
+    );
+  }
   if (enCurso === "en_proceso") {
     return actionError(
       "Tenés un pago en proceso (por ejemplo, un cupón de Rapipago o Pago Fácil). Esperá a que se acredite antes de generar otro.",

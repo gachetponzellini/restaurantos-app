@@ -19,7 +19,9 @@ const createPreference = vi.fn(async () => ({
   initPoint: "https://mp/checkout/pref-nueva",
   sandboxInitPoint: "https://mp/checkout/pref-nueva",
 }));
-const pagoEnCurso = vi.fn(async (): Promise<"aprobado" | "en_proceso" | null> => null);
+const pagoEnCurso = vi.fn(
+  async (): Promise<"aprobado" | "en_proceso" | "desconocido" | null> => null,
+);
 vi.mock("@/lib/payments/mercadopago", async () => {
   const actual = await vi.importActual<typeof import("@/lib/payments/mercadopago")>(
     "@/lib/payments/mercadopago",
@@ -143,6 +145,14 @@ describe.skipIf(!dbAvailable)("reintentar pago MP (integration · #368)", () => 
     const r = await reintentarPagoMp({ business_slug: TEST_TAG, order_id: id });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/en proceso/i);
+    expect(createPreference).not.toHaveBeenCalled();
+  });
+
+  it("si no se puede consultar MP, no abre un segundo cobro (falla cerrado)", async () => {
+    const id = await pedido({});
+    pagoEnCurso.mockResolvedValueOnce("desconocido");
+    const r = await reintentarPagoMp({ business_slug: TEST_TAG, order_id: id });
+    expect(r.ok).toBe(false);
     expect(createPreference).not.toHaveBeenCalled();
   });
 

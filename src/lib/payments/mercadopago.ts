@@ -212,12 +212,14 @@ export async function findPaymentByExternalRef(
  * cobro mientras el primero sigue vivo: un cupón de Rapipago/Pago Fácil queda
  * `pending` horas, y si se aprobaban los dos entraban dos pagos sin aviso.
  *
- * Si la búsqueda falla devuelve `null` (no bloquea al cliente) y lo loguea.
+ * Si la búsqueda falla devuelve `"desconocido"`: el reintento se bloquea
+ * (falla cerrado). Abrir un segundo cobro sin poder ver el primero es justo el
+ * riesgo que esto existe para evitar (revisión adversarial).
  */
 export async function pagoEnCursoPorReferencia(
   accessToken: string,
   externalReference: string,
-): Promise<"aprobado" | "en_proceso" | null> {
+): Promise<"aprobado" | "en_proceso" | "desconocido" | null> {
   const url = new URL("https://api.mercadopago.com/v1/payments/search");
   url.searchParams.set("external_reference", externalReference);
   try {
@@ -230,7 +232,7 @@ export async function pagoEnCursoPorReferencia(
     });
     if (!res.ok) {
       console.error("MP · buscar pagos en curso", res.status, await res.text());
-      return null;
+      return "desconocido";
     }
     const json = (await res.json()) as { results?: Array<{ status?: string }> };
     const estados = (json.results ?? []).map((p) => p.status);
@@ -241,7 +243,7 @@ export async function pagoEnCursoPorReferencia(
     return null;
   } catch (err) {
     console.error("MP · buscar pagos en curso", err);
-    return null;
+    return "desconocido";
   }
 }
 

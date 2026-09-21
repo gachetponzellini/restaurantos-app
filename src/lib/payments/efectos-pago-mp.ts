@@ -4,7 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getDefaultCaja } from "@/lib/caja/queries";
 import { notifyScheduledConfirmed } from "@/lib/notifications/delivery-notify";
-import { notifyPagoSobrePedidoCancelado } from "@/lib/notifications/events";
+import {
+  notifyPagoDuplicado,
+  notifyPagoSobrePedidoCancelado,
+} from "@/lib/notifications/events";
 import { routeOrderToCocina } from "@/lib/orders/route-to-cocina";
 import { isScheduledForLater } from "@/lib/orders/scheduled";
 
@@ -34,10 +37,29 @@ export async function aplicarPagoMpAprobado(
       total_cents: number;
     };
     paymentId: string;
+    /**
+     * El que llama ya tenía este pago registrado como `paid` antes de llegar
+     * (reentrega del webhook de MP, o el regreso después del webhook). Sin
+     * caja no hay llave en `payments`: con esto no se repiten marcha ni avisos.
+     */
+    yaRegistrado?: boolean;
   },
 ): Promise<{ aplicado: boolean }> {
   const { order, paymentId } = params;
 
+  // Revisión adversarial — ¿ya había OTRO pago aprobado de este pedido? (link
+  // viejo + reintento, o un cupón offline que se aprobó tarde). La plata entró
+  // igual y se asienta, pero el pedido no se vuelve a cocinar: se avisa para
+  // devolver el segundo.
+  const { data: otrosPagos } = await service
+    .from("payments")
+    .select("id")
+    .eq("order_id", order.id)
+    .eq("payment_status", "paid")
+    .neq("mp_payment_id", paymentId);
+  const esDuplicado = ((otrosPagos ?? []) as { id: string }[]).length > 0;
+
+  let llaveTomada = false;
   const caja = await getDefaultCaja(order.business_id);
   if (!caja) {
     // Sin cajas cargadas no hay dónde asentarlo. El pago quedó acreditado en
@@ -61,6 +83,7 @@ export async function aplicarPagoMpAprobado(
     // 23505 = ya lo asentó el otro camino (o una entrega previa del mismo
     // webhook): los efectos ya corrieron.
     if (payErr?.code === "23505") return { aplicado: false };
+    llaveTomada = !payErr;
     if (payErr) {
       console.error("MP · no se pudo asentar el pago en la caja", {
         orderId: order.id,
@@ -73,6 +96,20 @@ export async function aplicarPagoMpAprobado(
       });
       if (recErr) console.error("MP · recalcular lo pagado", recErr);
     }
+  }
+
+  // Sin llave (sin caja, o el insert falló) la repetición la corta quien llama.
+  if (!llaveTomada && params.yaRegistrado) return { aplicado: false };
+
+  if (esDuplicado) {
+    console.warn("MP · segundo pago aprobado del mismo pedido", { orderId: order.id, paymentId });
+    await notifyPagoDuplicado({
+      businessId: order.business_id,
+      orderId: order.id,
+      paymentId,
+      amountCents: order.total_cents,
+    }).catch((e) => console.error("MP · aviso de pago duplicado", e));
+    return { aplicado: true };
   }
 
   if (order.status === "cancelled") {

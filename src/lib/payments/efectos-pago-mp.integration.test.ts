@@ -31,9 +31,11 @@ vi.mock("@/lib/notifications/delivery-notify", () => ({
   notifyScheduledConfirmed: (...a: unknown[]) => notifyScheduledConfirmed(...(a as [])),
 }));
 const notifyPagoSobrePedidoCancelado = vi.fn(async () => {});
+const notifyPagoDuplicado = vi.fn(async () => {});
 vi.mock("@/lib/notifications/events", () => ({
   notifyPagoSobrePedidoCancelado: (...a: unknown[]) =>
     notifyPagoSobrePedidoCancelado(...(a as [])),
+  notifyPagoDuplicado: (...a: unknown[]) => notifyPagoDuplicado(...(a as [])),
 }));
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -102,6 +104,7 @@ describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · audi
     routeOrderToCocina.mockClear();
     notifyScheduledConfirmed.mockClear();
     notifyPagoSobrePedidoCancelado.mockClear();
+    notifyPagoDuplicado.mockClear();
     fetchPayment.mockReset();
   });
 
@@ -144,5 +147,55 @@ describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · audi
     expect(await filasEnCaja(o.id)).toBe(1);
     expect(routeOrderToCocina).not.toHaveBeenCalled();
     expect(notifyPagoSobrePedidoCancelado).toHaveBeenCalledTimes(1);
+  });
+
+  // Revisión adversarial — dos pagos aprobados del mismo pedido (link viejo +
+  // reintento). La plata entró las dos veces: se asienta, pero no se vuelve a
+  // cocinar y se avisa para devolver el segundo.
+  it("un segundo pago aprobado del mismo pedido: se asienta, no re-marcha y avisa", async () => {
+    const o = await pedido();
+    await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-5a" });
+    await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-5b" });
+    expect(await filasEnCaja(o.id)).toBe(2);
+    expect(routeOrderToCocina).toHaveBeenCalledTimes(1);
+    expect(notifyPagoDuplicado).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.skipIf(!dbAvailable)("efectos del pago MP · negocio sin caja (integration)", () => {
+  const supabase = createClient(supabaseUrl!, serviceKey!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  let businessId: string;
+
+  beforeAll(async () => {
+    const { data: biz } = await supabase
+      .from("businesses")
+      .insert({ slug: `${TEST_TAG}-sincaja`, name: "Sin caja", is_active: true })
+      .select("id")
+      .single();
+    businessId = biz!.id;
+  });
+  afterAll(async () => {
+    if (businessId) await supabase.from("businesses").delete().eq("id", businessId);
+  });
+
+  // Sin caja no hay llave en `payments`: la repetición la corta quien llama,
+  // que sabe si el pago ya estaba registrado (reentrega del webhook de MP).
+  it("una reentrega (ya registrado) no repite marcha ni avisos", async () => {
+    routeOrderToCocina.mockClear();
+    const { data: o } = await supabase
+      .from("orders")
+      .insert({
+        business_id: businessId, customer_name: "C", customer_phone: "0",
+        delivery_type: "pickup", subtotal_cents: 1000, total_cents: 1000,
+        lifecycle_status: "open", status: "pending", payment_status: "paid", payment_method: "mp",
+      })
+      .select("id, business_id, status, scheduled_at, total_cents")
+      .single();
+    await aplicarPagoMpAprobado(supabase as never, { order: o!, paymentId: "mp-6", yaRegistrado: true });
+    expect(routeOrderToCocina).not.toHaveBeenCalled();
+    await aplicarPagoMpAprobado(supabase as never, { order: o!, paymentId: "mp-6", yaRegistrado: false });
+    expect(routeOrderToCocina).toHaveBeenCalledTimes(1);
   });
 });

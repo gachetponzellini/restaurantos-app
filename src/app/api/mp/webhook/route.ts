@@ -292,6 +292,8 @@ export async function POST(req: Request) {
         total_cents: (order as { total_cents: number }).total_cents,
       },
       paymentId,
+      // Reentrega: este pago ya estaba registrado `paid` antes de este webhook.
+      yaRegistrado: existingByPayment?.payment_status === "paid",
     });
   }
 

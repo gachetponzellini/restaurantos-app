@@ -108,6 +108,18 @@ export async function resolverClienteDelPedido(
     .insert({ business_id: businessId, user_id: userId, phone: phoneKey, name, email })
     .select("id")
     .single();
+  if (error?.code === "23505") {
+    // Doble click: la otra llamada creó la ficha de esta cuenta un instante
+    // antes (o se tomó el teléfono). Se vuelve a resolver sobre lo que hay.
+    const { data: yaCreada } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (yaCreada) return { ok: true, id: (yaCreada as { id: string }).id };
+    return { ok: false, error: TELEFONO_DE_OTRA_CUENTA };
+  }
   if (error || !nueva) {
     console.error("resolverClienteDelPedido · alta", error);
     return { ok: false, error: "No pudimos guardar tus datos." };
