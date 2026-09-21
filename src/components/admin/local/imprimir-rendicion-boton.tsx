@@ -18,13 +18,16 @@ export function ImprimirRendicionBoton({
   slug,
   rendicionId,
   mozoName,
+  yaImpresa = false,
 }: {
   slug: string;
   rendicionId: string;
   mozoName: string;
+  /** Viene del server: la rendición ya tiene su print_job (issue #297). */
+  yaImpresa?: boolean;
 }) {
   const [enviando, startTransition] = useTransition();
-  const [listo, setListo] = useState(false);
+  const [listo, setListo] = useState(yaImpresa);
 
   return (
     <Button

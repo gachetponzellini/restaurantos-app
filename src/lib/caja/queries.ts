@@ -1173,7 +1173,11 @@ export async function getRendicionesHistorial(
   businessId: string,
   limit = 20,
 ): Promise<
-  (MozoRendicion & { mozo_name: string; registered_by_name: string | null })[]
+  (MozoRendicion & {
+    mozo_name: string;
+    registered_by_name: string | null;
+    ya_impresa: boolean;
+  })[]
 > {
   const service = db();
   const { data } = await service
@@ -1204,10 +1208,27 @@ export async function getRendicionesHistorial(
     ]),
   );
 
+  // Issue #297: el botón arranca en «Reimprimir» si la rendición ya tiene su
+  // papel. Mismo criterio que `imprimirRendicion` para `reimpresion`: existe el
+  // print_job (kind='rendicion') de esa rendición, sin importar su estado.
+  const { data: jobs } = await service
+    .from("print_jobs")
+    .select("rendicion_id")
+    .eq("business_id", businessId)
+    .eq("kind", "rendicion")
+    .in(
+      "rendicion_id",
+      rows.map((r) => r.id),
+    );
+  const impresas = new Set(
+    (jobs ?? []).map((j) => (j as { rendicion_id: string | null }).rendicion_id),
+  );
+
   return rows.map((r) => ({
     ...r,
     mozo_name: nameById.get(r.mozo_id) ?? "Sin nombre",
     registered_by_name: nameById.get(r.registered_by) ?? null,
+    ya_impresa: impresas.has(r.id),
   }));
 }
 

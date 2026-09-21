@@ -332,6 +332,22 @@ describe("rendición · el ticket por mozo (spec 178)", () => {
     expect(imprimirRendicion).toHaveBeenCalledWith("r1", "demo");
     expect(await screen.findByText(/reimprimir/i)).toBeInTheDocument();
   });
+
+  it("una rendición que ya tiene papel arranca en «Reimprimir» al recargar (#297)", () => {
+    renderTab([], [{ ...rendida, ya_impresa: true }]);
+    const boton = screen.getByRole("button", {
+      name: /imprimir rendición de lucía moza/i,
+    });
+    expect(boton).toHaveTextContent(/reimprimir/i);
+  });
+
+  it("una rendición sin papel dice «Imprimir» (#297)", () => {
+    renderTab([], [{ ...rendida, ya_impresa: false }]);
+    const boton = screen.getByRole("button", {
+      name: /imprimir rendición de lucía moza/i,
+    });
+    expect(boton).toHaveTextContent(/^\s*imprimir$/i);
+  });
 });
 
 // ── #351 — no se rinde con una mesa sin cobrar ────────────────────────────

@@ -840,3 +840,6 @@ export function RendirModal({
     </Modal>
   );
 }
+  /** Ya tiene su papel (print_job de la rendición). Issue #297. */
+  ya_impresa?: boolean;
+                      yaImpresa={r.ya_impresa ?? false}
