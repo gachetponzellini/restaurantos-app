@@ -50,13 +50,18 @@ export async function confirmReservationFromIntent(
   if (!intent) {
     return actionError("Este link ya no es válido. Pedí uno nuevo al chatbot.");
   }
+  // Auditoría de reservas · baja — el token tiene que ser de ESTE negocio (la
+  // página lo validaba, la action no).
+  const negocioDelLink = await getBusinessBySlug(parsed.data.business_slug);
+  if (!negocioDelLink || negocioDelLink.id !== intent.businessId) {
+    return actionError("Este link ya no es válido. Pedí uno nuevo al chatbot.");
+  }
 
   // Spec 077 — el intent guarda un `slot` del modelo estricto. Si el negocio
   // pasó a flexible mientras tanto, crearlo por este camino metería una reserva
   // con otro modelo y sin pasar por el cupo del servicio.
-  const business = await getBusinessBySlug(parsed.data.business_slug);
-  if (business) {
-    const settings = await getReservationSettings(business.id, { useService: true });
+  {
+    const settings = await getReservationSettings(negocioDelLink.id, { useService: true });
     if (settings.mode === "flexible") {
       return actionError(
         "Este local cambió cómo toma las reservas. Hacela desde la página de reservas del local.",

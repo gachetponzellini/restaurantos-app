@@ -253,7 +253,7 @@ export async function persistOrder(
   if (productIds.length > 0) {
     const { data: products } = await supabase
       .from("products")
-      .select("id, name, price_cents, business_id, is_active, is_available")
+      .select("id, name, price_cents, business_id, is_active, is_available, show_online")
       .in("id", productIds);
     if (!products || products.length !== productIds.length) {
       return actionError("Algún producto ya no está disponible.");
@@ -263,6 +263,16 @@ export async function persistOrder(
         return actionError("Producto inválido.");
       if (!p.is_active || !p.is_available) {
         return actionError(`"${p.name}" ya no está disponible.`);
+      }
+      // Auditoría de pedidos · baja — un producto oculto de la carta online
+      // no se pide desde el checkout público (armando el payload a mano sí se
+      // podía). El staff lo carga igual.
+      if (
+        p.show_online === false &&
+        !options?.mozoId &&
+        (options?.source ?? "public") === "public"
+      ) {
+        return actionError(`"${p.name}" no está disponible online.`);
       }
       productById.set(p.id, {
         id: p.id,

@@ -1,6 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
+
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { limitCreateOrder } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -27,6 +30,12 @@ export async function previewPromoCode(input: {
   }>
 > {
   if (!input.code?.trim()) return actionError("Ingresá un código.");
+  // Auditoría de pedidos · baja — sin techo, se podían probar códigos por
+  // fuerza bruta. Mismo límite que crear un pedido.
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { success: allowed } = await limitCreateOrder(ip);
+  if (!allowed) return actionError("Demasiados intentos, esperá un minuto.");
   const service = createSupabaseServiceClient();
 
   // Resolve business

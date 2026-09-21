@@ -130,4 +130,32 @@ describe.skipIf(!dbAvailable)("carrera del cupón (integration)", () => {
     const items = (createPreference.mock.calls[0] as unknown as [{ items: { id: string; unit_price: number; quantity: number }[] }])[0].items;
     expect(items.reduce((n, i) => n + i.unit_price * i.quantity, 0)).toBe(11_500);
   });
+
+  // Auditoría de pedidos · baja — un producto oculto de la carta online no se
+  // pide desde el checkout público; el staff sí lo carga.
+  it("producto oculto: el público no, el staff sí", async () => {
+    const { data: cat } = await supabase.from("categories").select("id").eq("business_id", businessId).limit(1).single();
+    const { data: oculto } = await supabase
+      .from("products")
+      .insert({ business_id: businessId, category_id: cat!.id, name: "Secreto", slug: "secreto", price_cents: 500_000, show_online: false })
+      .select("id")
+      .single();
+    const pedido = (opts?: Record<string, unknown>) =>
+      persistOrder(
+        {
+          business_slug: TEST_TAG,
+          delivery_type: "pickup",
+          customer_name: "Cliente",
+          customer_phone: "3511234567",
+          items: [{ product_id: oculto!.id, quantity: 1, modifier_ids: [] }],
+        } as never,
+        null,
+        opts as never,
+      );
+    const publico = await pedido();
+    expect(publico.ok).toBe(false);
+    if (!publico.ok) expect(publico.error).toMatch(/online/);
+    const staff = await pedido({ source: "staff" });
+    expect(staff.ok).toBe(true);
+  });
 });

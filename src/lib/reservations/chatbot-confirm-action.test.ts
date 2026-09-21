@@ -57,6 +57,24 @@ beforeEach(() => {
     intent: { date: "2027-01-15", slot: "20:00", party_size: 2 },
   });
   claimReservationIntentMock.mockResolvedValue(true);
+  // El negocio del link es el del intent (auditoría de reservas · baja).
+  getBusinessBySlugMock.mockResolvedValue({ id: "b1" });
+  getReservationSettingsMock.mockResolvedValue({ mode: "estricto" });
+});
+
+describe("confirmReservationFromIntent · negocio del link (auditoría · baja)", () => {
+  it("un token de OTRO negocio no crea la reserva", async () => {
+    getBusinessBySlugMock.mockResolvedValue({ id: "otro-negocio" });
+    const res = await confirmReservationFromIntent({
+      business_slug: "otro-slug",
+      token: "abcd12345678",
+      customer_name: "Ana",
+      customer_phone: "+5491100000000",
+    });
+    expect(res.ok).toBe(false);
+    expect(claimReservationIntentMock).not.toHaveBeenCalled();
+    expect(createReservationFromCustomerMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("confirmReservationFromIntent · sin notas (bug #1)", () => {
