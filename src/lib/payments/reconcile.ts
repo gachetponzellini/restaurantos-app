@@ -130,6 +130,7 @@ export async function reconcileMpPayment(args: {
         status: order.status,
         scheduled_at: order.scheduled_at,
         total_cents: Number(order.total_cents),
+        payment_status: order.payment_status,
       },
       paymentId: args.paymentId,
       yaRegistrado,

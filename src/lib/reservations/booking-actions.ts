@@ -682,18 +682,24 @@ export async function updateReservationStatus(
     );
   }
 
-  const { error } = await service
+  // Guarda en la misma escritura (revisión adversarial): dos cancelaciones
+  // simultáneas (doble click, dos encargados) cambian la fila una sola vez,
+  // y el aviso al cliente sale sólo para la que la cambió.
+  const { data: cambiada, error } = await service
     .from("reservations")
     .update({ status: parsed.data.status })
     .eq("id", parsed.data.id)
-    .eq("business_id", business.id);
+    .eq("business_id", business.id)
+    .neq("status", parsed.data.status)
+    .select("id");
   if (error) {
     console.error("updateReservationStatus", error);
     return actionError("No pudimos actualizar el estado.");
   }
+  const laCambioEsta = ((cambiada ?? []) as { id: string }[]).length > 0;
   // Auditoría de reservas · media — el local canceló una reserva tomada: el
   // cliente se entera (antes no salía nada).
-  if (parsed.data.status === "cancelled" && estadoActual !== "cancelled") {
+  if (parsed.data.status === "cancelled" && laCambioEsta) {
     await notifyReservationCancelledByLocal({ reservationId: parsed.data.id });
   }
   revalidatePath(`/${parsed.data.business_slug}/admin/reservas`);

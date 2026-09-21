@@ -312,6 +312,7 @@ export async function POST(req: Request) {
         status: order.status,
         scheduled_at: (order as { scheduled_at?: string | null }).scheduled_at,
         total_cents: (order as { total_cents: number }).total_cents,
+        payment_status: order.payment_status,
       },
       paymentId,
       // Reentrega: este pago ya estaba registrado `paid` antes de este webhook.

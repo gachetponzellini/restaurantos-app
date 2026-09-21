@@ -38,4 +38,15 @@ describe("estadoDePagoAEscribir", () => {
       estadoDePagoAEscribir({ actual: "failed", actualPaymentId: "1" }, { siguiente: "paid", paymentId: "2" }),
     ).toBe("paid");
   });
+
+  // Revisión adversarial — reembolsada también es terminal: un «approved»
+  // tardío de otro pago no la resucita (la plata se trata aparte, con aviso).
+  it("una orden reembolsada no vuelve a pagada ni a fallida", () => {
+    expect(
+      estadoDePagoAEscribir({ actual: "refunded", actualPaymentId: "1" }, { siguiente: "paid", paymentId: "2" }),
+    ).toBeNull();
+    expect(
+      estadoDePagoAEscribir({ actual: "refunded", actualPaymentId: "1" }, { siguiente: "failed", paymentId: "2" }),
+    ).toBeNull();
+  });
 });

@@ -606,6 +606,7 @@ export async function persistOrder(
   // del insert, atómicamente, vía la RPC `increment_promo_use` — así si el
   // insert de la orden falla, no contamos el uso.
   let discountCents = 0;
+  let envioAntesDelCupon: number | null = null;
   let promoCodeId: string | null = null;
   let promoCodeSnapshot: string | null = null;
   if (data.promo_code) {
@@ -637,6 +638,9 @@ export async function persistOrder(
     // Lo aplicamos como "delivery_fee = 0" visualmente para que el cliente vea
     // "Envío: gratis" en el detalle, en lugar de "Envío $X · Descuento -$X".
     if (validation.promo.free_shipping) {
+      // Si después se pierde la carrera del cupón, el envío se vuelve a cobrar
+      // (revisión adversarial): sin guardarlo, el revert dejaba el envío gratis.
+      envioAntesDelCupon = deliveryFeeCents;
       deliveryFeeCents = 0;
       discountCents = 0;
     }
@@ -755,10 +759,12 @@ export async function persistOrder(
     });
     if (incremented === false) {
       console.warn("promo race lost", { orderId: order.id, promoCodeId });
+      if (envioAntesDelCupon !== null) deliveryFeeCents = envioAntesDelCupon;
       const revertPatch = {
         promo_code_id: null,
         promo_code_snapshot: null,
         discount_cents: 0,
+        delivery_fee_cents: deliveryFeeCents,
         total_cents: subtotalCents + deliveryFeeCents,
       };
       await supabase

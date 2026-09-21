@@ -94,12 +94,19 @@ export async function cancelOrderByCustomer(
     })
     .eq("id", order_id)
     .in("status", Array.from(CUSTOMER_CANCELLABLE_STATUSES))
-    .select("id");
+    // El estado de pago AL cancelar (no el de la lectura de arriba): si MP lo
+    // acreditó en el medio, igual se reembolsa (revisión adversarial).
+    .select("id, payment_status, mp_payment_id");
   if (error) {
     console.error("cancelOrderByCustomer", error);
     return actionError("No pudimos cancelar el pedido.");
   }
-  if (((cancelada ?? []) as { id: string }[]).length === 0) {
+  const filaCancelada = ((cancelada ?? []) as {
+    id: string;
+    payment_status: string | null;
+    mp_payment_id: string | null;
+  }[])[0];
+  if (!filaCancelada) {
     return actionError(
       "Este pedido ya está en preparación. Contactá al local para cancelarlo.",
     );
@@ -108,7 +115,7 @@ export async function cancelOrderByCustomer(
   // Reembolso por MP, sólo con el pedido ya cancelado. Se intenta una vez; si
   // falla, el encargado ve `paid` + `cancelled` y lo hace a mano.
   let refundOutcome: CancelResult["refund"] = "none";
-  if (order.payment_status === "paid" && order.mp_payment_id) {
+  if (filaCancelada.payment_status === "paid" && filaCancelada.mp_payment_id) {
     const { data: biz } = await service
       .from("businesses")
       .select("mp_access_token")
@@ -117,7 +124,7 @@ export async function cancelOrderByCustomer(
     if (biz?.mp_access_token) {
       const refund = await refundPayment(
         biz.mp_access_token,
-        order.mp_payment_id,
+        filaCancelada.mp_payment_id,
       );
       if (refund.ok) {
         refundOutcome = "refunded";

@@ -12,6 +12,10 @@ export function estadoDePagoAEscribir(
   orden: { actual: string | null; actualPaymentId: string | null },
   mp: { siguiente: string; paymentId: string },
 ): string | null {
+  // Revisión adversarial — reembolsada también es terminal: un «approved»
+  // tardío de otro pago no la resucita. Esa plata la trata
+  // `aplicarPagoMpAprobado` (aviso para devolverla).
+  if (orden.actual === "refunded") return null;
   if (orden.actual !== "paid") return mp.siguiente;
   if (mp.siguiente === "paid") return "paid";
   if (mp.siguiente === "refunded" && orden.actualPaymentId === mp.paymentId) {

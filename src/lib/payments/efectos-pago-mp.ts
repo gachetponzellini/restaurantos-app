@@ -35,6 +35,8 @@ export async function aplicarPagoMpAprobado(
       status: string;
       scheduled_at?: string | null;
       total_cents: number;
+      /** Si ya estaba reembolsada, la plata nueva hay que devolverla. */
+      payment_status?: string | null;
     };
     paymentId: string;
     /**
@@ -101,7 +103,9 @@ export async function aplicarPagoMpAprobado(
   // Sin llave (sin caja, o el insert falló) la repetición la corta quien llama.
   if (!llaveTomada && params.yaRegistrado) return { aplicado: false };
 
-  if (esDuplicado) {
+  // Revisión adversarial — plata que entra sobre una orden ya reembolsada: no
+  // se cocina de nuevo; se avisa para devolverla, igual que un duplicado.
+  if (esDuplicado || order.payment_status === "refunded") {
     console.warn("MP · segundo pago aprobado del mismo pedido", { orderId: order.id, paymentId });
     await notifyPagoDuplicado({
       businessId: order.business_id,

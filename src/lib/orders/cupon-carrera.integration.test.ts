@@ -20,12 +20,18 @@ const dbAvailable = Boolean(supabaseUrl && serviceKey);
 const TEST_TAG = `test-carrera-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 let PROMO_ID = "";
+let ENVIO_GRATIS = false;
 // La validación «gana»; el incremento real falla porque el cupón está inactivo
 // en la base — el mismo efecto que perder la carrera.
 vi.mock("@/lib/promos/validate", () => ({
   validatePromoCode: async () => ({
     ok: true,
-    promo: { promo_code_id: PROMO_ID, code: "CARRERA", discount_cents: 200_000, free_shipping: false },
+    promo: {
+      promo_code_id: PROMO_ID,
+      code: "CARRERA",
+      discount_cents: ENVIO_GRATIS ? 0 : 200_000,
+      free_shipping: ENVIO_GRATIS,
+    },
   }),
 }));
 const createPreference = vi.fn(async () => ({ preferenceId: "p", initPoint: "https://mp/x", sandboxInitPoint: "x" }));
@@ -51,7 +57,7 @@ describe.skipIf(!dbAvailable)("carrera del cupón (integration)", () => {
   beforeAll(async () => {
     const { data: biz } = await supabase
       .from("businesses")
-      .insert({ slug: TEST_TAG, name: "Carrera", is_active: true, mp_access_token: "APP_USR-x", mp_accepts_payments: true })
+      .insert({ slug: TEST_TAG, name: "Carrera", is_active: true, mp_access_token: "APP_USR-x", mp_accepts_payments: true, delivery_fee_cents: 150_000 })
       .select("id")
       .single();
     businessId = biz!.id;
@@ -95,5 +101,33 @@ describe.skipIf(!dbAvailable)("carrera del cupón (integration)", () => {
     const items = (createPreference.mock.calls[0] as unknown as [{ items: { id: string; unit_price: number; quantity: number }[] }])[0].items;
     expect(items.find((i) => i.id === "descuento")).toBeUndefined();
     expect(items.reduce((n, i) => n + i.unit_price * i.quantity, 0)).toBe(10_000);
+  });
+
+  // Revisión adversarial — con un cupón de envío gratis, perder la carrera
+  // dejaba el envío en $0.
+  it("con envío gratis, perder la carrera vuelve a cobrar el envío", async () => {
+    ENVIO_GRATIS = true;
+    createPreference.mockClear();
+    const r = await persistOrder({
+      business_slug: TEST_TAG,
+      delivery_type: "delivery",
+      delivery_address: "Calle 123",
+      customer_name: "Cliente",
+      customer_phone: "3511234567",
+      payment_method: "mp",
+      promo_code: "CARRERA",
+      items: [{ product_id: productId, quantity: 1, modifier_ids: [] }],
+    } as never);
+    ENVIO_GRATIS = false;
+    expect(r.ok).toBe(true);
+    const { data: o } = await supabase
+      .from("orders")
+      .select("total_cents, delivery_fee_cents")
+      .eq("business_id", businessId)
+      .eq("delivery_type", "delivery")
+      .single();
+    expect(o).toMatchObject({ delivery_fee_cents: 150_000, total_cents: 1_150_000 });
+    const items = (createPreference.mock.calls[0] as unknown as [{ items: { id: string; unit_price: number; quantity: number }[] }])[0].items;
+    expect(items.reduce((n, i) => n + i.unit_price * i.quantity, 0)).toBe(11_500);
   });
 });
