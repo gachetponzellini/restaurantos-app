@@ -1,7 +1,11 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { fetchPayment } from "@/lib/payments/mercadopago";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+
+import { aplicarPagoMpAprobado } from "./efectos-pago-mp";
 
 /**
  * Fetches a payment from MP using the business's access token and updates
@@ -28,7 +32,7 @@ export async function reconcileMpPayment(args: {
       .maybeSingle(),
     service
       .from("orders")
-      .select("id, business_id, status, payment_status, mp_payment_id")
+      .select("id, business_id, status, payment_status, mp_payment_id, scheduled_at, total_cents")
       .eq("id", args.orderId)
       .maybeSingle(),
   ]);
@@ -82,21 +86,35 @@ export async function reconcileMpPayment(args: {
     payment_status: nextPaymentStatus,
   };
 
-  // Skip if nothing changed.
+  // Skip the write if nothing changed.
   if (
-    order.payment_status === nextPaymentStatus &&
-    order.mp_payment_id === args.paymentId
+    order.payment_status !== nextPaymentStatus ||
+    order.mp_payment_id !== args.paymentId
   ) {
-    return { ok: true, paymentStatus: nextPaymentStatus };
+    const { error } = await service
+      .from("orders")
+      .update(updatePayload)
+      .eq("id", order.id);
+    if (error) {
+      console.error("reconcileMpPayment update failed", error);
+      return { ok: false, reason: "update_failed" };
+    }
   }
 
-  const { error } = await service
-    .from("orders")
-    .update(updatePayload)
-    .eq("id", order.id);
-  if (error) {
-    console.error("reconcileMpPayment update failed", error);
-    return { ok: false, reason: "update_failed" };
+  // Auditoría de pedidos · ALTA — si el cliente vuelve antes que el webhook,
+  // los efectos del pago (caja + cocina/agendado) corren acá; el webhook
+  // después choca con la llave y no los repite (`aplicarPagoMpAprobado`).
+  if (nextPaymentStatus === "paid") {
+    await aplicarPagoMpAprobado(service as unknown as SupabaseClient, {
+      order: {
+        id: order.id,
+        business_id: order.business_id,
+        status: order.status,
+        scheduled_at: order.scheduled_at,
+        total_cents: Number(order.total_cents),
+      },
+      paymentId: args.paymentId,
+    });
   }
 
   return { ok: true, paymentStatus: nextPaymentStatus };

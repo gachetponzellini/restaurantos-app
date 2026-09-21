@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { closeOrderIfFullyPaid } from "@/lib/billing/cobro-actions";
-import { getDefaultCaja } from "@/lib/caja/queries";
-import { notifyScheduledConfirmed } from "@/lib/notifications/delivery-notify";
-import { notifyPagoSobrePedidoCancelado } from "@/lib/notifications/events";
-import { routeOrderToCocina } from "@/lib/orders/route-to-cocina";
-import { isScheduledForLater } from "@/lib/orders/scheduled";
+import { aplicarPagoMpAprobado } from "@/lib/payments/efectos-pago-mp";
 import { fetchPayment, verifySignature } from "@/lib/payments/mercadopago";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -262,10 +258,14 @@ export async function POST(req: Request) {
     payment_status: nextPaymentStatus,
   };
 
-  // Skip the write if nothing changed (idempotent replay).
+  // Skip if nothing changed (idempotent replay). Un pago aprobado NO corta
+  // acá: si el cliente volvió de MP antes, `reconcileMpPayment` ya dejó la
+  // orden `paid` con este `mp_payment_id`, y cortar dejaba el pedido sin caja
+  // ni cocina (auditoría de pedidos · ALTA). Los efectos son idempotentes.
   if (
     existingByPayment &&
-    existingByPayment.payment_status === nextPaymentStatus
+    existingByPayment.payment_status === nextPaymentStatus &&
+    nextPaymentStatus !== "paid"
   ) {
     return NextResponse.json({ ok: true, skipped: true });
   }
@@ -279,94 +279,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "update failed" }, { status: 500 });
   }
 
-  // ── El pago entra a la caja ───────────────────────────────────
-  // Hasta acá el flow legacy sólo marcaba `orders.payment_status`: la plata de
-  // un delivery pagado online no existía en `payments`, así que no aparecía en
-  // la caja ni en la recaudación del cierre de turno (que se arma leyendo
-  // `payments`). Como no hay cajero que elija dónde asentarlo, va a la caja por
-  // defecto del negocio.
-  //
-  // Idempotente por el índice único parcial `(business_id, mp_payment_id)`
-  // (migración 0026): MP reintenta hasta recibir un 2xx y un reintento no puede
-  // acreditar la misma plata dos veces.
+  // ── Efectos del pago aprobado: caja + cocina/agendado/aviso ───
+  // Compartidos con el regreso de MP (`reconcileMpPayment`); una sola vez por
+  // `mp_payment_id` (ver `aplicarPagoMpAprobado`).
   if (nextPaymentStatus === "paid") {
-    const caja = await getDefaultCaja(business.id);
-    if (!caja) {
-      // Sin cajas cargadas no hay dónde asentarlo. El pago ya quedó acreditado
-      // en la orden; no se pierde, pero hay que avisar fuerte porque la caja va
-      // a cerrar sin esta venta.
-      console.error("MP webhook: negocio sin cajas, pago sin asentar", {
-        orderId: order.id,
-        businessId,
-      });
-    } else {
-      const { error: payErr } = await service.from("payments").insert({
-        order_id: order.id,
+    await aplicarPagoMpAprobado(service as unknown as SupabaseClient, {
+      order: {
+        id: order.id,
         business_id: business.id,
-        split_id: null,
-        caja_id: caja.id,
-        method: "mp_link",
-        amount_cents: (order as { total_cents: number }).total_cents,
-        tip_cents: 0,
-        mp_payment_id: paymentId,
-        payment_status: "paid",
-      });
-      // 23505 = unique_violation: ya lo habíamos asentado en una entrega previa
-      // del mismo webhook. Es el camino esperado en un reintento, no un error.
-      if (payErr && payErr.code !== "23505") {
-        console.error("MP webhook: no se pudo asentar el pago en la caja", {
-          orderId: order.id,
-          error: payErr,
-        });
-      } else {
-        // #352 — lo pagado de la orden sale de la regla común (0117).
-        const { error: recErr } = await service.rpc("recalcular_pagado_orden", {
-          p_order_id: order.id,
-        });
-        if (recErr) console.error("MP webhook: recalcular lo pagado", recErr);
-      }
-    }
-  }
-
-  // Auto-march (spec-05): pago aprobado → rutear a cocina.
-  // Diferido (spec 31): si el pedido es para más tarde, el pago aprobado sólo
-  // **confirma el agendado** (avisa al cliente) — NO marcha. Lo marcha el cron
-  // ~40 min antes (o "marchar ahora"). Sin scheduled_at futuro, marcha como hoy.
-  if (nextPaymentStatus === "paid") {
-    const scheduledAt = (order as { scheduled_at?: string | null })
-      .scheduled_at;
-    if (order.status === "cancelled") {
-      // spec 093 · H-21. El pago se acredita igual (la plata entró y tiene que
-      // estar en la caja), pero un pedido cancelado NO se cocina. La ventana es
-      // real con los medios offline de MP —efectivo, Rapipago— que se aprueban
-      // horas después de generado el link: para entonces el cliente ya pudo
-      // cancelar desde la app. `order.status` se seleccionaba arriba y no se
-      // usaba en ningún lado.
-      console.warn("MP webhook: pago aprobado sobre pedido cancelado", {
-        orderId: order.id,
-      });
-      // #148 · H-20: con el barrido que vence impagos esto deja de ser raro.
-      // Que se entere alguien que puede devolver la plata.
-      await notifyPagoSobrePedidoCancelado({
-        businessId: order.business_id,
-        orderId: order.id,
-        paymentId: String(payment.id),
-        amountCents:
-          payment.transactionAmount != null
-            ? Math.round(payment.transactionAmount * 100)
-            : null,
-      }).catch((e) =>
-        console.error("MP webhook: aviso de pago sobre cancelado", e),
-      );
-    } else if (isScheduledForLater(scheduledAt)) {
-      await notifyScheduledConfirmed({ orderId: order.id });
-    } else {
-      try {
-        await routeOrderToCocina(order.id, order.business_id);
-      } catch (e) {
-        console.error("MP webhook: auto-march failed", e);
-      }
-    }
+        status: order.status,
+        scheduled_at: (order as { scheduled_at?: string | null }).scheduled_at,
+        total_cents: (order as { total_cents: number }).total_cents,
+      },
+      paymentId,
+    });
   }
 
   return NextResponse.json({ ok: true, payment_status: nextPaymentStatus });
