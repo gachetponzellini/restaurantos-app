@@ -6,6 +6,7 @@ import { fetchPayment } from "@/lib/payments/mercadopago";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { aplicarPagoMpAprobado } from "./efectos-pago-mp";
+import { estadoDePagoAEscribir } from "./estado-de-pago";
 
 /**
  * Fetches a payment from MP using the business's access token and updates
@@ -89,14 +90,28 @@ export async function reconcileMpPayment(args: {
   const yaRegistrado =
     order.payment_status === "paid" && order.mp_payment_id === args.paymentId;
 
+  // Auditoría de pedidos · MEDIA — misma regla que el webhook: una orden pagada
+  // no baja por un rechazo tardío de otro intento, y un segundo aprobado no le
+  // pisa el `mp_payment_id` al primero.
+  const aEscribir = estadoDePagoAEscribir(
+    { actual: order.payment_status, actualPaymentId: order.mp_payment_id },
+    { siguiente: nextPaymentStatus, paymentId: args.paymentId },
+  );
+  const segundoAprobado =
+    order.payment_status === "paid" &&
+    nextPaymentStatus === "paid" &&
+    order.mp_payment_id !== null &&
+    order.mp_payment_id !== args.paymentId;
+
   // Skip the write if nothing changed.
   if (
-    order.payment_status !== nextPaymentStatus ||
-    order.mp_payment_id !== args.paymentId
+    aEscribir !== null &&
+    !segundoAprobado &&
+    (order.payment_status !== aEscribir || order.mp_payment_id !== args.paymentId)
   ) {
     const { error } = await service
       .from("orders")
-      .update(updatePayload)
+      .update({ ...updatePayload, payment_status: aEscribir })
       .eq("id", order.id);
     if (error) {
       console.error("reconcileMpPayment update failed", error);

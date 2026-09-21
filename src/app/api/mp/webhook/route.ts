@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { closeOrderIfFullyPaid } from "@/lib/billing/cobro-actions";
 import { aplicarPagoMpAprobado } from "@/lib/payments/efectos-pago-mp";
+import { estadoDePagoAEscribir } from "@/lib/payments/estado-de-pago";
 import { fetchPayment, verifySignature } from "@/lib/payments/mercadopago";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -225,7 +226,7 @@ export async function POST(req: Request) {
   const orderId = externalRef;
   const { data: order } = await service
     .from("orders")
-    .select("id, business_id, status, payment_status, scheduled_at, total_cents")
+    .select("id, business_id, status, payment_status, mp_payment_id, scheduled_at, total_cents")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) {
@@ -270,13 +271,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const { error: updErr } = await service
-    .from("orders")
-    .update(updatePayload)
-    .eq("id", order.id);
-  if (updErr) {
-    console.error("MP webhook: update failed", updErr);
-    return NextResponse.json({ error: "update failed" }, { status: 500 });
+  // Auditoría de pedidos · MEDIA — una orden pagada no baja por un rechazo
+  // tardío de otro intento (reintento #368), y un segundo aprobado no le pisa
+  // el `mp_payment_id` al primero (lo trata `aplicarPagoMpAprobado`).
+  const orderPaymentId = (order as { mp_payment_id?: string | null }).mp_payment_id ?? null;
+  const aEscribir = estadoDePagoAEscribir(
+    { actual: order.payment_status, actualPaymentId: orderPaymentId },
+    { siguiente: nextPaymentStatus, paymentId },
+  );
+  const segundoAprobado =
+    order.payment_status === "paid" &&
+    nextPaymentStatus === "paid" &&
+    orderPaymentId !== null &&
+    orderPaymentId !== paymentId;
+  if (aEscribir !== null && !segundoAprobado) {
+    const { error: updErr } = await service
+      .from("orders")
+      .update({ ...updatePayload, payment_status: aEscribir })
+      .eq("id", order.id);
+    if (updErr) {
+      console.error("MP webhook: update failed", updErr);
+      return NextResponse.json({ error: "update failed" }, { status: 500 });
+    }
+  } else if (aEscribir === null) {
+    console.warn("MP webhook: estado de pago tardío ignorado", {
+      orderId: order.id,
+      paymentId,
+      nextPaymentStatus,
+    });
   }
 
   // ── Efectos del pago aprobado: caja + cocina/agendado/aviso ───

@@ -149,6 +149,26 @@ describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · audi
     expect(notifyPagoSobrePedidoCancelado).toHaveBeenCalledTimes(1);
   });
 
+  // Auditoría de pedidos · MEDIA — un rechazo tardío de otro intento no pisa.
+  it("una orden pagada no baja a fallida por el rechazo tardío de otro intento", async () => {
+    const o = await pedido({ payment_status: "paid", mp_payment_id: "mp-ok" });
+    fetchPayment.mockResolvedValue({
+      id: "mp-viejo",
+      status: "rejected",
+      statusDetail: null,
+      externalReference: o.id,
+      transactionAmount: 10_000,
+      payerEmail: null,
+    });
+    await reconcileMpPayment({ orderId: o.id, businessId, paymentId: "mp-viejo" });
+    const { data } = await supabase
+      .from("orders")
+      .select("payment_status, mp_payment_id")
+      .eq("id", o.id)
+      .single();
+    expect(data).toEqual({ payment_status: "paid", mp_payment_id: "mp-ok" });
+  });
+
   // Revisión adversarial — dos pagos aprobados del mismo pedido (link viejo +
   // reintento). La plata entró las dos veces: se asienta, pero no se vuelve a
   // cocinar y se avisa para devolver el segundo.
