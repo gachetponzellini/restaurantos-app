@@ -26,11 +26,34 @@ export function computeIsOpen(
   const secondsNow =
     zoned.getHours() * 3600 + zoned.getMinutes() * 60 + zoned.getSeconds();
 
-  return hours
-    .filter((h) => h.day_of_week === dow)
-    .some(
-      (h) =>
-        secondsNow >= timeToSeconds(h.opens_at) &&
-        secondsNow < effectiveClose(h.closes_at),
-    );
+  const ayer = (dow + 6) % 7;
+  return hours.some((h) => {
+    const abre = timeToSeconds(h.opens_at);
+    const cierra = effectiveClose(h.closes_at);
+    // Turno que cruza la medianoche (20:00–01:00): hoy desde que abre hasta el
+    // final del día, y la cola del turno de AYER hasta que cierra.
+    if (cierra <= abre) {
+      if (h.day_of_week === dow && secondsNow >= abre) return true;
+      if (h.day_of_week === ayer && secondsNow < cierra) return true;
+      return false;
+    }
+    return h.day_of_week === dow && secondsNow >= abre && secondsNow < cierra;
+  });
+}
+
+/**
+ * ¿Se puede tomar un pedido **inmediato** del checkout público ahora?
+ *
+ * Auditoría de pedidos · ALTA: el server no miraba el horario — a las 3 de la
+ * mañana un pedido pagado por MP se marchaba solo e imprimía. Un local sin
+ * horarios cargados no se bloquea: rechazar todo sería peor que el hueco.
+ * (Los programados se validan aparte, contra su grilla.)
+ */
+export function aceptaPedidoInmediato(
+  hours: BusinessHour[],
+  timezone: string,
+  now: Date = new Date(),
+): boolean {
+  if (hours.length === 0) return true;
+  return computeIsOpen(hours, timezone, now);
 }

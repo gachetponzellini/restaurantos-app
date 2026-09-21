@@ -34,6 +34,7 @@ import {
 } from "@/lib/comandas/item-libre";
 
 import type { PersistableOrderInput } from "./schema";
+import { aceptaPedidoInmediato, type BusinessHour } from "@/lib/business-hours";
 
 export type CreateOrderResult = {
   order_id: string;
@@ -135,6 +136,32 @@ export async function persistOrder(
     return actionError("Este negocio no acepta Mercado Pago por ahora.");
   }
   const paymentMethod = wantsMp ? "mp" : "cash";
+
+  // ── Local cerrado (auditoría de pedidos · ALTA) ──────────────────────────
+  // El checkout público no miraba el horario: a las 3 am un pedido pagado por
+  // MP se marchaba solo e imprimía, y uno en efectivo quedaba pendiente para
+  // siempre. Sólo los inmediatos: los programados se validan contra su grilla
+  // abajo. El staff (mozoId / source distinto de público) carga cuando quiere.
+  if (
+    !data.scheduled_at &&
+    !options?.mozoId &&
+    (options?.source ?? "public") === "public"
+  ) {
+    const { data: hours } = await supabase
+      .from("business_hours")
+      .select("day_of_week, opens_at, closes_at")
+      .eq("business_id", business.id);
+    if (
+      !aceptaPedidoInmediato(
+        (hours ?? []) as BusinessHour[],
+        business.timezone,
+      )
+    ) {
+      return actionError(
+        "El local está cerrado en este momento. Podés programar el pedido para más tarde.",
+      );
+    }
+  }
 
   // ── Pedido diferido (spec 31 + 061 + 064) ───────────────────────────────
   // Con `scheduled_at` validamos que sea para HOY, con la anticipación mínima
