@@ -62,6 +62,31 @@ export async function openTable(
     return actionError("Transición no permitida.");
   }
 
+  // Orden `open` ya existente en la mesa. Reusarla es la idempotencia del
+  // doble tap (la creó un toque anterior y todavía está vacía). Pero una mesa
+  // **libre** con una cuenta que ya tiene consumo es una cuenta huérfana del
+  // grupo anterior: reusarla le cargaba sus platos al grupo nuevo (#148 ·
+  // H-47). Se chequea antes de tocar la mesa, para no dejarla a medio abrir.
+  const { data: existingOrder } = await service
+    .from("orders")
+    .select("id")
+    .eq("table_id", table.id)
+    .eq("business_id", businessId)
+    .eq("lifecycle_status", "open")
+    .maybeSingle();
+  if (existingOrder) {
+    const { count: itemsVivos } = await service
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", (existingOrder as { id: string }).id)
+      .is("cancelled_at", null);
+    if ((itemsVivos ?? 0) > 0) {
+      return actionError(
+        "Esta mesa tiene una cuenta abierta de antes, con consumo. Cobrala o anulala antes de sentar a alguien nuevo.",
+      );
+    }
+  }
+
   // Auto-asignación: si la mesa no tenía mozo, queda el actor.
   const willAssignMozo = table.mozo_id === null;
   const newMozoId = table.mozo_id ?? actorUserId;
@@ -80,14 +105,7 @@ export async function openTable(
     return actionError("No pudimos abrir la mesa.");
   }
 
-  // Crear order open (o reusar si ya existe — idempotencia).
-  const { data: existingOrder } = await service
-    .from("orders")
-    .select("id")
-    .eq("table_id", table.id)
-    .eq("business_id", businessId)
-    .eq("lifecycle_status", "open")
-    .maybeSingle();
+  // Crear order open (o reusar la vacía de arriba — idempotencia).
   let orderId: string | null = existingOrder
     ? (existingOrder as { id: string }).id
     : null;

@@ -203,6 +203,46 @@ export async function updateTableOperationalStatus(
     if (bloqueo) return actionError(bloqueo);
   }
 
+  // Al liberar: no dejar órdenes abiertas — eso produce el estado imposible
+  // «mesa Libre con orden abierta», y el próximo `openTable` le heredaba esa
+  // cuenta al grupo nuevo (#148 · H-47). Por eso se cancela **antes** de tocar
+  // la mesa y, si alguna quedó abierta, no se libera: la mesa sigue como
+  // estaba, con su cuenta, y el encargado lo ve.
+  //
+  // spec 090 — usa el mismo helper que anular: cancela ítems, comandas y
+  // recalcula totales (antes quedaban comandas vivas en el kanban).
+  if (status === "libre" && from !== "libre") {
+    const { data: abiertas } = await service
+      .from("orders")
+      .select("id")
+      .eq("table_id", tableId)
+      .eq("business_id", business.id)
+      .eq("lifecycle_status", "open");
+
+    const nowIso = new Date().toISOString();
+    for (const o of (abiertas ?? []) as { id: string }[]) {
+      await cancelarOrden(service, {
+        orderId: o.id,
+        businessId: business.id,
+        motivo: "Mesa liberada",
+        actorUserId: ctx.userId, // spec 34 — responsable de la anulación
+        nowIso,
+      });
+    }
+
+    const { count: siguenAbiertas } = await service
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("table_id", tableId)
+      .eq("business_id", business.id)
+      .eq("lifecycle_status", "open");
+    if ((siguenAbiertas ?? 0) > 0) {
+      return actionError(
+        "No pudimos anular la cuenta de la mesa, así que no la liberamos. Probá de nuevo.",
+      );
+    }
+  }
+
   const patch: Record<string, unknown> = { operational_status: status };
   patch.opened_at = nextOpenedAt(from, status, table.opened_at);
   if (status === "libre") {
@@ -227,30 +267,9 @@ export async function updateTableOperationalStatus(
     byUserId: ctx.userId,
   });
 
-  // Al liberar: no dejar órdenes abiertas ni reservas seated huérfanas — eso
-  // produce el estado imposible "mesa Libre con orden abierta".
+  // Al liberar: no dejar reservas seated huérfanas (las órdenes ya se
+  // cancelaron arriba, antes de tocar la mesa).
   if (status === "libre" && from !== "libre") {
-    // spec 090 — esto era un `anularMesa` degradado: cancelaba la cuenta y
-    // dejaba las comandas **vivas y accionables** en el kanban (el botón sólo
-    // se apaga con `cancelled_at`, que acá nunca se escribía), los ítems sin
-    // marcar y el total sin recalcular. Ahora usa el mismo helper que anular.
-    const { data: abiertas } = await service
-      .from("orders")
-      .select("id")
-      .eq("table_id", tableId)
-      .eq("business_id", business.id)
-      .eq("lifecycle_status", "open");
-
-    const nowIso = new Date().toISOString();
-    for (const o of (abiertas ?? []) as { id: string }[]) {
-      await cancelarOrden(service, {
-        orderId: o.id,
-        businessId: business.id,
-        motivo: "Mesa liberada",
-        actorUserId: ctx.userId, // spec 34 — responsable de la anulación
-        nowIso,
-      });
-    }
     await closeSeatedReservations(service, tableId, business.id, "completed");
   }
 
