@@ -642,7 +642,7 @@ export async function persistOrder(
     }
   }
 
-  const totalCents = Math.max(0, subtotalCents + deliveryFeeCents - discountCents);
+  let totalCents = Math.max(0, subtotalCents + deliveryFeeCents - discountCents);
 
   // `customers.user_id` liga el cliente a una cuenta de Supabase Auth, y hay
   // una unique parcial `(business_id, user_id)`: UNA cuenta = UN cliente.
@@ -766,6 +766,11 @@ export async function persistOrder(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .update(revertPatch as any)
         .eq("id", order.id);
+      // Auditoría de pedidos · media — la preferencia de MP que se arma abajo
+      // tiene que cobrar la orden REVERTIDA: sin esto salía con la línea
+      // «Descuento» y el cliente pagaba de menos que el total de la orden.
+      discountCents = 0;
+      totalCents = revertPatch.total_cents;
     }
   }
 
