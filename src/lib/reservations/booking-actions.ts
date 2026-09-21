@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { fromZonedTime } from "date-fns-tz";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -47,6 +48,8 @@ import {
 } from "@/lib/reservations/schema";
 import { openTable } from "@/lib/mozo/open-table";
 import type { Reservation, ReservationSource } from "@/lib/reservations/types";
+import { limitCreateReservation } from "@/lib/rate-limit";
+import { excedeTopeDeReservas, TOPE_RESERVAS_MSG } from "@/lib/reservations/tope-cliente";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -256,6 +259,27 @@ async function createReservationCommon(
   return actionError("No pudimos asignarte una mesa, probá otro horario.");
 }
 
+
+/**
+ * Guardas del alta de reserva del CLIENTE (auditoría de reservas · ALTA):
+ * rate-limit por IP y tope de reservas vivas por cuenta y día. El admin no
+ * pasa por acá.
+ */
+async function guardasDeAltaCliente(params: {
+  businessId: string;
+  timezone: string;
+  userId: string;
+  fechaLocal: string;
+}): Promise<string | null> {
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { success } = await limitCreateReservation(ip);
+  if (!success) return "Demasiados intentos, esperá un minuto.";
+  const service = createSupabaseServiceClient() as unknown as SupabaseClient;
+  if (await excedeTopeDeReservas(service, params)) return TOPE_RESERVAS_MSG;
+  return null;
+}
+
 export async function createReservationFromCustomer(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
@@ -288,6 +312,14 @@ export async function createReservationFromCustomer(
       "Este local toma reservas por servicio. Elegí el horario desde la página de reservas.",
     );
   }
+
+  const bloqueo = await guardasDeAltaCliente({
+    businessId: business.id,
+    timezone: business.timezone,
+    userId: user.id,
+    fechaLocal: parsed.data.date,
+  });
+  if (bloqueo) return actionError(bloqueo);
 
   const result = await createReservationCommon({
     source: parsed.data.source,
@@ -411,6 +443,14 @@ export async function createFlexibleReservation(
     if (!(await canManage(business.id, user.id))) return actionError("Permiso denegado.");
   } else if (!user) {
     return actionError("Necesitás iniciar sesión para reservar.");
+  } else {
+    const bloqueo = await guardasDeAltaCliente({
+      businessId: business.id,
+      timezone: business.timezone,
+      userId: user.id,
+      fechaLocal: data.date,
+    });
+    if (bloqueo) return actionError(bloqueo);
   }
 
   const settings = await getReservationSettings(business.id, { useService: true });

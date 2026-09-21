@@ -129,3 +129,16 @@ describe("sin Upstash en producción (#79)", () => {
     error.mockRestore();
   });
 });
+
+describe("limitCreateReservation (auditoría de reservas)", () => {
+  it("sin Upstash deja pasar", async () => {
+    const { limitCreateReservation } = await load({ upstash: false });
+    expect(await limitCreateReservation("1.2.3.4")).toEqual({ success: true });
+  });
+
+  it("con el techo alcanzado, rechaza", async () => {
+    successByPrefix["pedidos:reservas:create"] = false;
+    const { limitCreateReservation } = await load({ upstash: true });
+    expect(await limitCreateReservation("1.2.3.4")).toEqual({ success: false });
+  });
+});

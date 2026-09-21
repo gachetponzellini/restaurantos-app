@@ -52,6 +52,18 @@ export async function limitCreateOrder(ip: string): Promise<LimitResult> {
   return { success };
 }
 
+// Reservas del cliente (auditoría de reservas · ALTA): sin techo, un script
+// podía llenar el cupo de un servicio de pendientes. Mismo número que pedidos.
+export async function limitCreateReservation(ip: string): Promise<LimitResult> {
+  const l = getLimiter(
+    "pedidos:reservas:create",
+    Ratelimit.slidingWindow(5, "1 m"),
+  );
+  if (!l) return { success: true };
+  const { success } = await l.limit(ip);
+  return { success };
+}
+
 // Chatbot: límite de dos niveles para proteger antes de invocar al modelo.
 // - Por contacto (anti-spam): corta el doble/triple-texteo abusivo de un usuario.
 // - Por negocio (techo de costo / anti-DoS): acota el gasto agregado por hora
