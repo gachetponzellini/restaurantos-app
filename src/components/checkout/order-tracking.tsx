@@ -42,6 +42,7 @@ export function OrderTracking({
   whatsappHref,
   canCancel = false,
   wasPaid = false,
+  programadoPara = null,
 }: {
   slug: string;
   orderId: string;
@@ -58,6 +59,12 @@ export function OrderTracking({
   whatsappHref?: string | null;
   canCancel?: boolean;
   wasPaid?: boolean;
+  /**
+   * Auditoría de pedidos · baja — pedido programado: la hora ya formateada en
+   * la zona del local. Con esto se muestra «Programado para · 21:30» en vez de
+   * un «~40 min» que no tiene nada que ver.
+   */
+  programadoPara?: string | null;
 }) {
   const stepLabels = [
     // Spec 139 — el primer paso decía «El local confirmó tu pedido» también
@@ -162,9 +169,11 @@ export function OrderTracking({
               ? "Pedido cancelado"
               : step === 2
                 ? "¡Pedido completado!"
-                : deliveryType === "pickup"
-                  ? "Retiralo aproximadamente"
-                  : "Llega aproximadamente"}
+                : programadoPara
+                  ? "Programado para"
+                  : deliveryType === "pickup"
+                    ? "Retiralo aproximadamente"
+                    : "Llega aproximadamente"}
           </div>
           <div
             className="d-display"
@@ -179,9 +188,11 @@ export function OrderTracking({
               ? "Cancelado"
               : step === 2
                 ? "¡Listo!"
-                : estimatedMinutes
-                  ? `~${estimatedMinutes} min`
-                  : "En preparación"}
+                : programadoPara
+                  ? programadoPara
+                  : estimatedMinutes
+                    ? `~${estimatedMinutes} min`
+                    : "En preparación"}
           </div>
           {!cancelled && (
             <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>

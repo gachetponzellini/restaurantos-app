@@ -8,6 +8,7 @@ import {
 } from "@/components/checkout/payment-banner";
 import { PaymentStatusPoller } from "@/components/checkout/payment-status-poller";
 import { findPaymentByExternalRef } from "@/lib/payments/mercadopago";
+import { etiquetaProgramado } from "@/lib/orders/etiqueta-programado";
 import { evaluarReintentoPago } from "@/lib/orders/reintentar-pago";
 import { reconcileMpPayment } from "@/lib/payments/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -48,7 +49,7 @@ export default async function ConfirmacionPage({
     .select(
       `id, order_number, status, delivery_type, total_cents, subtotal_cents,
        delivery_fee_cents, payment_method, payment_status, customer_id,
-       lifecycle_status, created_at,
+       lifecycle_status, created_at, scheduled_at,
        customers!inner(user_id),
        order_items(product_name, quantity, subtotal_cents,
          is_combo_component, daily_menu_snapshot,
@@ -171,6 +172,10 @@ export default async function ConfirmacionPage({
         whatsappHref={whatsappHref}
         canCancel={canCancel}
         wasPaid={order.payment_status === "paid"}
+        programadoPara={etiquetaProgramado(
+          (order as { scheduled_at?: string | null }).scheduled_at ?? null,
+          business.timezone,
+        )}
       />
     </>
   );
