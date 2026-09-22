@@ -37,6 +37,8 @@ import type { PersistableOrderInput } from "./schema";
 import { aceptaPedidoInmediato, type BusinessHour } from "@/lib/business-hours";
 import { clienteParaCupon, resolverClienteDelPedido } from "@/lib/customers/resolver-cliente";
 import { itemsDePreferenciaPedido } from "@/lib/payments/items-preferencia";
+import { cancelarOrden } from "./cancel-order";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CreateOrderResult = {
   order_id: string;
@@ -751,6 +753,22 @@ export async function persistOrder(
     return actionError("No pudimos crear el pedido.");
   }
 
+  // #372 — el alta no es una transacción: la orden ya existe y lo que sigue
+  // (cupón, ítems, preferencia de MP) puede fallar a mitad. Si falla, el
+  // cliente ve un error y vuelve a intentar, así que esta orden queda
+  // abandonada. Se CANCELA —no se borra— por el camino común: el descuento de
+  // stock es un trigger AFTER INSERT de `order_items` que borrar no devuelve,
+  // y `cancelarOrden` devuelve stock y cupón. No avisa a nadie.
+  const abandonarAlta = async (mensaje: string) => {
+    await cancelarOrden(supabase as unknown as SupabaseClient, {
+      orderId: order.id,
+      businessId: business.id,
+      motivo: "No se pudo completar el alta del pedido",
+      actorUserId: null,
+    }).catch((e) => console.error("abandonarAlta · cancelarOrden", e));
+    return actionError(mensaje);
+  };
+
   // ── Atomic increment of promo uses_count (after order is committed) ────
   // Si el RPC devuelve false (race condition: alguien ganó la carrera y agotó
   // el cupón entre nuestro check y el insert), revertimos el promo en la orden
@@ -855,7 +873,7 @@ export async function persistOrder(
       .single();
     if (lineErr || !inserted) {
       console.error("order_item insert", lineErr);
-      return actionError("No pudimos guardar los productos del pedido.");
+      return abandonarAlta("No pudimos guardar los productos del pedido.");
     }
     if (line.kind === "product" && line.modifiers.length > 0) {
       const { error: modErr } = await supabase
@@ -870,7 +888,7 @@ export async function persistOrder(
         );
       if (modErr) {
         console.error("order_item_modifier insert", modErr);
-        return actionError("No pudimos guardar los adicionales.");
+        return abandonarAlta("No pudimos guardar los adicionales.");
       }
     }
 
@@ -964,7 +982,7 @@ export async function persistOrder(
         .from("orders")
         .update({ payment_status: "failed" })
         .eq("id", order.id);
-      return actionError("El total del pedido es 0, no se puede pagar online.");
+      return abandonarAlta("El total del pedido es 0, no se puede pagar online.");
     }
     try {
       const pref = await createPreference({
@@ -1017,12 +1035,13 @@ export async function persistOrder(
       mpInitPoint = pref.initPoint;
     } catch (err) {
       console.error("MP createPreference failed", err);
-      // Don't block the order — mark payment as failed so the admin sees it.
       await supabase
         .from("orders")
         .update({ payment_status: "failed" })
         .eq("id", order.id);
-      return actionError(
+      // #372 — el cliente va a reintentar con un pedido NUEVO: éste queda
+      // abandonado y no puede seguir reteniendo stock y cupón.
+      return abandonarAlta(
         "No pudimos conectar con Mercado Pago. Probá de nuevo o elegí efectivo.",
       );
     }
