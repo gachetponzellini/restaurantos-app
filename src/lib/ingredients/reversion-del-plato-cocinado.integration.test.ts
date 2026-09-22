@@ -11,6 +11,7 @@
 // margen mejor que el real. Aparece meses después como faltante de inventario y
 // se lee como robo del personal.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { hoyEnZona } from "@/lib/reservations/horizonte";
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -196,7 +197,7 @@ describe.skipIf(!dbAvailable)("reversión del plato ya cocinado (integration)", 
 
   it("el reporte de merma la ve como salida, y «Salió» no cambia", async () => {
     const itemId = await cargarLinea("preparing");
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyEnZona(new Date(), "America/Argentina/Buenos_Aires");
 
     const antes = (await getMermaReport(businessId, hoy, hoy)).find(
       (r) => r.ingredientId === ingredientId,
@@ -231,7 +232,7 @@ describe.skipIf(!dbAvailable)("reversión del plato ya cocinado (integration)", 
 
   it("la reversión de una línea cancelada descuenta de lo que se vendió", async () => {
     const itemId = await cargarLinea("pending");
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyEnZona(new Date(), "America/Argentina/Buenos_Aires");
 
     await anular(itemId, "el cliente cambió de idea");
 

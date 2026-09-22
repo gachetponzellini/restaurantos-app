@@ -11,6 +11,7 @@
 //      siempre para abajo, o sea el número da lindo. Con recetas completas son
 //      ~200 platos × ~5 insumos hoja = mil filas por servicio.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { hoyEnZona } from "@/lib/reservations/horizonte";
 import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -64,7 +65,7 @@ describe.skipIf(!dbAvailable)("reporte de merma (integration)", () => {
     await supabase.from("ingredient_consumptions").delete().eq("business_id", businessId);
   };
 
-  const hoy = () => new Date().toISOString().slice(0, 10);
+  const hoy = () => hoyEnZona(new Date(), "America/Argentina/Buenos_Aires");
 
   it("la mercadería de un comprobante anulado deja de contar como que entró", async () => {
     await limpiar();
