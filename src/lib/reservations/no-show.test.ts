@@ -46,4 +46,22 @@ describe("isOverdueConfirmed", () => {
       ).toBe(false);
     }
   });
+
+  // #148 · H-46 — sentada como walk-in sin actualizar el status.
+  it("vencida pero con la mesa ocupada → false (alguien la sentó)", () => {
+    expect(
+      isOverdueConfirmed(
+        { status: "confirmed", starts_at: "2026-06-15T20:00:00Z" },
+        GRACE,
+        NOW,
+        true,
+      ),
+    ).toBe(false);
+  });
+
+  it("mesa ocupada sin pasar el flag (default) se comporta como antes", () => {
+    expect(
+      isOverdueConfirmed({ status: "confirmed", starts_at: "2026-06-15T20:00:00Z" }, GRACE, NOW),
+    ).toBe(true);
+  });
 });

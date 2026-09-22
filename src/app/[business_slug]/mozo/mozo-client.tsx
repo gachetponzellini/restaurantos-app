@@ -22,6 +22,7 @@ import {
   MoveRight,
   Receipt,
   Settings,
+  UserCheck,
   UserPlus,
   Users,
   Wallet,
@@ -38,6 +39,7 @@ import { TrasladarMesaModal } from "@/components/mozo/trasladar-mesa-modal";
 import { WalkInModal } from "@/components/mozo/walk-in-modal";
 import { signOut } from "@/lib/auth/sign-out";
 import { anularMesa, transferTable, volverAPedir } from "@/lib/mozo/actions";
+import { sentarReserva } from "@/lib/reservations/booking-actions";
 import { tieneConsumo } from "@/lib/mozo/consumo";
 import type { MozoMember, MozoAttendance } from "@/lib/mozo/queries";
 import { type OperationalStatus } from "@/lib/mozo/state-machine";
@@ -394,6 +396,34 @@ export function MozoClient({
 
   // ── Handlers ──
   /**
+   * #148 · H-46 — sentar la reserva confirmada de esta mesa. Abre la mesa
+   * (igual que un walk-in) Y marca la reserva `seated` — es lo que faltaba
+   * en la app del mozo: sin esto, sentar de acá con «Sentar walk-in» dejaba
+   * la reserva en `confirmed` para siempre, y el auto-`no_show` la marcaba
+   * ausente con la mesa llena. Mismo camino que usa el encargado
+   * (`salon-desktop.tsx` → `sentarReserva`), sin overlay optimista: acá ya
+   * hay `loading` en el botón, alcanza.
+   */
+  const sentarLaReserva = useCallback(
+    async (reservationId: string) => {
+      setLoading(true);
+      const result = await sentarReserva({
+        business_slug: businessSlug,
+        reservation_id: reservationId,
+      });
+      setLoading(false);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Mesa abierta con reserva.");
+      setSelected(null);
+      void refetchHome();
+    },
+    [businessSlug, refetchHome],
+  );
+
+  /**
    * Anula la mesa. `reason` vacío sólo vale para una mesa sin consumo: el
    * server re-deriva eso contra la DB y rechaza el vacío si hay ítems (spec
    * 071), así que acá no hay riesgo de saltearse el motivo con datos viejos.
@@ -497,6 +527,13 @@ export function MozoClient({
     role === "mozo";
   const canShowWalkInButton =
     !!selectedSync && selectedStatus === "libre" && !isOtherMozosTable;
+  // #148 · H-46 — con reserva confirmada para esta mesa, «Sentar reserva»
+  // reemplaza a «Sentar walk-in» (mismo criterio que `salon-desktop.tsx`).
+  // `seated`/otros estados no ofrecen re-sentar.
+  const reservaParaSentar =
+    selectedSync && reservationByTable[selectedSync.id]?.status === "confirmed"
+      ? reservationByTable[selectedSync.id]!
+      : null;
   const canShowTransferButton =
     !!selectedSync &&
     (selectedStatus !== "libre" || isOtherMozosTable) &&
@@ -661,7 +698,19 @@ export function MozoClient({
         footer={
           selectedSync ? (
             <div className="space-y-2">
-              {canShowWalkInButton && (
+              {/* #148 · H-46 — con reserva confirmada, sentarla es la
+                  primaria; si no, «Sentar walk-in» como siempre. */}
+              {canShowWalkInButton && reservaParaSentar && (
+                <button
+                  disabled={loading}
+                  onClick={() => void sentarLaReserva(reservaParaSentar.id)}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 text-base font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
+                >
+                  <UserCheck className="h-5 w-5" />
+                  {loading ? "Sentando..." : "Sentar reserva"}
+                </button>
+              )}
+              {canShowWalkInButton && !reservaParaSentar && (
                 <button
                   disabled={loading}
                   onClick={() => setWalkInTableId(selectedSync.id)}
@@ -672,7 +721,7 @@ export function MozoClient({
                 </button>
               )}
               {/* Acción primaria: jerarquía según estado + items.
-                  - libre → Sentar walk-in (arriba).
+                  - libre → Sentar walk-in / Sentar reserva (arriba).
                   - pidio_cuenta u ocupada CON items → Cobrar (paso cuenta).
                   - ocupada SIN items → Cargar pedido.
 
