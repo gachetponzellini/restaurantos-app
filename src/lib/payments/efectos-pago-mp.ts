@@ -11,6 +11,7 @@ import {
 } from "@/lib/notifications/events";
 import { routeOrderToCocina } from "@/lib/orders/route-to-cocina";
 import { isScheduledForLater } from "@/lib/orders/scheduled";
+import { montoCobradoCoincide } from "@/lib/payments/items-preferencia";
 
 /**
  * Lo que pasa cuando MP aprueba el pago de un pedido online: la plata entra a
@@ -46,9 +47,24 @@ export async function aplicarPagoMpAprobado(
      * caja no hay llave en `payments`: con esto no se repiten marcha ni avisos.
      */
     yaRegistrado?: boolean;
+    /**
+     * Lo que MP dice que cobró (`transaction_amount`, en pesos). La caja
+     * asienta `total_cents`: si no coinciden, el arqueo va a descuadrar y
+     * alguien tiene que mirarlo (#372). No frena el asiento — la plata entró.
+     */
+    montoCobradoPesos?: number | null;
   },
 ): Promise<{ aplicado: boolean }> {
   const { order, paymentId } = params;
+
+  if (!montoCobradoCoincide(params.montoCobradoPesos, order.total_cents)) {
+    console.error("MP · lo cobrado no coincide con el total del pedido", {
+      orderId: order.id,
+      paymentId,
+      cobradoPesos: params.montoCobradoPesos,
+      totalCents: order.total_cents,
+    });
+  }
 
   // Revisión adversarial — ¿ya había OTRO pago aprobado de este pedido? (link
   // viejo + reintento, o un cupón offline que se aprobó tarde). La plata entró

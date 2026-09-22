@@ -181,6 +181,22 @@ describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · audi
     expect(notifyPagoDuplicado).toHaveBeenCalledTimes(1);
   });
 
+  it("si MP cobró otro monto, lo avisa fuerte pero asienta igual (#372)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const o = await pedido();
+    await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-m1", montoCobradoPesos: 9_999 });
+    expect(await filasEnCaja(o.id)).toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "MP · lo cobrado no coincide con el total del pedido",
+      expect.objectContaining({ orderId: o.id, cobradoPesos: 9_999 }),
+    );
+    error.mockClear();
+    const o2 = await pedido();
+    await aplicarPagoMpAprobado(supabase as never, { order: o2, paymentId: "mp-m2", montoCobradoPesos: 10_000 });
+    expect(error).not.toHaveBeenCalledWith("MP · lo cobrado no coincide con el total del pedido", expect.anything());
+    error.mockRestore();
+  });
+
   // Auditoría · baja (#372) — un reembolso hecho desde el panel de MP llegaba
   // por webhook, marcaba la ORDEN `refunded` y dejaba la fila de `payments` en
   // `paid`: la caja seguía esperando esa plata para siempre.

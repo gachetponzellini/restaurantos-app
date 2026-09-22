@@ -36,6 +36,7 @@ import {
 import type { PersistableOrderInput } from "./schema";
 import { aceptaPedidoInmediato, type BusinessHour } from "@/lib/business-hours";
 import { clienteParaCupon, resolverClienteDelPedido } from "@/lib/customers/resolver-cliente";
+import { itemsDePreferenciaPedido } from "@/lib/payments/items-preferencia";
 
 export type CreateOrderResult = {
   order_id: string;
@@ -983,42 +984,24 @@ export async function persistOrder(
         //
         // El envío va como una línea propia y no repartido entre los platos —
         // es lo que hace el checkout y es lo que el cliente espera ver en la
-        // pantalla de MP. El descuento va en negativo por la misma razón:
-        // prorratearlo escondería de dónde salió.
-        items: [
-          ...lines.map((l) => ({
-            // MP usa el id sólo para categorización — cualquier string lo sirve.
-            // Usamos product_id o daily_menu_id según el tipo de línea.
-            id: (l.product_id ?? l.daily_menu_id) as string,
-            title: l.product_name,
-            quantity: l.quantity,
-            unit_price: Math.round(
-              (l.unit_price_cents +
-                l.modifiers.reduce((a, m) => a + m.price_delta_cents, 0)) /
-                100,
-            ),
+        // pantalla de MP.
+        // #372 — lo arma `itemsDePreferenciaPedido`: sin redondear por línea
+        // y, con cupón, una sola línea por el total (nunca un precio negativo).
+        items: itemsDePreferenciaPedido({
+          lineas: lines.map((l) => ({
+            // MP usa el id sólo para categorización — cualquier string sirve.
+            id: String(l.product_id ?? l.daily_menu_id ?? "item"),
+            titulo: l.product_name,
+            cantidad: l.quantity,
+            unitarioCents:
+              l.unit_price_cents +
+              l.modifiers.reduce((a, m) => a + m.price_delta_cents, 0),
           })),
-          ...(deliveryFeeCents > 0
-            ? [
-                {
-                  id: "envio",
-                  title: "Envío",
-                  quantity: 1,
-                  unit_price: Math.round(deliveryFeeCents / 100),
-                },
-              ]
-            : []),
-          ...(discountCents > 0
-            ? [
-                {
-                  id: "descuento",
-                  title: "Descuento",
-                  quantity: 1,
-                  unit_price: -Math.round(discountCents / 100),
-                },
-              ]
-            : []),
-        ],
+          envioCents: deliveryFeeCents,
+          descuentoCents: discountCents,
+          totalCents,
+          numeroPedido: order.order_number,
+        }),
         payer: {
           name: data.customer_name,
           email: data.customer_email,

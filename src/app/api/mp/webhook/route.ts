@@ -320,6 +320,7 @@ export async function POST(req: Request) {
       paymentId,
       // Reentrega: este pago ya estaba registrado `paid` antes de este webhook.
       yaRegistrado: existingByPayment?.payment_status === "paid",
+      montoCobradoPesos: payment.transactionAmount,
     });
   }
 

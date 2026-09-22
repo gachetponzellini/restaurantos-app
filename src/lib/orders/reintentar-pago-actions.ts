@@ -104,7 +104,8 @@ export async function reintentarPagoMp(
           id: "pedido",
           title: `Pedido #${order.order_number}`,
           quantity: 1,
-          unit_price: Math.round(totalCents / 100),
+          // #372 — sin redondear: MP acepta centavos y la caja asienta el total exacto.
+          unit_price: totalCents / 100,
         },
       ],
       venceEl: evaluacion.venceEl,

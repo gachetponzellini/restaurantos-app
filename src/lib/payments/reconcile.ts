@@ -134,6 +134,7 @@ export async function reconcileMpPayment(args: {
       },
       paymentId: args.paymentId,
       yaRegistrado,
+      montoCobradoPesos: payment.transactionAmount,
     });
   }
 
