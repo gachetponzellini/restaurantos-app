@@ -9,7 +9,11 @@
 - [x] R5 agotado: producto sin ningún gusto prendido se ve agotado (`estaAgotado`) en carta/card, y el mozo no lo lista (hallazgo de code-review, no estaba en la spec original)
 - [x] R6 `modifier-groups-editor.tsx` (switch «Variantes con precio final», fija 1-1 obligatorio) + `product-actions.ts` persiste el flag
 - [x] `pnpm typecheck && pnpm test` — 406 archivos, 3812 tests, verde
-- [ ] Datos kcc (OK de Juan pendiente) + verificación en vivo con el rol real
+- [x] Datos kcc (OK de Juan, 2026-09-21): producto "Pizza" $16.000 + grupo
+      "Gusto" (Muzarella +0, Napolitana +2.000, Especial +6.000, Veggie +6.000);
+      los 4 productos viejos desactivados (`is_active=false`)
+- [x] Verificado en vivo, rol público real, https://restaurant.mithandir.com/kcc/carta:
+      4 filas con precio final correcto, ninguna tachada
 
 **Nota:** `pnpm db:types` pide `supabase link` (no configurado en este entorno);
 se generó con `supabase gen types --project-id` y, al fallar igual por falta de

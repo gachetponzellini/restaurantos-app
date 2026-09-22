@@ -2,9 +2,10 @@
 
 **Issue:** [#373](https://github.com/gachetponzellini/RestaurantOS-app/issues/373) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 🚧 en progreso (2026-09-21). Juan aprobó la opción 2 *"como excepción
-para las pizzas"*. Código implementado y gate en verde; falta migrar los datos
-de kcc (con su OK) y verificar en vivo.
+**Estado:** ✅ aplicado (2026-09-21). Juan aprobó la opción 2 *"como excepción
+para las pizzas"* y dio el OK para migrar los datos de kcc. Código en verde,
+datos migrados, verificado en vivo en `https://restaurant.mithandir.com/kcc/carta`
+con el rol público real (sin login, sin service_role).
 
 **Input:** audio de kcc (2026-09-21): *"las pizzas se pueden agrupar en un solo
 ítem y que apretando en pizzas estén las opciones de las diferentes pizzas con
@@ -61,7 +62,7 @@ que se pidió, no un cambio general a los adicionales.
 - Menú del día y chatbot: siguen viendo el grupo como un adicional común.
 - Reportes por gusto: la venta queda como «Pizza» + modificador.
 
-## Datos kcc (con OK de Juan)
-Crear «Pizza» ($16.000, categoría *Pizzas*) con el grupo «Gusto» (variante):
+## Datos kcc — aplicado (2026-09-21)
+«Pizza» ($16.000, categoría *Pizzas*) con el grupo «Gusto» (variante):
 Muzarella +0, Napolitana +2.000, Especial +6.000 y Veggie +6.000. Los 4 productos
-viejos quedan `is_active=false, is_available=false` (sin ventas, no rompe historial).
+viejos (sin ventas) quedan `is_active=false, is_available=false, show_online=false`.
