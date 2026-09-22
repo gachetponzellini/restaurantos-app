@@ -218,6 +218,46 @@ export async function notifyInvoiceFailed(params: {
 }
 
 /**
+ * #148 · H-42 — un pedido programado que el cron no pudo marchar a cocina.
+ *
+ * El cron reintentaba cada 5 min para siempre y en silencio. Ahora, después de
+ * `MARCH_ATTEMPTS_MAX` fallas seguidas, deja de intentar y avisa esto una sola
+ * vez (el sello es `orders.march_alerted_at`). El pedido sigue en «Próximos»:
+ * se marcha a mano cuando se resuelve lo que falla.
+ */
+export async function notifyMarchaFallida(params: {
+  businessId: string;
+  orderId: string;
+  attempts: number;
+}): Promise<void> {
+  const service = createSupabaseServiceClient();
+  const { data: order } = await service
+    .from("orders")
+    .select("order_number, customer_name, delivery_type")
+    .eq("id", params.orderId)
+    .maybeSingle();
+  if (!order) return;
+  const o = order as {
+    order_number: number | null;
+    customer_name: string | null;
+    delivery_type: string;
+  };
+
+  await createNotification({
+    businessId: params.businessId,
+    targetRole: "encargado",
+    type: "pedido.marcha_fallida",
+    payload: {
+      orderId: params.orderId,
+      orderNumber: o.order_number ?? undefined,
+      customerName: o.customer_name ?? undefined,
+      deliveryType: o.delivery_type,
+      attempts: params.attempts,
+    },
+  });
+}
+
+/**
  * #148 · H-20 — Mercado Pago acreditó un pago de un pedido ya cancelado.
  *
  * Pasa con los medios offline (se aprueban horas después) o con un link que

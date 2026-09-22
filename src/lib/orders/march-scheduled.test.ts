@@ -17,6 +17,9 @@ type DueRow = {
   delivery_type: string;
   scheduled_at: string | null;
   kitchen_at?: string | null;
+  /** #148 · H-42 */
+  march_attempts?: number;
+  march_alerted_at?: string | null;
   business: {
     scheduled_march_lead_pickup_min: number | null;
     scheduled_march_lead_delivery_min: number | null;
@@ -50,14 +53,23 @@ function makeFakeService() {
   return {
     from(tabla: string) {
       let esUpdate = false;
+      let patch: Record<string, unknown> | null = null;
+      const filtros: Record<string, unknown> = {};
       const esComandas = tabla === "comandas";
       const builder = {
-        update(patch: Record<string, unknown>) {
+        update(p: Record<string, unknown>) {
           esUpdate = true;
-          updates.push(patch);
+          patch = p;
+          updates.push(p);
           return builder;
         },
-        eq() {
+        eq(col: string, val: unknown) {
+          filtros[col] = val;
+          return builder;
+        },
+        /** #148 · H-42 — la guarda «todavía no se avisó». */
+        is(col: string, val: unknown) {
+          filtros[`is:${col}`] = val;
           return builder;
         },
         select(cols: string) {
@@ -80,6 +92,19 @@ function makeFakeService() {
           return builder;
         },
         then(resolve: (v: { data: unknown; error: unknown }) => void) {
+          // #148 · H-42 — los updates de `orders` quedan en la fila, así la
+          // corrida siguiente del cron ve los intentos acumulados.
+          if (esUpdate && tabla === "orders" && patch) {
+            const fila = rows.find((r) => r.id === filtros.id) as
+              | Record<string, unknown>
+              | undefined;
+            const guarda = filtros["is:march_alerted_at"];
+            const pasa =
+              !fila || guarda === undefined || (fila.march_alerted_at ?? null) === guarda;
+            if (fila && pasa) Object.assign(fila, patch);
+            resolve({ data: fila && pasa ? [{ id: fila.id }] : [], error: null });
+            return;
+          }
           resolve(
             esUpdate
               ? { data: [{ id: "avanzado" }], error: null }
@@ -100,10 +125,21 @@ vi.mock("@/lib/supabase/service", () => ({
 
 /** Spec 127: los tests que necesitan el camino "ya tenía comandas" lo prenden. */
 let yaTeniaComandas = false;
+/** #148 · H-42: «falla» devuelve error; «tira» lanza una excepción. */
+let ruteo: "ok" | "falla" | "tira" = "ok";
+const avisos: { orderId: string; attempts: number }[] = [];
+
+vi.mock("@/lib/notifications/events", () => ({
+  notifyMarchaFallida: async (p: { orderId: string; attempts: number }) => {
+    avisos.push({ orderId: p.orderId, attempts: p.attempts });
+  },
+}));
 
 vi.mock("./route-to-cocina", () => ({
   routeOrderToCocina: async (orderId: string) => {
     routed.push(orderId);
+    if (ruteo === "tira") throw new Error("boom");
+    if (ruteo === "falla") return { ok: false, error: "boom" };
     return {
       ok: true,
       data: {
@@ -116,7 +152,7 @@ vi.mock("./route-to-cocina", () => ({
   },
 }));
 
-const { marchDueScheduledOrders } = await import("./march-scheduled");
+const { marchDueScheduledOrders, MARCH_ATTEMPTS_MAX } = await import("./march-scheduled");
 
 // Reloj de referencia: 2026-06-26 20:00 AR.
 const NOW = new Date("2026-06-26T20:00:00-03:00");
@@ -140,6 +176,8 @@ describe("marchDueScheduledOrders", () => {
     routed.length = 0;
     updates.length = 0;
     yaTeniaComandas = false;
+    ruteo = "ok";
+    avisos.length = 0;
     comandasDelPedido = [{ status: "pendiente", cancelled_at: null }];
   });
 
@@ -243,6 +281,8 @@ describe("marchDueScheduledOrders", () => {
       // spec 127 — el encargue de hoy llega acá con la comanda ya impresa y lo
       // único que se le hace es avanzar el estado. Éste marchó completo.
       advancedOnly: 0,
+      // #148 · H-42 — ninguno llegó al techo de reintentos.
+      gaveUp: 0,
     });
   });
 
@@ -321,5 +361,71 @@ describe("marchDueScheduledOrders", () => {
     // A las 20:35 sí.
     const alas2035 = new Date("2026-06-26T20:35:00-03:00");
     expect((await marchDueScheduledOrders(alas2035)).considered).toBe(1);
+  });
+
+  // ── #148 · H-42 · el programado que falla siempre ──────────────────────
+  describe("un pedido que falla siempre al marchar (H-42)", () => {
+    const vencido = () =>
+      row({ id: "malo", scheduled_at: "2026-06-26T20:30:00-03:00" });
+
+    it("cuenta cada intento fallido en la orden", async () => {
+      ruteo = "falla";
+      rows = [vencido()];
+      const res = await marchDueScheduledOrders(NOW);
+      expect(res.failed).toBe(1);
+      expect(rows[0].march_attempts).toBe(1);
+    });
+
+    it("una excepción también cuenta como intento fallido", async () => {
+      ruteo = "tira";
+      rows = [vencido()];
+      await marchDueScheduledOrders(NOW);
+      expect(rows[0].march_attempts).toBe(1);
+    });
+
+    it("al llegar al techo deja de reintentar y avisa UNA sola vez", async () => {
+      ruteo = "falla";
+      rows = [vencido()];
+      for (let i = 0; i < MARCH_ATTEMPTS_MAX; i++) {
+        await marchDueScheduledOrders(NOW);
+      }
+      expect(routed).toHaveLength(MARCH_ATTEMPTS_MAX);
+      expect(avisos).toEqual([]);
+
+      // Tick siguiente: ya no lo toca y avisa.
+      const res = await marchDueScheduledOrders(NOW);
+      expect(routed).toHaveLength(MARCH_ATTEMPTS_MAX);
+      expect(res).toMatchObject({ considered: 1, marched: 0, failed: 0, gaveUp: 1 });
+      expect(avisos).toEqual([{ orderId: "malo", attempts: MARCH_ATTEMPTS_MAX }]);
+      expect(rows[0].march_alerted_at).toBeTruthy();
+
+      // Y el siguiente no vuelve a avisar.
+      await marchDueScheduledOrders(NOW);
+      expect(avisos).toHaveLength(1);
+      expect(routed).toHaveLength(MARCH_ATTEMPTS_MAX);
+    });
+
+    it("si ya se avisó (otro tick ganó la guarda), no avisa de nuevo", async () => {
+      rows = [
+        { ...vencido(), march_attempts: MARCH_ATTEMPTS_MAX, march_alerted_at: "2026-06-26T19:00:00-03:00" },
+      ];
+      const res = await marchDueScheduledOrders(NOW);
+      expect(res.gaveUp).toBe(1);
+      expect(avisos).toEqual([]);
+      expect(routed).toEqual([]);
+    });
+
+    it("un pedido sano no toca los contadores", async () => {
+      rows = [vencido()];
+      await marchDueScheduledOrders(NOW);
+      expect(rows[0].march_attempts).toBeUndefined();
+      expect(updates).toEqual([]);
+    });
+
+    it("trae los contadores en el select", async () => {
+      await marchDueScheduledOrders(NOW);
+      expect(captured.select).toContain("march_attempts");
+      expect(captured.select).toContain("march_alerted_at");
+    });
   });
 });

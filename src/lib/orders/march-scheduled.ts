@@ -1,5 +1,6 @@
 import "server-only";
 
+import { notifyMarchaFallida } from "@/lib/notifications/events";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 import { routeOrderToCocina } from "./route-to-cocina";
@@ -26,7 +27,27 @@ export type MarchDueResult = {
    * telefónico— pero conviene verlos separados en el log del cron.
    */
   advancedOnly: number;
+  /**
+   * #148 · H-42 — en ventana pero sin tocar: ya fallaron `MARCH_ATTEMPTS_MAX`
+   * veces seguidas. Se avisó al encargado (una vez) y esperan que alguien los
+   * marche a mano.
+   */
+  gaveUp: number;
 };
+
+/**
+ * #148 · H-42 — cuántas veces seguidas se reintenta un pedido que falla al
+ * marchar antes de avisar y dejarlo.
+ *
+ * El cron corre cada 5 min y no tenía techo: un pedido que fallaba siempre se
+ * reintentaba 288 veces por día, en silencio, y el primer aviso era el cliente
+ * parado en el mostrador. Tres intentos son ~15 min: alcanza para un corte de
+ * red corto y no deja pasar una falla de verdad.
+ *
+ * El techo es sólo del cron. Marcharlo a mano («Marchar ahora» →
+ * `confirmarPedido`) llama a `routeOrderToCocina` directo y no lo mira.
+ */
+export const MARCH_ATTEMPTS_MAX = 3;
 
 type DueRow = {
   id: string;
@@ -35,6 +56,9 @@ type DueRow = {
   scheduled_at: string | null;
   /** Spec 127: la hora de cocina, cuando el encargado la escribió. */
   kitchen_at: string | null;
+  /** #148 · H-42 (0132). */
+  march_attempts: number | null;
+  march_alerted_at: string | null;
   business: {
     scheduled_march_lead_pickup_min: number | null;
     scheduled_march_lead_delivery_min: number | null;
@@ -102,7 +126,7 @@ export async function marchDueScheduledOrders(
   const { data: due } = await service
     .from("orders")
     .select(
-      "id, business_id, delivery_type, scheduled_at, kitchen_at, business:businesses(scheduled_march_lead_pickup_min, scheduled_march_lead_delivery_min, scheduled_march_lead_kitchen_min)",
+      "id, business_id, delivery_type, scheduled_at, kitchen_at, march_attempts, march_alerted_at, business:businesses(scheduled_march_lead_pickup_min, scheduled_march_lead_delivery_min, scheduled_march_lead_kitchen_min)",
     )
     .in("delivery_type", ["pickup", "delivery"])
     .or("and(status.eq.pending,payment_status.eq.paid),status.eq.confirmed")
@@ -126,11 +150,51 @@ export async function marchDueScheduledOrders(
   let withoutComanda = 0;
   let controlFailed = 0;
   let advancedOnly = 0;
+  let gaveUp = 0;
+
+  // #148 · H-42 — un intento fallido queda en la orden. Se escribe el número
+  // leído + 1: cada orden se procesa una vez por tick.
+  const contarFallo = async (o: DueRow) => {
+    const { error } = await service
+      .from("orders")
+      .update({ march_attempts: (o.march_attempts ?? 0) + 1 })
+      .eq("id", o.id);
+    if (error) console.error("marchDueScheduledOrders · march_attempts", o.id, error);
+  };
+
   for (const o of inWindow) {
+    // #148 · H-42 — llegó al techo: no se reintenta. Se avisa una sola vez; la
+    // guarda `march_alerted_at is null` hace que, si dos ticks se pisan, avise
+    // sólo el que gana el UPDATE.
+    if ((o.march_attempts ?? 0) >= MARCH_ATTEMPTS_MAX) {
+      gaveUp += 1;
+      if (!o.march_alerted_at) {
+        const { data: sellado, error } = await service
+          .from("orders")
+          .update({ march_alerted_at: now.toISOString() })
+          .eq("id", o.id)
+          .is("march_alerted_at", null)
+          .select("id");
+        if (error) {
+          console.error("marchDueScheduledOrders · march_alerted_at", o.id, error);
+        } else if ((sellado ?? []).length > 0) {
+          await notifyMarchaFallida({
+            businessId: o.business_id,
+            orderId: o.id,
+            attempts: o.march_attempts ?? MARCH_ATTEMPTS_MAX,
+          }).catch((e) =>
+            console.error("marchDueScheduledOrders · aviso de marcha fallida", o.id, e),
+          );
+        }
+      }
+      continue;
+    }
+
     try {
       const res = await routeOrderToCocina(o.id, o.business_id);
       if (!res.ok) {
         failed += 1;
+        await contarFallo(o);
         continue;
       }
       marched += 1;
@@ -172,6 +236,7 @@ export async function marchDueScheduledOrders(
     } catch (e) {
       console.error("marchDueScheduledOrders · routeOrderToCocina", o.id, e);
       failed += 1;
+      await contarFallo(o);
     }
   }
 
@@ -182,5 +247,6 @@ export async function marchDueScheduledOrders(
     withoutComanda,
     controlFailed,
     advancedOnly,
+    gaveUp,
   };
 }

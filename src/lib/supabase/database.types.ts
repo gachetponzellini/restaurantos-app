@@ -2927,6 +2927,7 @@ export type Database = {
           kitchen_notes: string | null;
           lifecycle_status: string;
           march_alerted_at: string | null;
+          march_attempts: number;
           mozo_id: string | null;
           mp_payment_id: string | null;
           mp_preference_id: string | null;
@@ -2977,6 +2978,7 @@ export type Database = {
           kitchen_notes?: string | null;
           lifecycle_status?: string;
           march_alerted_at?: string | null;
+          march_attempts?: number;
           mozo_id?: string | null;
           mp_payment_id?: string | null;
           mp_preference_id?: string | null;
@@ -3027,6 +3029,7 @@ export type Database = {
           kitchen_notes?: string | null;
           lifecycle_status?: string;
           march_alerted_at?: string | null;
+          march_attempts?: number;
           mozo_id?: string | null;
           mp_payment_id?: string | null;
           mp_preference_id?: string | null;

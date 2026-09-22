@@ -318,6 +318,22 @@ export function viewForNotification(n: Notification): NotiView {
     };
   }
 
+  // ── #148 · H-42 ───────────────────────────────────────────────────
+  if (n.type === "pedido.marcha_fallida") {
+    const orderNumber = p.orderNumber as number | undefined;
+    const cliente = p.customerName as string | undefined;
+    const intentos = (p.attempts as number | undefined) ?? 0;
+    const origen = orderNumber ? `Pedido #${orderNumber}` : "Pedido programado";
+    return {
+      tone: "danger",
+      icon: AlertTriangle,
+      title: `No salió a cocina · ${origen}`,
+      body: `${cliente ? `${cliente}: ` : ""}falló ${intentos} ${
+        intentos === 1 ? "vez" : "veces"
+      } seguidas y se dejó de reintentar. Marchalo a mano desde Pedidos.`,
+    };
+  }
+
   // ── spec 093 ──────────────────────────────────────────────────────
   if (n.type === "pedido.sin_comanda") {
     const orderNumber = p.orderNumber as number | undefined;

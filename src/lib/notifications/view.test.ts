@@ -84,3 +84,22 @@ describe("viewForNotification (spec 27)", () => {
     expect(v.tone).toBe("danger");
   });
 });
+
+describe("pedido.marcha_fallida (#148 · H-42)", () => {
+  it("dice qué pedido no salió, cuántas veces falló y qué hacer", () => {
+    const v = viewForNotification(
+      noti("pedido.marcha_fallida", { orderNumber: 312, customerName: "Lucía", attempts: 3 }),
+    );
+    expect(v.tone).toBe("danger");
+    expect(v.title).toBe("No salió a cocina · Pedido #312");
+    expect(v.body).toContain("Lucía");
+    expect(v.body).toContain("3 veces");
+    expect(v.body).toContain("Marchalo a mano");
+  });
+
+  it("sin número ni cliente, igual se entiende", () => {
+    const v = viewForNotification(noti("pedido.marcha_fallida", { attempts: 1 }));
+    expect(v.title).toBe("No salió a cocina · Pedido programado");
+    expect(v.body).toMatch(/^falló 1 vez/);
+  });
+});
