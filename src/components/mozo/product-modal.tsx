@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Minus, Plus, UtensilsCrossed, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -83,6 +83,9 @@ export function ProductModal({
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
   const [asEntrada, setAsEntrada] = useState(false);
+  // ¿Se especificó algo? Decide qué hace Esc (issue #374): si se tocó algo,
+  // confirma el ítem; si el modal se abrió y no se tocó nada, cancela.
+  const [tocado, setTocado] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -90,6 +93,7 @@ export function ProductModal({
       setQuantity(1);
       setNotes("");
       setAsEntrada(false);
+      setTocado(false);
     }
   }, [product?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,8 +102,17 @@ export function ProductModal({
   // embebido el foco vuelve al buscador al cerrar/agregar (lo hace el padre).
   const panelRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
-  useEscapeToClose(onClose, open);
+  // Esc confirma, como en Maxirest (issue #374): la encargada carga sin mouse
+  // —Enter en «a punto», `+`, Esc— y Esc tiene que dejar el ítem cargado como
+  // lo especificó, no descartarlo. Si no se tocó nada, Esc cancela: cubre el
+  // producto abierto por error. Para cancelar después de tocar queda la X o el
+  // click afuera. El handler se lee de un ref porque depende del estado del
+  // render y `handleAdd` se define después del early return.
+  const escapeRef = useRef<() => void>(onClose);
+  const onEscape = useCallback(() => escapeRef.current(), []);
+  useEscapeToClose(onEscape, open);
 
   // ── Los modificadores son una zona más del panel (spec 113) ──────────────
   //
@@ -170,6 +183,8 @@ export function ProductModal({
    * diferencia es que acá se llega decidiendo, no navegando.
    */
   const seguirDesdeGrupo = (gi: number) => {
+    // «Seguir» es decidir que lo elegido queda: cuenta como especificar.
+    setTocado(true);
     const grupos = product.modifier_groups;
     for (let i = gi + 1; i < grupos.length; i++) {
       if (grupos[i].modifiers.length > 0) {
@@ -181,6 +196,7 @@ export function ProductModal({
   };
 
   const toggle = (g: { id: string; max_selection: number }, modId: string) => {
+    setTocado(true);
     setSelection((prev) => {
       const current = prev[g.id] ?? [];
       const isOn = current.includes(modId);
@@ -219,6 +235,17 @@ export function ProductModal({
     onClose();
   };
 
+  escapeRef.current = tocado ? handleAdd : onClose;
+
+  const cambiarCantidad = (delta: number) => {
+    setTocado(true);
+    setQuantity((q) => Math.min(99, Math.max(1, q + delta)));
+  };
+  const alternarEntrada = () => {
+    setTocado(true);
+    setAsEntrada((v) => !v);
+  };
+
   return (
     <div
       onClick={onClose}
@@ -238,17 +265,34 @@ export function ProductModal({
           // no aplica: ahí una barra es una barra.
           if (!typing && permiteComoEntrada && e.key === "/") {
             e.preventDefault();
-            setAsEntrada((v) => !v);
+            alternarEntrada();
             return;
           }
           if (!typing && (e.key === "+" || e.key === "=")) {
             e.preventDefault();
-            setQuantity((q) => Math.min(99, q + 1));
+            cambiarCantidad(1);
             return;
           }
           if (!typing && e.key === "-") {
             e.preventDefault();
-            setQuantity((q) => Math.max(1, q - 1));
+            cambiarCantidad(-1);
+            return;
+          }
+          // Tipear una letra desde cualquier lado del modal escribe en
+          // Observaciones (issue #374), igual que «A-Z busca» en el panel: sin
+          // esto, para poner «sin sal» había que tabular o ir al mouse.
+          if (
+            !typing &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey &&
+            e.key.length === 1 &&
+            /\p{L}/u.test(e.key)
+          ) {
+            e.preventDefault();
+            setTocado(true);
+            setNotes((n) => (n + e.key).slice(0, 200));
+            notesRef.current?.focus();
             return;
           }
           // Focus-trap: Tab/Shift+Tab ciclan dentro del modal. FR-009.
@@ -451,7 +495,7 @@ export function ProductModal({
             {permiteComoEntrada && (
               <button
                 type="button"
-                onClick={() => setAsEntrada((v) => !v)}
+                onClick={alternarEntrada}
                 aria-pressed={asEntrada}
                 className={`mb-2 flex w-full items-center gap-2.5 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition active:scale-[0.99] ${
                   asEntrada
@@ -482,8 +526,19 @@ export function ProductModal({
               </button>
             )}
             <textarea
+              ref={notesRef}
               value={notes}
-              onChange={(e) => setNotes(e.target.value.slice(0, 200))}
+              onChange={(e) => {
+                setTocado(true);
+                setNotes(e.target.value.slice(0, 200));
+              }}
+              onKeyDown={(e) => {
+                // Enter agrega, igual que en el resto del modal; el salto de
+                // línea queda en Shift+Enter (issue #374).
+                if (e.key !== "Enter" || e.shiftKey) return;
+                e.preventDefault();
+                handleAdd();
+              }}
               placeholder="ej: sin jamón, sin rúcula, bien cocido"
               className="block w-full rounded-2xl border border-border px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
               rows={2}
@@ -500,7 +555,7 @@ export function ProductModal({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                onClick={() => cambiarCantidad(-1)}
                 disabled={quantity <= 1}
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
                 aria-label="Restar"
@@ -512,7 +567,7 @@ export function ProductModal({
               </span>
               <button
                 type="button"
-                onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                onClick={() => cambiarCantidad(1)}
                 disabled={quantity >= 99}
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
                 aria-label="Sumar"

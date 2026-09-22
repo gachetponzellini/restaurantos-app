@@ -38,6 +38,23 @@ const COMUNES: Atajo[] = [
   { teclas: ["?"], que: "Esta ayuda" },
 ];
 
+/**
+ * El modal de alta de producto: lo comparten «Cargar pedido» y «Venta rápida».
+ * Esc confirma como en Maxirest (issue #374).
+ */
+const MODAL_PRODUCTO: Atajo[] = [
+  {
+    teclas: ["Enter"],
+    que: "En el producto: elegir la opción y pasar a la siguiente",
+  },
+  { teclas: ["+", "−"], que: "En el producto: cantidad" },
+  { teclas: ["A-Z"], que: "En el producto: escribir la observación" },
+  {
+    teclas: ["Esc"],
+    que: "En el producto: agregarlo como quedó (sin tocar nada, cancela)",
+  },
+];
+
 const POR_MODO: Record<ModoPanel, Atajo[]> = {
   lista: [
     { teclas: ["Enter"], que: "Abrir la mesa, o las acciones de la reserva" },
@@ -57,6 +74,7 @@ const POR_MODO: Record<ModoPanel, Atajo[]> = {
     { teclas: ["1-9"], que: "Fijar la cantidad de la línea" },
     { teclas: ["Supr"], que: "Quitar la línea" },
     { teclas: ["⌘", "Enter"], que: "Enviar la comanda" },
+    ...MODAL_PRODUCTO,
   ],
   walkin: [
     { teclas: ["1-9"], que: "Cuánta gente se sienta" },
@@ -67,6 +85,7 @@ const POR_MODO: Record<ModoPanel, Atajo[]> = {
     { teclas: ["A-Z"], que: "Escribir busca, desde donde estés" },
     { teclas: ["←", "→"], que: "Cantidad de la línea" },
     { teclas: ["Supr"], que: "Quitar la línea" },
+    ...MODAL_PRODUCTO,
   ],
   reserva: [
     { teclas: ["1-9"], que: "Cuánta gente viene" },
