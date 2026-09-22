@@ -27,6 +27,11 @@ import type {
   ReservationService,
   ReservationSettings,
 } from "@/lib/reservations/types";
+import {
+  hoyEnZona,
+  minutosAhoraEnZona,
+  sumarDias,
+} from "@/lib/reservations/horizonte";
 import type { ReservaInicial } from "@/lib/reservations/reserva-inicial";
 
 type Slot = { slot: string; starts_at: string; ends_at: string };
@@ -35,6 +40,12 @@ type Salon = { id: string; name: string };
 
 type Props = {
   slug: string;
+  /**
+   * Zona del negocio (#372). «Hoy», el último día reservable y los horarios
+   * ya pasados se calculan con ésta, no con la del navegador: un turista o un
+   * celular mal configurado veía otro día que el que valida el server.
+   */
+  timezone: string;
   businessName: string;
   tagline: string | null;
   coverImageUrl: string | null;
@@ -60,18 +71,6 @@ type Props = {
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
 
-function todayInTz(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
-function maxDate(days: number): string {
-  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 10);
-}
 
 function buildDateStrip(min: string, maxDays: number) {
   const out: { iso: string; weekday: string; day: number; month: string }[] =
@@ -142,6 +141,7 @@ function getFirstName(user: Props["user"]): string {
 
 export function ReservarFlow({
   slug,
+  timezone,
   businessName,
   tagline,
   coverImageUrl,
@@ -165,7 +165,9 @@ export function ReservarFlow({
       ? (salones.find((s) => s.id === inicial?.salon)?.id ?? null)
       : (salones[0]?.id ?? null),
   );
-  const [date, setDate] = useState<string>(inicial?.date ?? todayInTz());
+  const [date, setDate] = useState<string>(
+    inicial?.date ?? hoyEnZona(new Date(), timezone),
+  );
   const [partySize, setPartySize] = useState<number>(inicial?.party ?? 2);
   // El horario que había elegido antes del login: se selecciona cuando llegan
   // los horarios, si sigue disponible (una sola vez).
@@ -198,10 +200,11 @@ export function ReservarFlow({
    */
   const isLargeGroup = partySize > settings.max_party_size;
 
-  const minDate = todayInTz();
+  const minDate = hoyEnZona(new Date(), timezone);
+  // #372 — el mismo último día que valida el server (`dentroDelHorizonte`).
   const maxDateStr = useMemo(
-    () => maxDate(settings.advance_days_max),
-    [settings.advance_days_max],
+    () => sumarDias(minDate, settings.advance_days_max),
+    [minDate, settings.advance_days_max],
   );
   const dateStrip = useMemo(
     () => buildDateStrip(minDate, settings.advance_days_max),
@@ -246,14 +249,15 @@ export function ReservarFlow({
 
   // Oculta los horarios ya pasados cuando la fecha elegida es hoy.
   const shownArrivalOptions = useMemo(() => {
-    if (date !== todayInTz()) return arrivalOptions;
     const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+    if (date !== hoyEnZona(now, timezone)) return arrivalOptions;
+    // #372 — la hora del local, no la del celular.
+    const nowMin = minutosAhoraEnZona(now, timezone);
     return arrivalOptions.filter((t) => {
       const [h, m] = t.split(":").map(Number);
       return h * 60 + m >= nowMin;
     });
-  }, [arrivalOptions, date]);
+  }, [arrivalOptions, date, timezone]);
 
   useEffect(() => {
     if (isFlexible) return;

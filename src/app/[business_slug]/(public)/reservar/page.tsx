@@ -69,6 +69,7 @@ export default async function ReservarPage({
   return (
     <ReservarFlow
       slug={business_slug}
+      timezone={business.timezone}
       businessName={business.name}
       tagline={tagline}
       coverImageUrl={business.cover_image_url ?? business.logo_url ?? null}

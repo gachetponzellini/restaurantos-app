@@ -106,6 +106,21 @@ describe.skipIf(!dbAvailable)("reservas · alta flexible respeta lead time del c
       business_id: businessId, name: "Todo el día", day_of_week: dow,
       opens_at: "00:00", closes_at: "23:59", soft_capacity: 50,
     });
+    // #372 — una mesa, para que el alta web tenga dónde sentar.
+    const { data: fp } = await db
+      .from("floor_plans")
+      .insert({ business_id: businessId, name: "Salón" })
+      .select("id")
+      .single();
+    await db.from("tables").insert({
+      floor_plan_id: fp!.id, label: "1", seats: 4, shape: "circle",
+      x: 0, y: 0, width: 80, height: 80,
+    });
+    // #372 — un servicio de todos los días para probar el horizonte.
+    await db.from("reservation_services").insert({
+      business_id: businessId, name: "Siempre", day_of_week: null,
+      opens_at: "00:00", closes_at: "23:59", soft_capacity: 50,
+    });
   });
 
   afterAll(async () => {
@@ -129,6 +144,29 @@ describe.skipIf(!dbAvailable)("reservas · alta flexible respeta lead time del c
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/antelación/i);
+  });
+
+  // #372 — el calendario ofrece el día `hoy + 30` entero; el alta rechazaba
+  // cualquier turno de ese día más tarde que la hora actual (N × 24 h exactas).
+  it("el último día del horizonte se puede reservar a última hora; el siguiente no", async () => {
+    const sumar = (ymd: string, d: number) => {
+      const [y, m, dd] = ymd.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, dd + d)).toISOString().slice(0, 10);
+    };
+    const base = {
+      business_slug: TAG,
+      service: "Siempre",
+      arrival_time: "23:50",
+      party_size: 2,
+      customer_name: "Cliente",
+      source: "web" as const,
+    };
+    const ultimo = await createFlexibleReservation({ ...base, date: sumar(fecha, 30), customer_phone: "1122334466" });
+    expect(ultimo.ok, ultimo.ok ? "" : ultimo.error).toBe(true);
+
+    const pasado = await createFlexibleReservation({ ...base, date: sumar(fecha, 31), customer_phone: "1122334477" });
+    expect(pasado.ok).toBe(false);
+    if (!pasado.ok) expect(pasado.error).toMatch(/30 días/);
   });
 
   it("el walk-in de admin sí puede reservar dentro del lead time", async () => {

@@ -54,6 +54,7 @@ import { limitCreateReservation } from "@/lib/rate-limit";
 import { excedeTopeDeReservas, TOPE_RESERVAS_MSG } from "@/lib/reservations/tope-cliente";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { dentroDelHorizonte } from "@/lib/reservations/horizonte";
 
 type GenericClient = SupabaseClient;
 
@@ -126,8 +127,8 @@ async function createReservationCommon(
     if (start < leadCutoff) {
       return actionError("Necesitamos un poco más de antelación para ese horario.");
     }
-    const horizonMs = settings.advance_days_max * 24 * 60 * 60 * 1000;
-    if (start.getTime() - Date.now() > horizonMs) {
+    // #372 — días calendario del negocio, la misma regla que el calendario.
+    if (!dentroDelHorizonte(ctx.date, new Date(), settings.advance_days_max, ctx.timezone)) {
       return actionError(`Solo aceptamos reservas con hasta ${settings.advance_days_max} días de antelación.`);
     }
     const dow = String(new Date(Date.UTC(
@@ -529,8 +530,8 @@ export async function createFlexibleReservation(
     if (starts.getTime() < leadCutoff.getTime()) {
       return actionError("Necesitamos un poco más de antelación para ese horario.");
     }
-    const horizonMs = settings.advance_days_max * 24 * 60 * 60 * 1000;
-    if (starts.getTime() - Date.now() > horizonMs) {
+    // #372 — días calendario del negocio, la misma regla que el calendario.
+    if (!dentroDelHorizonte(data.date, new Date(), settings.advance_days_max, business.timezone)) {
       return actionError(`Solo aceptamos reservas con hasta ${settings.advance_days_max} días de antelación.`);
     }
   }

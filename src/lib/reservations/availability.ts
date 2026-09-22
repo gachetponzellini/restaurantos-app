@@ -7,6 +7,7 @@ import type {
   WeeklySchedule,
 } from "@/lib/reservations/types";
 import { LIVE_RESERVATION_STATUSES } from "@/lib/reservations/types";
+import { dentroDelHorizonte } from "@/lib/reservations/horizonte";
 
 /**
  * A slot that the customer can pick. Represented as the local "HH:MM" string
@@ -131,8 +132,8 @@ export function computeAvailableSlots(params: ComputeSlotsParams): AvailableSlot
   const todayInTz = fromZonedTime(`${formatYmdLocal(now, timezone)}T00:00:00`, timezone);
   const target = fromZonedTime(`${date}T00:00:00`, timezone);
   if (target < todayInTz) return [];
-  const horizonMs = settings.advance_days_max * 24 * 60 * 60 * 1000;
-  if (target.getTime() - todayInTz.getTime() > horizonMs) return [];
+  // #372 — la misma regla que valida el alta (días calendario del negocio).
+  if (!dentroDelHorizonte(date, now, settings.advance_days_max, timezone)) return [];
 
   const dayKey = parseDayKey(date);
   if (!dayKey) return [];
