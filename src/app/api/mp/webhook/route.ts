@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { closeOrderIfFullyPaid } from "@/lib/billing/cobro-actions";
-import { aplicarPagoMpAprobado } from "@/lib/payments/efectos-pago-mp";
+import {
+  aplicarPagoMpAprobado,
+  aplicarReembolsoMp,
+} from "@/lib/payments/efectos-pago-mp";
 import { estadoDePagoAEscribir } from "@/lib/payments/estado-de-pago";
 import { fetchPayment, verifySignature } from "@/lib/payments/mercadopago";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -317,6 +320,17 @@ export async function POST(req: Request) {
       paymentId,
       // Reentrega: este pago ya estaba registrado `paid` antes de este webhook.
       yaRegistrado: existingByPayment?.payment_status === "paid",
+    });
+  }
+
+  // ── Reembolso o contracargo hecho en MP (#372) ────────────────
+  // Va DESPUÉS de escribir la orden: el recálculo de lo pagado no pisa un
+  // `refunded`, pero sí bajaría a `pending` una orden todavía `paid`.
+  if (nextPaymentStatus === "refunded") {
+    await aplicarReembolsoMp(service as unknown as SupabaseClient, {
+      orderId: order.id,
+      businessId: business.id,
+      paymentId,
     });
   }
 

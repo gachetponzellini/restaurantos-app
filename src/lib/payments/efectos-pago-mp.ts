@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { marcarPagosReembolsados } from "@/lib/billing/refund-payments";
 import { getDefaultCaja } from "@/lib/caja/queries";
 import { notifyScheduledConfirmed } from "@/lib/notifications/delivery-notify";
 import {
@@ -136,4 +137,38 @@ export async function aplicarPagoMpAprobado(
     }
   }
   return { aplicado: true };
+}
+
+/**
+ * Lo que pasa cuando MP avisa que un pago se devolvió o se contracargó (#372).
+ *
+ * El webhook escribía `orders.payment_status = 'refunded'` y nada más, pero la
+ * caja no lee la orden: lee `payments` (issue #272). Un reembolso hecho desde
+ * el panel de MP dejaba la plata en el arqueo para siempre.
+ *
+ * Marca sólo el cobro de ESE pago: si el pedido tuvo un duplicado y se devolvió
+ * uno, el otro sigue siendo plata en la caja y la orden sigue pagada.
+ * Idempotente: sólo toca filas `paid`, así que una reentrega del webhook no
+ * repite ni el rastro ni el recálculo.
+ */
+export async function aplicarReembolsoMp(
+  service: SupabaseClient,
+  params: { orderId: string; businessId: string; paymentId: string },
+): Promise<{ reembolsados: number }> {
+  const { reembolsados } = await marcarPagosReembolsados(service, {
+    orderId: params.orderId,
+    businessId: params.businessId,
+    motivo: "Devuelto o contracargado en Mercado Pago",
+    actorUserId: null,
+    mpPaymentId: params.paymentId,
+  });
+  if (reembolsados > 0) {
+    // Lo pagado de la orden sale de la regla común (0117). No pisa un
+    // `refunded` que el webhook ya escribió.
+    const { error } = await service.rpc("recalcular_pagado_orden", {
+      p_order_id: params.orderId,
+    });
+    if (error) console.error("MP · recalcular lo pagado tras el reembolso", error);
+  }
+  return { reembolsados };
 }

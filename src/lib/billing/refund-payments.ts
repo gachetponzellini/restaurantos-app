@@ -38,9 +38,15 @@ export async function marcarPagosReembolsados(
     motivo: string;
     /** Quién lo provocó. `null` cuando fue el propio cliente desde la web. */
     actorUserId: string | null;
+    /**
+     * Sólo el cobro de ESTE pago de Mercado Pago (#372). Un reembolso hecho
+     * desde MP devuelve un pago puntual: si el pedido tuvo dos (duplicado),
+     * el otro sigue en la caja. Sin esto se marcan todos los cobros vivos.
+     */
+    mpPaymentId?: string;
   },
 ): Promise<{ reembolsados: number; centavos: number }> {
-  const { data: refundados } = await service
+  let query = service
     .from("payments")
     .update({
       payment_status: "refunded",
@@ -48,8 +54,9 @@ export async function marcarPagosReembolsados(
       refunded_reason: params.motivo,
     })
     .eq("order_id", params.orderId)
-    .eq("payment_status", "paid")
-    .select("id, caja_id, amount_cents");
+    .eq("payment_status", "paid");
+  if (params.mpPaymentId) query = query.eq("mp_payment_id", params.mpPaymentId);
+  const { data: refundados } = await query.select("id, caja_id, amount_cents");
 
   const filas = (refundados ?? []) as Array<{
     id: string;

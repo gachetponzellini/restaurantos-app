@@ -49,7 +49,7 @@ vi.mock("@/lib/payments/mercadopago", async () => {
   return { ...actual, fetchPayment: (...a: unknown[]) => fetchPayment(...(a as [])) };
 });
 
-const { aplicarPagoMpAprobado } = await import("./efectos-pago-mp");
+const { aplicarPagoMpAprobado, aplicarReembolsoMp } = await import("./efectos-pago-mp");
 const { reconcileMpPayment } = await import("./reconcile");
 
 describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · auditoría)", () => {
@@ -179,6 +179,93 @@ describe.skipIf(!dbAvailable)("efectos del pago MP aprobado (integration · audi
     expect(await filasEnCaja(o.id)).toBe(2);
     expect(routeOrderToCocina).toHaveBeenCalledTimes(1);
     expect(notifyPagoDuplicado).toHaveBeenCalledTimes(1);
+  });
+
+  // Auditoría · baja (#372) — un reembolso hecho desde el panel de MP llegaba
+  // por webhook, marcaba la ORDEN `refunded` y dejaba la fila de `payments` en
+  // `paid`: la caja seguía esperando esa plata para siempre.
+  describe("reembolso desde Mercado Pago", () => {
+    const pagoEnCaja = async (orderId: string, mp: string) => {
+      const { data } = await supabase
+        .from("payments")
+        .select("payment_status, refunded_at")
+        .eq("order_id", orderId)
+        .eq("mp_payment_id", mp)
+        .single();
+      return data!;
+    };
+
+    it("saca el pago de la caja, deja rastro y la orden reembolsada no se toca", async () => {
+      const o = await pedido();
+      await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-r1" });
+      // El webhook ya escribió la orden antes de llamar a esto.
+      await supabase.from("orders").update({ payment_status: "refunded" }).eq("id", o.id);
+
+      await aplicarReembolsoMp(supabase as never, {
+        orderId: o.id,
+        businessId,
+        paymentId: "mp-r1",
+      });
+
+      const p = await pagoEnCaja(o.id, "mp-r1");
+      expect(p.payment_status).toBe("refunded");
+      expect(p.refunded_at).not.toBeNull();
+      const { data: orden } = await supabase
+        .from("orders")
+        .select("payment_status, total_paid_cents")
+        .eq("id", o.id)
+        .single();
+      expect(orden).toEqual({ payment_status: "refunded", total_paid_cents: 0 });
+      const { count } = await supabase
+        .from("caja_audit_log")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", businessId)
+        .eq("to_value", "refunded");
+      expect(count).toBeGreaterThanOrEqual(1);
+    });
+
+    it("devolver el pago duplicado deja el otro en la caja y la orden pagada", async () => {
+      const o = await pedido();
+      await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-r2a" });
+      await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-r2b" });
+
+      await aplicarReembolsoMp(supabase as never, {
+        orderId: o.id,
+        businessId,
+        paymentId: "mp-r2b",
+      });
+
+      expect((await pagoEnCaja(o.id, "mp-r2a")).payment_status).toBe("paid");
+      expect((await pagoEnCaja(o.id, "mp-r2b")).payment_status).toBe("refunded");
+      const { data: orden } = await supabase
+        .from("orders")
+        .select("payment_status, total_paid_cents")
+        .eq("id", o.id)
+        .single();
+      expect(orden).toEqual({ payment_status: "paid", total_paid_cents: 1_000_000 });
+    });
+
+    it("una reentrega del webhook no duplica el rastro", async () => {
+      const o = await pedido();
+      await aplicarPagoMpAprobado(supabase as never, { order: o, paymentId: "mp-r3" });
+      await supabase.from("orders").update({ payment_status: "refunded" }).eq("id", o.id);
+      const { data: fila } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("mp_payment_id", "mp-r3")
+        .single();
+
+      const primera = await aplicarReembolsoMp(supabase as never, { orderId: o.id, businessId, paymentId: "mp-r3" });
+      const segunda = await aplicarReembolsoMp(supabase as never, { orderId: o.id, businessId, paymentId: "mp-r3" });
+
+      expect(primera.reembolsados).toBe(1);
+      expect(segunda.reembolsados).toBe(0);
+      const { count } = await supabase
+        .from("caja_audit_log")
+        .select("id", { count: "exact", head: true })
+        .eq("entity_id", fila!.id);
+      expect(count).toBe(1);
+    });
   });
 });
 
