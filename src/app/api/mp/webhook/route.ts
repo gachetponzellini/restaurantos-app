@@ -206,6 +206,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // #372 · revisión — lo pagado de la ORDEN también baja. Sin esto
+    // `orders.total_paid_cents` seguía contando la plata devuelta, y es la
+    // columna que lee «cuenta con saldo»: la mesa quedaba como saldada y nadie
+    // la volvía a cobrar. La regla común (0117) recalcula splits y orden desde
+    // `payments`, así que el ajuste del split de arriba queda confirmado.
+    if (nextStatus === "refunded") {
+      const { error: recErr } = await service.rpc("recalcular_pagado_orden", {
+        p_order_id: prow.order_id,
+      });
+      if (recErr) console.error("MP webhook · recalcular tras reembolso de mesa", recErr);
+    }
+
     if (nextStatus === "paid") {
       // Resolver slug del business para closeOrderIfFullyPaid.
       const { data: bizRow } = await service
