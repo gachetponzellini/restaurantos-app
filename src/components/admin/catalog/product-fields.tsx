@@ -90,6 +90,7 @@ export function productDefaults(
       min_selection: g.min_selection,
       max_selection: g.max_selection,
       is_required: g.is_required,
+      is_variant: g.is_variant,
       sort_order: g.sort_order,
       modifiers: g.modifiers.map((m) => ({
         id: m.id,

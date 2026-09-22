@@ -29,6 +29,8 @@ export type CatalogModifierGroup = {
   min_selection: number;
   max_selection: number;
   is_required: boolean;
+  /** Spec 207: opciones = variantes con precio final. */
+  is_variant: boolean;
   sort_order: number;
   modifiers: CatalogModifier[];
 };
@@ -93,7 +95,7 @@ export async function getCatalogForMozo(
       supabase
         .from("products")
         .select(
-          "id, category_id, name, description, price_cents, image_url, sort_order, show_online, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, group_id, name, price_delta_cents, is_available, sort_order))",
+          "id, category_id, name, description, price_cents, image_url, sort_order, show_online, modifier_groups(id, name, min_selection, max_selection, is_required, is_variant, sort_order, modifiers(id, group_id, name, price_delta_cents, is_available, sort_order))",
         )
         .eq("business_id", businessId)
         .eq("is_active", true)
@@ -101,38 +103,48 @@ export async function getCatalogForMozo(
         .order("sort_order"),
     ]);
 
-  const productsList: CatalogProduct[] = (products ?? []).map((p) => ({
-    id: p.id,
-    category_id: p.category_id,
-    name: p.name,
-    description: p.description,
-    price_cents: Number(p.price_cents),
-    image_url: p.image_url,
-    sort_order: p.sort_order,
-    show_online: p.show_online ?? true,
-    modifier_groups: (p.modifier_groups ?? [])
-      .slice()
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((g) => ({
-        id: g.id,
-        name: g.name,
-        min_selection: g.min_selection,
-        max_selection: g.max_selection,
-        is_required: g.is_required,
-        sort_order: g.sort_order,
-        modifiers: (g.modifiers ?? [])
-          .filter((m) => m.is_available)
-          .slice()
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((m) => ({
-            id: m.id,
-            group_id: g.id,
-            name: m.name,
-            price_delta_cents: Number(m.price_delta_cents),
-            sort_order: m.sort_order,
-          })),
-      })),
-  }));
+  const productsList: CatalogProduct[] = (products ?? [])
+    .map((p) => ({
+      id: p.id,
+      category_id: p.category_id,
+      name: p.name,
+      description: p.description,
+      price_cents: Number(p.price_cents),
+      image_url: p.image_url,
+      sort_order: p.sort_order,
+      show_online: p.show_online ?? true,
+      modifier_groups: (p.modifier_groups ?? [])
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((g) => ({
+          id: g.id,
+          name: g.name,
+          min_selection: g.min_selection,
+          max_selection: g.max_selection,
+          is_required: g.is_required,
+          is_variant: g.is_variant ?? false,
+          sort_order: g.sort_order,
+          modifiers: (g.modifiers ?? [])
+            .filter((m) => m.is_available)
+            .slice()
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((m) => ({
+              id: m.id,
+              group_id: g.id,
+              name: m.name,
+              price_delta_cents: Number(m.price_delta_cents),
+              sort_order: m.sort_order,
+            })),
+        })),
+    }))
+    // Spec 207: un producto con variantes sin ningún gusto prendido es un
+    // producto apagado — el mozo no lo ve, igual que con `is_available`.
+    .filter(
+      (p) =>
+        !p.modifier_groups.some(
+          (g) => g.is_variant && g.modifiers.length === 0,
+        ),
+    );
 
   const cats: CatalogCategory[] = (categories ?? []).map((c) => ({
     id: c.id,

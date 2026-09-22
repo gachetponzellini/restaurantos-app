@@ -15,9 +15,24 @@ describe("ModifierGroupInput — Punto de cocción", () => {
     is_required: true,
     sort_order: 0,
     modifiers: [
-      { name: "Jugoso", price_delta_cents: 0, is_available: true, sort_order: 0 },
-      { name: "A punto", price_delta_cents: 0, is_available: true, sort_order: 1 },
-      { name: "Cocido", price_delta_cents: 0, is_available: true, sort_order: 2 },
+      {
+        name: "Jugoso",
+        price_delta_cents: 0,
+        is_available: true,
+        sort_order: 0,
+      },
+      {
+        name: "A punto",
+        price_delta_cents: 0,
+        is_available: true,
+        sort_order: 1,
+      },
+      {
+        name: "Cocido",
+        price_delta_cents: 0,
+        is_available: true,
+        sort_order: 2,
+      },
     ],
   };
 
@@ -64,7 +79,12 @@ describe("warnGarnishModifierGroups", () => {
         is_required: true,
         sort_order: 0,
         modifiers: [
-          { name: "Papas fritas", price_delta_cents: 0, is_available: true, sort_order: 0 },
+          {
+            name: "Papas fritas",
+            price_delta_cents: 0,
+            is_available: true,
+            sort_order: 0,
+          },
         ],
       },
     ];
@@ -97,7 +117,12 @@ describe("warnGarnishModifierGroups", () => {
         is_required: true,
         sort_order: 0,
         modifiers: [
-          { name: "Jugoso", price_delta_cents: 0, is_available: true, sort_order: 0 },
+          {
+            name: "Jugoso",
+            price_delta_cents: 0,
+            is_available: true,
+            sort_order: 0,
+          },
         ],
       },
     ];
@@ -270,5 +295,72 @@ describe("StationPrinterInput — config de comandera por sector (spec 28)", () 
       printer_enabled: true,
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("spec 207 — grupo variante (la pizza tiene gustos)", () => {
+  const gusto: ModifierGroupInput = {
+    name: "Gusto",
+    min_selection: 1,
+    max_selection: 1,
+    is_required: true,
+    is_variant: true,
+    sort_order: 0,
+    modifiers: [
+      {
+        name: "Muzarella",
+        price_delta_cents: 0,
+        is_available: true,
+        sort_order: 0,
+      },
+      {
+        name: "Napolitana",
+        price_delta_cents: 200000,
+        is_available: true,
+        sort_order: 1,
+      },
+    ],
+  };
+
+  it("acepta un grupo variante obligatorio 1-1", () => {
+    expect(ModifierGroupInput.safeParse(gusto).success).toBe(true);
+  });
+
+  it("is_variant es opcional y por defecto false (los grupos de hoy no cambian)", () => {
+    const { is_variant: _omit, ...sinFlag } = gusto;
+    const r = ModifierGroupInput.safeParse({
+      ...sinFlag,
+      is_required: false,
+      min_selection: 0,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.is_variant ?? false).toBe(false);
+  });
+
+  it.each([
+    ["no obligatorio", { is_required: false }],
+    ["min 0", { min_selection: 0 }],
+    ["max 2", { max_selection: 2 }],
+  ])("rechaza un grupo variante %s", (_n, patch) => {
+    expect(ModifierGroupInput.safeParse({ ...gusto, ...patch }).success).toBe(
+      false,
+    );
+  });
+
+  it("rechaza un producto con dos grupos variante", () => {
+    const producto = {
+      name: "Pizza",
+      slug: "pizza",
+      price_cents: 1600000,
+      is_available: true,
+      is_active: true,
+      show_online: true,
+      sort_order: 0,
+      modifier_groups: [gusto, { ...gusto, name: "Tamaño", sort_order: 1 }],
+    };
+    expect(ProductInput.safeParse(producto).success).toBe(false);
+    expect(
+      ProductInput.safeParse({ ...producto, modifier_groups: [gusto] }).success,
+    ).toBe(true);
   });
 });

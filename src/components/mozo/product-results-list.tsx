@@ -3,6 +3,7 @@
 import { Pencil, Plus } from "lucide-react";
 
 import { formatCurrency } from "@/lib/currency";
+import { etiquetaDePrecio } from "@/lib/catalog/variantes";
 import type { CatalogProduct } from "@/lib/mozo/catalog-query";
 import { isItemLibreEntry } from "@/lib/mozo/item-libre-entry";
 
@@ -62,7 +63,7 @@ export function ProductResultsList({
               // distinguirse: con los dos iguales no se sabía dónde estabas
               // parado. Foco = anillo grueso con offset; target de Enter =
               // anillo fino.
-              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left outline-none transition active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${
+              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 active:scale-[0.99] ${
                 esLibre
                   ? "border border-dashed border-amber-300 bg-amber-50/60 active:bg-amber-100"
                   : "bg-card active:bg-muted/50"
@@ -71,10 +72,10 @@ export function ProductResultsList({
                   ? "ring-1 ring-emerald-400"
                   : esLibre
                     ? ""
-                    : "ring-1 ring-border"
+                    : "ring-border ring-1"
               }`}
             >
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+              <span className="text-foreground min-w-0 flex-1 truncate text-sm font-semibold">
                 {esLibre ? "Cargar un artículo que no existe" : p.name}
               </span>
               {esLibre ? (
@@ -82,8 +83,8 @@ export function ProductResultsList({
                   nombre y precio a mano
                 </span>
               ) : (
-                <span className="shrink-0 text-sm font-bold tabular-nums text-emerald-700">
-                  {formatCurrency(p.price_cents)}
+                <span className="shrink-0 text-sm font-bold text-emerald-700 tabular-nums">
+                  {etiquetaDePrecio(p, formatCurrency)}
                 </span>
               )}
               <span

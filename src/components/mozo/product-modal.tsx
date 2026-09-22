@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/currency";
+import { etiquetaDePrecio } from "@/lib/catalog/variantes";
 import { composeItemNotes } from "@/lib/mozo/item-notes";
 import { useEscapeToClose } from "@/lib/ui/use-escape-to-close";
 import { indexFromDigit } from "@/lib/ui/roving";
@@ -274,7 +275,7 @@ export function ProductModal({
         role="dialog"
         aria-modal="true"
         aria-label={product.name}
-        className={`w-full max-w-md ${embedded ? "max-h-full" : "max-h-[92dvh]"} overflow-y-auto rounded-t-3xl bg-card pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl`}
+        className={`w-full max-w-md ${embedded ? "max-h-full" : "max-h-[92dvh]"} bg-card overflow-y-auto rounded-t-3xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl`}
       >
         <form
           onSubmit={(e) => {
@@ -284,21 +285,21 @@ export function ProductModal({
         >
           {/* Handle */}
           <div className="flex justify-center py-2">
-            <span className="h-1 w-10 rounded-full bg-border" />
+            <span className="bg-border h-1 w-10 rounded-full" />
           </div>
 
           <div className="flex items-start justify-between gap-3 px-5">
             <div className="min-w-0">
-              <h3 className="font-heading text-lg leading-tight font-bold text-foreground">
+              <h3 className="font-heading text-foreground text-lg leading-tight font-bold">
                 {product.name}
               </h3>
               {product.description && (
-                <p className="mt-1 text-sm text-foreground/70">
+                <p className="text-foreground/70 mt-1 text-sm">
                   {product.description}
                 </p>
               )}
               <p className="mt-1 text-sm font-bold text-emerald-700 tabular-nums">
-                {formatCurrency(product.price_cents)}
+                {etiquetaDePrecio(product, formatCurrency)}
               </p>
             </div>
             <Button
@@ -333,18 +334,19 @@ export function ProductModal({
               {product.modifier_groups.map((g, gi) => (
                 <div
                   key={g.id}
-                  className="rounded-2xl border border-border p-3"
+                  className="border-border rounded-2xl border p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-bold text-foreground">
+                    <h4 className="text-foreground text-sm font-bold">
                       {g.name}
                     </h4>
                     <div className="flex items-center gap-1.5">
-                      {g.modifiers.every((m) => m.price_delta_cents === 0) && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">
-                          sin cargo
-                        </span>
-                      )}
+                      {!g.is_variant &&
+                        g.modifiers.every((m) => m.price_delta_cents === 0) && (
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-700 uppercase">
+                            sin cargo
+                          </span>
+                        )}
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${
                           g.is_required
@@ -408,7 +410,7 @@ export function ProductModal({
                           className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition active:scale-[0.99] ${
                             selected
                               ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-300"
-                              : "bg-muted/50 ring-1 ring-border/60 active:bg-muted"
+                              : "bg-muted/50 ring-border/60 active:bg-muted ring-1"
                           }`}
                         >
                           <span className="flex items-center gap-2.5">
@@ -420,7 +422,7 @@ export function ProductModal({
                               } ${
                                 selected
                                   ? "bg-emerald-600 text-white"
-                                  : "bg-card ring-1 ring-foreground/20"
+                                  : "bg-card ring-foreground/20 ring-1"
                               }`}
                             >
                               {selected && (
@@ -429,11 +431,20 @@ export function ProductModal({
                             </span>
                             <span className="font-semibold">{m.name}</span>
                           </span>
-                          {m.price_delta_cents !== 0 && (
-                            <span className="text-xs font-semibold text-foreground/70 tabular-nums">
-                              {m.price_delta_cents > 0 ? "+" : ""}
-                              {formatCurrency(m.price_delta_cents)}
+                          {g.is_variant ? (
+                            // Spec 207: el gusto se lee con su precio final.
+                            <span className="text-foreground/70 text-xs font-semibold tabular-nums">
+                              {formatCurrency(
+                                product.price_cents + m.price_delta_cents,
+                              )}
                             </span>
+                          ) : (
+                            m.price_delta_cents !== 0 && (
+                              <span className="text-foreground/70 text-xs font-semibold tabular-nums">
+                                {m.price_delta_cents > 0 ? "+" : ""}
+                                {formatCurrency(m.price_delta_cents)}
+                              </span>
+                            )
                           )}
                         </button>
                       );
@@ -445,7 +456,7 @@ export function ProductModal({
           )}
 
           <div className="mt-5 space-y-1 px-5">
-            <label className="block text-xs font-bold tracking-wide text-foreground/80 uppercase">
+            <label className="text-foreground/80 block text-xs font-bold tracking-wide uppercase">
               Observaciones
             </label>
             {permiteComoEntrada && (
@@ -456,14 +467,14 @@ export function ProductModal({
                 className={`mb-2 flex w-full items-center gap-2.5 rounded-2xl px-3 py-3 text-left text-sm font-semibold transition active:scale-[0.99] ${
                   asEntrada
                     ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-300"
-                    : "bg-muted/50 text-foreground/80 ring-1 ring-border/60 active:bg-muted"
+                    : "bg-muted/50 text-foreground/80 ring-border/60 active:bg-muted ring-1"
                 }`}
               >
                 <span
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
                     asEntrada
                       ? "bg-emerald-600 text-white"
-                      : "bg-card ring-1 ring-foreground/20"
+                      : "bg-card ring-foreground/20 ring-1"
                   }`}
                 >
                   {asEntrada && <Check className="h-3 w-3" strokeWidth={3} />}
@@ -474,7 +485,7 @@ export function ProductModal({
                   className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                     asEntrada
                       ? "bg-emerald-600/15 text-emerald-800"
-                      : "bg-card text-muted-foreground ring-1 ring-border"
+                      : "bg-card text-muted-foreground ring-border ring-1"
                   }`}
                 >
                   /
@@ -485,16 +496,16 @@ export function ProductModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value.slice(0, 200))}
               placeholder="ej: sin jamón, sin rúcula, bien cocido"
-              className="block w-full rounded-2xl border border-border px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
+              className="border-border block w-full rounded-2xl border px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
               rows={2}
             />
-            <p className="text-right text-[10px] text-muted-foreground/70">
+            <p className="text-muted-foreground/70 text-right text-[10px]">
               {notes.length}/200
             </p>
           </div>
 
-          <div className="mx-5 mt-4 flex items-center justify-between rounded-2xl bg-muted/50 p-2 ring-1 ring-border/60">
-            <span className="px-2 text-sm font-semibold text-foreground/80">
+          <div className="bg-muted/50 ring-border/60 mx-5 mt-4 flex items-center justify-between rounded-2xl p-2 ring-1">
+            <span className="text-foreground/80 px-2 text-sm font-semibold">
               Cantidad
             </span>
             <div className="flex items-center gap-3">
@@ -502,7 +513,7 @@ export function ProductModal({
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                 disabled={quantity <= 1}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
+                className="bg-card ring-border flex h-12 w-12 items-center justify-center rounded-full shadow-sm ring-1 active:scale-[0.95] disabled:opacity-40"
                 aria-label="Restar"
               >
                 <Minus className="h-5 w-5" />
@@ -514,7 +525,7 @@ export function ProductModal({
                 type="button"
                 onClick={() => setQuantity((q) => Math.min(99, q + 1))}
                 disabled={quantity >= 99}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-border active:scale-[0.95] disabled:opacity-40"
+                className="bg-card ring-border flex h-12 w-12 items-center justify-center rounded-full shadow-sm ring-1 active:scale-[0.95] disabled:opacity-40"
                 aria-label="Sumar"
               >
                 <Plus className="h-5 w-5" />

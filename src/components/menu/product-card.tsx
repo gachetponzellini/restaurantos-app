@@ -5,6 +5,7 @@ import * as m from "motion/react-m";
 
 import { I, ImageTile } from "@/components/delivery/primitives";
 import { EASE_OUT, springPop, staggerDelay } from "@/components/motion/presets";
+import { estaAgotado, etiquetaDePrecio } from "@/lib/catalog/variantes";
 import { formatCurrency } from "@/lib/currency";
 import type { MenuProduct } from "@/lib/menu";
 
@@ -25,7 +26,7 @@ export function ProductCard({
   /** Entrar animada (al cambiar de categoría). La primera carga no anima acá. */
   animateIn?: boolean;
 }) {
-  const soldOut = !product.is_available;
+  const soldOut = estaAgotado(product);
   const interactive = !soldOut && !disabled;
   return (
     <m.button
@@ -83,7 +84,7 @@ export function ProductCard({
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 14, fontWeight: 300, color: "var(--ink)" }}>
-            {formatCurrency(product.price_cents)}
+            {etiquetaDePrecio(product, formatCurrency)}
           </span>
           {soldOut && (
             <span

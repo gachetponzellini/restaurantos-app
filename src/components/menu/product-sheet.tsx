@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { I, ImageTile } from "@/components/delivery/primitives";
 import { AnimatedValue } from "@/components/motion/animated-value";
 import { BottomSheet } from "@/components/motion/bottom-sheet";
+import { etiquetaDePrecio } from "@/lib/catalog/variantes";
 import { formatCurrency } from "@/lib/currency";
 import type { MenuProduct } from "@/lib/menu";
 import { useCart, type CartModifier } from "@/stores/cart";
@@ -189,7 +190,7 @@ export function ProductSheet({
             </div>
           )}
           <div style={{ fontSize: 14, fontWeight: 600, marginTop: 10 }}>
-            {formatCurrency(product.price_cents)}
+            {etiquetaDePrecio(product, formatCurrency)}
           </div>
         </div>
 
@@ -309,10 +310,19 @@ export function ProductSheet({
                     >
                       {o.name}
                     </span>
-                    {o.price_delta_cents > 0 && (
+                    {g.is_variant ? (
+                      // Spec 207: el gusto se lee con su precio final.
                       <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
-                        +{formatCurrency(o.price_delta_cents)}
+                        {formatCurrency(
+                          product.price_cents + o.price_delta_cents,
+                        )}
                       </span>
+                    ) : (
+                      o.price_delta_cents > 0 && (
+                        <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                          +{formatCurrency(o.price_delta_cents)}
+                        </span>
+                      )
                     )}
                   </button>
                 );

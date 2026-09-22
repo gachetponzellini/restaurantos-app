@@ -16,6 +16,8 @@ export type AdminModifierGroup = {
   min_selection: number;
   max_selection: number;
   is_required: boolean;
+  /** Spec 207: opciones = variantes con precio final. */
+  is_variant: boolean;
   sort_order: number;
   modifiers: AdminModifier[];
 };
@@ -101,7 +103,7 @@ export async function getAdminCatalog(businessId: string) {
     supabase
       .from("products")
       .select(
-        "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
+        "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, is_variant, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
       )
       .eq("business_id", businessId)
       .order("sort_order"),
@@ -132,6 +134,7 @@ export async function getAdminCatalog(businessId: string) {
         min_selection: g.min_selection,
         max_selection: g.max_selection,
         is_required: g.is_required,
+        is_variant: g.is_variant ?? false,
         sort_order: g.sort_order,
         modifiers: (g.modifiers ?? [])
           .slice()
@@ -159,7 +162,7 @@ export async function getAdminProduct(id: string): Promise<AdminProduct | null> 
   const { data } = await supabase
     .from("products")
     .select(
-      "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
+      "id, category_id, name, slug, description, price_cents, image_url, is_available, is_active, show_online, sort_order, station_id, extra_station_ids, sin_comanda, prep_time_minutes, modifier_groups(id, name, min_selection, max_selection, is_required, is_variant, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -189,6 +192,7 @@ export async function getAdminProduct(id: string): Promise<AdminProduct | null> 
         min_selection: g.min_selection,
         max_selection: g.max_selection,
         is_required: g.is_required,
+        is_variant: g.is_variant ?? false,
         sort_order: g.sort_order,
         modifiers: (g.modifiers ?? [])
           .slice()

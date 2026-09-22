@@ -58,6 +58,7 @@ async function syncModifierGroups(
       min_selection: group.min_selection,
       max_selection: group.max_selection,
       is_required: group.is_required,
+      is_variant: group.is_variant ?? false,
       sort_order: idx,
     };
 

@@ -6,6 +6,7 @@ import * as m from "motion/react-m";
 
 import { EASE_OUT } from "@/components/motion/presets";
 import { computeIsOpen, type BusinessHour } from "@/lib/business-hours";
+import { estaAgotado, filasDeCarta } from "@/lib/catalog/variantes";
 import type { CartaTheme } from "@/lib/carta-theme";
 import { formatCurrency } from "@/lib/currency";
 import type { MenuCategory, MenuProduct } from "@/lib/menu";
@@ -101,8 +102,20 @@ function Ornament({
 
 // Fila de plato con líder de puntos dorado: nombre ······ precio, descripción
 // debajo. Sin foto (la carta impresa no las lleva).
-function ProductRow({ product }: { product: MenuProduct }) {
-  const soldOut = !product.is_available;
+// Spec 207: un producto con variantes (la pizza) se dibuja como una fila por
+// gusto — «Pizza Napolitana ····· $18.000» — igual que cuando eran sueltos.
+function ProductRow({
+  product,
+  name = product.name,
+  priceCents = product.price_cents,
+  showDescription = true,
+}: {
+  product: MenuProduct;
+  name?: string;
+  priceCents?: number;
+  showDescription?: boolean;
+}) {
+  const soldOut = estaAgotado(product);
   return (
     <li
       style={{
@@ -123,7 +136,7 @@ function ProductRow({ product }: { product: MenuProduct }) {
             textDecoration: soldOut ? "line-through" : "none",
           }}
         >
-          {product.name}
+          {name}
         </span>
         <span
           aria-hidden
@@ -144,10 +157,10 @@ function ProductRow({ product }: { product: MenuProduct }) {
             flexShrink: 0,
           }}
         >
-          {formatCurrency(product.price_cents)}
+          {formatCurrency(priceCents)}
         </span>
       </div>
-      {product.description && (
+      {showDescription && product.description && (
         <div
           style={{
             fontSize: 13,
@@ -514,9 +527,18 @@ export function CartaClient({
           <Reveal as="section" key={s.key}>
             <SectionTitle theme={theme}>{s.name}</SectionTitle>
             <ul style={{ margin: 0, padding: 0 }}>
-              {s.products.map((p) => (
-                <ProductRow key={p.id} product={p} />
-              ))}
+              {s.products.flatMap((p) => {
+                const filas = filasDeCarta(p);
+                return filas.map((f) => (
+                  <ProductRow
+                    key={`${p.id}:${f.key}`}
+                    product={p}
+                    name={f.name}
+                    priceCents={f.price_cents}
+                    showDescription={filas.length === 1}
+                  />
+                ));
+              })}
             </ul>
           </Reveal>
         ))}

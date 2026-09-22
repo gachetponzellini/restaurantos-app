@@ -54,7 +54,9 @@ export function localPrinterName(host: string): string {
 export function isValidPrinterHost(host: string): boolean {
   if (isLocalPrinterTarget(host)) {
     const name = localPrinterName(host);
-    return name.length > 0 && name.length <= 220 && !/[\\/\x00-\x1f]/.test(name);
+    return (
+      name.length > 0 && name.length <= 220 && !/[\\/\x00-\x1f]/.test(name)
+    );
   }
   if (/^[\d.]+$/.test(host)) {
     const parts = host.split(".");
@@ -169,13 +171,27 @@ export const ModifierGroupInput = z
     min_selection: z.number().int().min(0),
     max_selection: z.number().int().min(1),
     is_required: z.boolean(),
+    /**
+     * Spec 207: las opciones son variantes del producto (la pizza y sus
+     * gustos): se muestran con precio final, no como «+$X». Opt-in.
+     */
+    is_variant: z.boolean().optional(),
     sort_order: z.number().int().min(0),
     modifiers: z.array(ModifierInput),
   })
   .refine((g) => g.max_selection >= g.min_selection, {
     message: "Máximo debe ser ≥ mínimo.",
     path: ["max_selection"],
-  });
+  })
+  .refine(
+    (g) =>
+      !g.is_variant ||
+      (g.is_required && g.min_selection === 1 && g.max_selection === 1),
+    {
+      message: "Un grupo de variantes es obligatorio y se elige uno solo.",
+      path: ["is_variant"],
+    },
+  );
 export type ModifierGroupInput = z.infer<typeof ModifierGroupInput>;
 
 export const ProductInput = z.object({
@@ -205,7 +221,19 @@ export const ProductInput = z.object({
   show_online: z.boolean(),
   sort_order: z.number().int().min(0),
   prep_time_minutes: z.number().int().min(1).max(999).nullable().optional(),
-  modifier_groups: z.array(ModifierGroupInput),
+  modifier_groups: z.array(ModifierGroupInput).superRefine((gs, ctx) => {
+    // Spec 207: a lo sumo un grupo de variantes. El error cae en el sobrante
+    // para que el editor lo muestre al lado de su switch.
+    gs.forEach((g, i) => {
+      if (g.is_variant && gs.findIndex((x) => x.is_variant) !== i) {
+        ctx.addIssue({
+          code: "custom",
+          path: [i, "is_variant"],
+          message: "Un producto tiene a lo sumo un grupo de variantes.",
+        });
+      }
+    });
+  }),
 });
 export type ProductInput = z.infer<typeof ProductInput>;
 

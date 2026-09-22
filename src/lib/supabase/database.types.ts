@@ -2360,6 +2360,7 @@ export type Database = {
           business_id: string;
           id: string;
           is_required: boolean;
+          is_variant: boolean;
           max_selection: number;
           min_selection: number;
           name: string;
@@ -2370,6 +2371,7 @@ export type Database = {
           business_id: string;
           id?: string;
           is_required?: boolean;
+          is_variant?: boolean;
           max_selection?: number;
           min_selection?: number;
           name: string;
@@ -2380,6 +2382,7 @@ export type Database = {
           business_id?: string;
           id?: string;
           is_required?: boolean;
+          is_variant?: boolean;
           max_selection?: number;
           min_selection?: number;
           name?: string;

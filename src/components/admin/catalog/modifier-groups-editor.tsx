@@ -17,7 +17,7 @@ import { PrecioField } from "@/components/admin/catalog/pesos-input";
 import type { ProductInput } from "@/lib/catalog/schemas";
 
 export function ModifierGroupsEditor() {
-  const { control } = useFormContext<ProductInput>();
+  const { control, setValue } = useFormContext<ProductInput>();
   const { fields, append, remove } = useFieldArray({
     control,
     name: "modifier_groups",
@@ -151,6 +151,41 @@ export function ModifierGroupsEditor() {
                 )}
               />
             </div>
+
+            {/* Spec 207: la pizza y sus gustos. Opt-in, uno por producto. */}
+            <FormField
+              control={control}
+              name={`modifier_groups.${idx}.is_variant`}
+              render={({ field }) => (
+                <FormItem>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4"
+                      checked={field.value ?? false}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        field.onChange(on);
+                        if (on) {
+                          setValue(`modifier_groups.${idx}.min_selection`, 1);
+                          setValue(`modifier_groups.${idx}.max_selection`, 1);
+                          setValue(`modifier_groups.${idx}.is_required`, true);
+                        }
+                      }}
+                    />
+                    <span className="text-sm">
+                      Variantes con precio final
+                      <span className="text-muted-foreground block text-xs">
+                        Cada opción es una versión del producto (ej: los gustos
+                        de la pizza) y se muestra con su precio total, no como
+                        «+$». Apagar el producto apaga todas.
+                      </span>
+                    </span>
+                  </label>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <ModifierList groupIdx={idx} />
           </div>

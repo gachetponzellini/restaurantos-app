@@ -18,6 +18,8 @@ export type MenuModifierGroup = {
   min_selection: number;
   max_selection: number;
   is_required: boolean;
+  /** Spec 207: opciones = variantes con precio final. */
+  is_variant: boolean;
   sort_order: number;
   modifiers: MenuModifier[];
 };
@@ -148,7 +150,7 @@ export const getMenu = cache(
       supabase
         .from("products")
         .select(
-          "id, category_id, name, slug, description, price_cents, image_url, is_available, sort_order, modifier_groups(id, name, min_selection, max_selection, is_required, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
+          "id, category_id, name, slug, description, price_cents, image_url, is_available, sort_order, modifier_groups(id, name, min_selection, max_selection, is_required, is_variant, sort_order, modifiers(id, name, price_delta_cents, is_available, sort_order))",
         )
         .eq("business_id", businessId)
         .eq("is_active", true)
@@ -197,6 +199,7 @@ export const getMenu = cache(
         min_selection: g.min_selection,
         max_selection: g.max_selection,
         is_required: g.is_required,
+        is_variant: g.is_variant ?? false,
         sort_order: g.sort_order,
         modifiers: (g.modifiers ?? [])
           .slice()
