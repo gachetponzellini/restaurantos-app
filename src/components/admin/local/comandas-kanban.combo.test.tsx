@@ -84,6 +84,7 @@ const comanda = (items: LocalComandaItem[]): LocalComanda => ({
   customer_name: "",
   mozo_id: null,
   notes: null,
+  cancelled_reason: null,
   items,
 });
 
@@ -92,6 +93,7 @@ function pintar(items: LocalComandaItem[]) {
     <ComandasKanban
       slug="demo"
       businessId="biz-1"
+      timezone="America/Argentina/Buenos_Aires"
       role="encargado"
       initialComandas={[comanda(items)]}
       stations={[{ id: "st-fritera", name: "Fritera", sort_order: 1 }]}

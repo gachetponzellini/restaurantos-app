@@ -306,6 +306,7 @@ function ComandasPanel({
   salonIds,
   salonLabel,
   active,
+  timezone,
 }: {
   promise: Promise<ComandasData>;
   slug: string;
@@ -314,6 +315,7 @@ function ComandasPanel({
   salonIds: string[];
   salonLabel: string | null;
   active: boolean;
+  timezone: string;
 }) {
   const { initialComandas, stations, mozos, printAgentLastSeenAt } =
     use(promise);
@@ -329,6 +331,7 @@ function ComandasPanel({
       salonIds={salonIds}
       salonLabel={salonLabel}
       active={active}
+      timezone={timezone}
     />
   );
 }
@@ -927,6 +930,7 @@ function TabsInner({
                   salonIds={salonFilter}
                   salonLabel={salonLabel}
                   active={active === "comandas"}
+                  timezone={timezone}
                 />
               </Suspense>
             </ErrorBoundary>

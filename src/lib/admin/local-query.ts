@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { entregadasCutoff } from "@/lib/comandas/entregadas-window";
+import { startOfOperatingDayUtc } from "@/lib/admin/orders-query";
 import type { ComandaStatus, KitchenItemStatus } from "@/lib/comandas/types";
 
 type GenericClient = SupabaseClient;
@@ -65,6 +66,9 @@ export type LocalComanda = {
    *  cancelados y la card se oculta (fantasma); el flag corta los botones en la
    *  ventana previa al refresh de realtime. */
   cancelled_at: string | null;
+  /** Spec 208: motivo de la anulación (el que escribió el encargado al anular
+   *  la comanda o cancelar el pedido). Se muestra en la sección «Anuladas». */
+  cancelled_reason: string | null;
   /** Tipo de la order — "dine_in" / "delivery" / "pickup" (retiro en el local).
    *  El dine-in se rotula como Mesa N en la card. */
   delivery_type: string;
@@ -105,6 +109,8 @@ export type LocalStation = {
  */
 export async function getActiveComandas(
   businessId: string,
+  /** Spec 208: TZ del negocio, para el corte del día operativo de las anuladas. */
+  timezone: string,
 ): Promise<LocalComanda[]> {
   const supabase = (await createSupabaseServerClient()) as unknown as GenericClient;
 
@@ -115,7 +121,7 @@ export async function getActiveComandas(
   // PostgREST con timestamp ISO embebido era frágil.
   const select = `
     id, order_id, station_id, batch, status, emitted_at, delivered_at,
-    print_failed_at, reprint_requested_at, cancelled_at, notes,
+    print_failed_at, reprint_requested_at, cancelled_at, cancelled_reason, notes,
     stations!inner ( name ),
     orders!inner (
       id, business_id, order_number, daily_number, delivery_type, customer_name, mozo_id,
@@ -132,7 +138,12 @@ export async function getActiveComandas(
     )
   `;
 
-  const [activeRes, deliveredRes] = await Promise.all([
+  // Spec 208 — las anuladas del día operativo, para la sección «Anuladas» (el
+  // mismo corte que usa Pedidos para sus cancelados). No vuelven a las columnas:
+  // H-28 se mantiene, el kanban las separa por `cancelled_at`.
+  const anuladasDesde = startOfOperatingDayUtc(timezone).toISOString();
+
+  const [activeRes, deliveredRes, cancelledRes] = await Promise.all([
     supabase
       .from("comandas")
       .select(select)
@@ -156,6 +167,13 @@ export async function getActiveComandas(
       .gte("delivered_at", entregadasDesde)
       .order("delivered_at", { ascending: false })
       .limit(100),
+    supabase
+      .from("comandas")
+      .select(select)
+      .eq("orders.business_id", businessId)
+      .gte("cancelled_at", anuladasDesde)
+      .order("cancelled_at", { ascending: false })
+      .limit(100),
   ]);
 
   if (activeRes.error) {
@@ -166,7 +184,23 @@ export async function getActiveComandas(
     console.error("getActiveComandas delivered", deliveredRes.error);
     return [];
   }
-  const data = [...(activeRes.data ?? []), ...(deliveredRes.data ?? [])];
+  // Las anuladas son un registro: si su query falla, el KDS sigue andando con
+  // lo operativo en vez de quedar vacío.
+  if (cancelledRes.error) {
+    console.error("getActiveComandas cancelled", cancelledRes.error);
+  }
+  const vistos = new Set<string>();
+  const data = [
+    ...(activeRes.data ?? []),
+    ...(deliveredRes.data ?? []),
+    ...(cancelledRes.error ? [] : (cancelledRes.data ?? [])),
+  ].filter((c) => {
+    // Una entregada que además tuviera `cancelled_at` vendría dos veces.
+    const id = (c as { id: string }).id;
+    if (vistos.has(id)) return false;
+    vistos.add(id);
+    return true;
+  });
 
   type RawRow = {
     id: string;
@@ -179,6 +213,7 @@ export async function getActiveComandas(
     print_failed_at: string | null;
     reprint_requested_at: string | null;
     cancelled_at: string | null;
+    cancelled_reason: string | null;
     notes: string | null;
     stations: { name: string };
     orders: {
@@ -227,6 +262,7 @@ export async function getActiveComandas(
     print_failed_at: c.print_failed_at,
     reprint_requested_at: c.reprint_requested_at,
     cancelled_at: c.cancelled_at,
+    cancelled_reason: c.cancelled_reason,
     delivery_type: c.orders.delivery_type,
     table_label: c.orders.tables?.label ?? null,
     floor_plan_id: c.orders.tables?.floor_plan_id ?? null,

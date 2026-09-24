@@ -287,10 +287,13 @@ export async function loadSalon(
 // Resto de las tabs.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function loadComandas(businessId: string): Promise<ComandasData> {
+export async function loadComandas(
+  businessId: string,
+  timezone: string,
+): Promise<ComandasData> {
   const [initialComandas, stations, mozos, printAgentHealth] =
     await Promise.all([
-      getActiveComandas(businessId),
+      getActiveComandas(businessId, timezone),
       getStationsForLocal(businessId),
       getMozosByBusiness(businessId),
       getPrintAgentHealth(businessId),

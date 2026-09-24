@@ -92,7 +92,7 @@ export default async function LocalEnVivoPage({
   const ve = (tab: OperacionTab) => veTabDeOperacion(rol, tab);
 
   const salon = loadSalon(business.id, service, { todayStart, tomorrowStart });
-  const comandas = loadComandas(business.id);
+  const comandas = loadComandas(business.id, business.timezone);
   const fichaje = loadFichaje(business.id, business_slug);
   const pedidos = ve("pedidos")
     ? loadPedidos(business.id, business.timezone, {

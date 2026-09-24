@@ -57,6 +57,7 @@ function pintar(role: "encargado" | "terminal") {
     <ComandasKanban
       slug="demo"
       businessId="biz-1"
+      timezone="America/Argentina/Buenos_Aires"
       role={role}
       initialComandas={[comanda("pendiente"), comanda("en_preparacion")]}
       stations={[{ id: "st-1", name: "Cocina", sort_order: 1 }]}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { formatInTimeZone } from "date-fns-tz";
 
 import {
   Ban,
@@ -252,9 +253,12 @@ export function ComandasKanban({
   salonIds = [],
   salonLabel = null,
   active = true,
+  timezone,
 }: {
   slug: string;
   businessId: string;
+  /** Spec 208: TZ del negocio, para la hora de anulación en «Anuladas». */
+  timezone: string;
   /**
    * Spec 182 · D2 — hasta acá el kanban no sabía quién lo miraba, y le pintaba
    * a la `terminal` los tres botones que el server le rechaza: reimprimir,
@@ -485,6 +489,10 @@ export function ComandasKanban({
       comandas.filter(
         (c) =>
           matchesSalon(salonIds, c.floor_plan_id) &&
+          // Spec 208 — las anuladas vienen en la misma lista pero no son
+          // operativas (H-28): van a la sección «Anuladas», nunca a columnas,
+          // saturación ni alertas.
+          !c.cancelled_at &&
           // `now === null` es el primer render (ver `useNow`): sin ventana, para
           // que el árbol del server y el del cliente sean idénticos. El efecto
           // la aplica un frame después.
@@ -495,6 +503,18 @@ export function ComandasKanban({
     [comandas, salonIds, now],
   );
 
+  // Spec 208 — las anuladas del día operativo (el server ya aplica el corte),
+  // con el mismo filtro de salón que el resto. La más reciente arriba.
+  const anuladas = useMemo(
+    () =>
+      comandas
+        .filter(
+          (c) => c.cancelled_at && matchesSalon(salonIds, c.floor_plan_id),
+        )
+        .sort((a, b) => (b.cancelled_at ?? "").localeCompare(a.cancelled_at ?? "")),
+    [comandas, salonIds],
+  );
+
   // Comandas activas que el filtro dejó afuera por no tener mesa (delivery,
   // retiro, mostrador). Esconderlas en silencio sería el riesgo real de esta
   // feature: una comanda de cocina que nadie mira. Se avisan.
@@ -503,6 +523,7 @@ export function ComandasKanban({
     return comandas.filter(
       (c) =>
         c.floor_plan_id === null &&
+        !c.cancelled_at &&
         c.status !== "entregado" &&
         c.items.some((it) => !it.cancelled_at),
     ).length;
@@ -689,6 +710,15 @@ export function ComandasKanban({
         })}
       </div>
 
+      {/* ── Spec 208 · anuladas del día: registro, no trabajo ── */}
+      {anuladas.length > 0 && (
+        <AnuladasSection
+          anuladas={anuladas}
+          timezone={timezone}
+          stationStyleById={stationStyleById}
+        />
+      )}
+
       {/* ── Modales de gestión de comanda (spec 049) ── */}
       {anularTarget && (
         <AnularComandaModal
@@ -742,6 +772,87 @@ export function ComandasKanban({
         />
       )}
     </div>
+  );
+}
+
+// ─── Anuladas del día (spec 208) ────────────────────────────────────────────
+
+/**
+ * Mismo lenguaje que «Cancelados» en el board de Pedidos: plegable, cerrado por
+ * defecto, filas punteadas y apagadas. Sin botones: una anulada ya no se
+ * trabaja, sólo confirma que algo se sacó de cocina y por qué.
+ */
+function AnuladasSection({
+  anuladas,
+  timezone,
+  stationStyleById,
+}: {
+  anuladas: LocalComanda[];
+  timezone: string;
+  stationStyleById: Map<string, (typeof SECTOR_PALETTE)[number]>;
+}) {
+  return (
+    <details className="group mt-2">
+      <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-2 text-xs font-semibold tracking-wider uppercase transition-colors">
+        <span>Anuladas</span>
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-50 px-1.5 text-[0.65rem] font-bold text-rose-700 tabular-nums">
+          {anuladas.length}
+        </span>
+        <span className="text-muted-foreground/60 tracking-normal normal-case">
+          · tocá para ver
+        </span>
+      </summary>
+      <ul className="mt-3 grid gap-2">
+        {anuladas.map((c) => {
+          const style = stationStyleById.get(c.station_id) ?? FALLBACK;
+          const motivo =
+            c.cancelled_reason ??
+            c.items.find((it) => it.cancelled_reason)?.cancelled_reason ??
+            null;
+          return (
+            <li
+              key={c.id}
+              className="bg-card rounded-lg border border-dashed p-3 opacity-80"
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="text-muted-foreground font-semibold tabular-nums">
+                  #{c.daily_number}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${style.bg} ${style.text}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
+                  {c.station_name}
+                </span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {comandaOrigen(c)}
+                </span>
+                {c.cancelled_at && (
+                  <>
+                    <span className="text-muted-foreground/70 text-xs">·</span>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      anulada {formatInTimeZone(c.cancelled_at, timezone, "HH:mm")}
+                    </span>
+                  </>
+                )}
+              </div>
+              {c.items.length > 0 && (
+                <p className="text-muted-foreground mt-1 text-xs line-through">
+                  {c.items
+                    .map((it) => `${it.quantity}× ${it.product_name}`)
+                    .join(" · ")}
+                </p>
+              )}
+              {motivo && (
+                <p className="text-muted-foreground mt-0.5 truncate text-xs italic">
+                  &quot;{motivo}&quot;
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
 
