@@ -120,6 +120,8 @@ export function OrderCard({
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Abrir el detalle ya con el cobro arriba (botón «Cobrar» de la tarjeta). */
   const [cobrarDirecto, setCobrarDirecto] = useState(false);
+  /** Abrir el detalle ya en el motivo de cancelación (issue #377). */
+  const [cancelarDirecto, setCancelarDirecto] = useState(false);
   const elapsed = useElapsedMinutes(order.created_at);
   const entrega = entregaLabel(order, timezone);
 
@@ -418,16 +420,36 @@ export function OrderCard({
           ) : (
             advanceLabel &&
             nextForDelivery && (
-              <Button
-                size="sm"
-                className="h-8 font-semibold"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdvance(order, nextForDelivery);
-                }}
-              >
-                {advanceLabel}
-              </Button>
+              <div className="flex items-center gap-1.5">
+                {/* Issue #377 — el cliente cancela un pedido que ya marchó.
+                    Antes había que abrir el detalle y buscarlo al fondo del
+                    pie. Abre el detalle directo en el motivo (obligatorio); el
+                    server sigue bloqueando el pedido cobrado (#259). */}
+                {!isTerminal && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 font-semibold text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCancelarDirecto(true);
+                      setSheetOpen(true);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="h-8 font-semibold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdvance(order, nextForDelivery);
+                  }}
+                >
+                  {advanceLabel}
+                </Button>
+              </div>
             )
           )}
         </div>
@@ -437,7 +459,10 @@ export function OrderCard({
         open={sheetOpen}
         onOpenChange={(o) => {
           setSheetOpen(o);
-          if (!o) setCobrarDirecto(false);
+          if (!o) {
+            setCobrarDirecto(false);
+            setCancelarDirecto(false);
+          }
         }}
         order={order}
         slug={slug}
@@ -445,6 +470,7 @@ export function OrderCard({
         onAdvance={onAdvance}
         onConfirm={onConfirm}
         abrirCobro={cobrarDirecto}
+        abrirCancelar={cancelarDirecto}
         onChanged={onChanged}
       />
     </>

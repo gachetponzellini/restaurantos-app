@@ -99,4 +99,35 @@ describe("OrderDetailSheet · cobrar un pedido entregado", () => {
     expect(screen.getByRole("button", { name: /cobrar \/ facturar/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /cancelar pedido/i })).toBeTruthy();
   });
+
+  // Issue #377 — jsdom no hace layout, así que «está en el DOM» no alcanza:
+  // `ModalFooter` trae `sm:flex-row` de base y en la PC los botones quedaban en
+  // fila, cada uno a lo ancho del panel, y sólo se veía «Cobrar / Facturar».
+  it("en escritorio el pie apila los botones (no los pone en fila)", () => {
+    renderSheet(order({ status: "preparing" as OrderStatus }));
+    const pie = screen
+      .getByRole("button", { name: /cancelar pedido/i })
+      .closest('[data-slot="modal-footer"]')!;
+    expect(pie.className).toContain("sm:flex-col");
+    expect(pie.className).not.toContain("sm:flex-row");
+  });
+
+  it("abrirCancelar: abre directo en el motivo de cancelación", () => {
+    render(
+      <OrderDetailSheet
+        open
+        onOpenChange={() => {}}
+        order={order({ status: "preparing" as OrderStatus })}
+        slug="kcc"
+        timezone="America/Argentina/Buenos_Aires"
+        onAdvance={() => {}}
+        abrirCancelar
+      />,
+    );
+    expect(screen.getByLabelText(/motivo de cancelación/i)).toBeTruthy();
+    const pie = screen
+      .getByLabelText(/motivo de cancelación/i)
+      .closest('[data-slot="modal-footer"]')!;
+    expect(pie.className).not.toContain("sm:flex-row");
+  });
 });

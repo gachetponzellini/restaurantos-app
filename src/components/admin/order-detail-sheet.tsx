@@ -136,6 +136,7 @@ export function OrderDetailSheet({
   onAdvance,
   onConfirm,
   abrirCobro = false,
+  abrirCancelar = false,
   onChanged,
 }: {
   open: boolean;
@@ -148,6 +149,9 @@ export function OrderDetailSheet({
   /** Abrir directo en el cobro: lo usa el botón «Cobrar» de la tarjeta de un
    *  pedido entregado e impago (issue #190). */
   abrirCobro?: boolean;
+  /** Abrir directo en el motivo de cancelación: lo usa el botón «Cancelar» de
+   *  la tarjeta (issue #377). El motivo sigue siendo obligatorio. */
+  abrirCancelar?: boolean;
   /** Se editaron los ítems: el board de afuera revalida su copia del pedido. */
   onChanged?: () => void;
 }) {
@@ -194,6 +198,12 @@ export function OrderDetailSheet({
   useEffect(() => {
     if (open && abrirCobro) setCobrarOpen(true);
   }, [open, abrirCobro]);
+
+  // Issue #377 — lo mismo para «Cancelar»: el pedido que el cliente canceló
+  // después de marchar abre el detalle ya pidiendo el motivo.
+  useEffect(() => {
+    if (open && abrirCancelar) setShowCancel(true);
+  }, [open, abrirCancelar]);
 
   /**
    * Trae el detalle. Vive afuera del efecto porque después de editar los ítems
@@ -620,8 +630,12 @@ export function OrderDetailSheet({
           )}
         </ModalBody>
 
+        {/* Issue #377 — `ModalFooter` trae `sm:flex-row` de base: sin el
+            `sm:flex-col` explícito, en la PC los botones (todos `w-full`)
+            quedaban en fila y sólo se veía el primero — «Cancelar pedido» se
+            salía del panel. */}
         {!isCancelled && !showCancel && (
-          <ModalFooter className="flex-col sm:items-stretch sm:justify-start">
+          <ModalFooter className="flex-col sm:flex-col sm:items-stretch sm:justify-start">
             {/* Un pedido ya saldado no se vuelve a cobrar: hasta ahora el botón
                 miraba sólo el estado operativo (`isTerminal` = entregado /
                 cancelado), así que un delivery pagado online ofrecía cobrarse
@@ -708,7 +722,7 @@ export function OrderDetailSheet({
         )}
 
         {!isTerminal && showCancel && (
-          <ModalFooter className="flex-col sm:items-stretch sm:justify-start">
+          <ModalFooter className="flex-col sm:flex-col sm:items-stretch sm:justify-start">
             <div className="grid gap-1.5">
               <Label htmlFor={`sheet-cancel-reason-${order.id}`}>
                 Motivo de cancelación
