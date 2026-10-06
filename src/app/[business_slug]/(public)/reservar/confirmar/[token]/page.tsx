@@ -17,11 +17,11 @@ export default async function ConfirmarReservaPage({
   params: Promise<{ business_slug: string; token: string }>;
 }) {
   const { business_slug, token } = await params;
-  const reservation = await getReservationByConfirmToken(token);
+  const reservation = await getReservationByConfirmToken(token, business_slug);
 
   async function confirm() {
     "use server";
-    await confirmReservationAttendance(token);
+    await confirmReservationAttendance(token, business_slug);
     revalidatePath(`/${business_slug}/reservar/confirmar/${token}`);
   }
 

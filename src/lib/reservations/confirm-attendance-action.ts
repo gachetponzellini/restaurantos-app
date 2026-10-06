@@ -19,10 +19,13 @@ export type ReservationByToken = {
 
 /**
  * Lee una reserva por su `confirm_token` (double opt-in, spec 45). Read-only,
- * sin login: el token opaco es la credencial. Devuelve null si no existe.
+ * sin login: el token opaco es la credencial. Devuelve null si no existe **o si
+ * la reserva no es del negocio del slug** de la URL (H-08): mismo resultado que
+ * un token inválido, para no revelar que el token existe bajo otro negocio.
  */
 export async function getReservationByConfirmToken(
   token: string,
+  businessSlug: string,
 ): Promise<ReservationByToken | null> {
   if (!token || token.length < 8) return null;
   const service = createSupabaseServiceClient() as unknown as GenericClient;
@@ -35,10 +38,10 @@ export async function getReservationByConfirmToken(
 
   const { data: business } = await service
     .from("businesses")
-    .select("name, timezone")
+    .select("slug, name, timezone")
     .eq("id", reservation.business_id)
     .maybeSingle();
-  if (!business) return null;
+  if (!business || business.slug !== businessSlug) return null;
 
   return {
     businessName: business.name,
@@ -64,6 +67,7 @@ export type ConfirmAttendanceResult =
  */
 export async function confirmReservationAttendance(
   token: string,
+  businessSlug: string,
 ): Promise<ConfirmAttendanceResult> {
   if (!token || token.length < 8) {
     return { ok: false, error: "Link inválido." };
@@ -71,10 +75,20 @@ export async function confirmReservationAttendance(
   const service = createSupabaseServiceClient() as unknown as GenericClient;
   const { data: reservation } = await service
     .from("reservations")
-    .select("id, status, client_confirmed_at")
+    .select("id, business_id, status, client_confirmed_at")
     .eq("confirm_token", token)
     .maybeSingle();
   if (!reservation) return { ok: false, error: "No encontramos la reserva." };
+
+  // H-08: la reserva tiene que ser del negocio del slug de la URL.
+  const { data: business } = await service
+    .from("businesses")
+    .select("slug")
+    .eq("id", reservation.business_id)
+    .maybeSingle();
+  if (!business || business.slug !== businessSlug) {
+    return { ok: false, error: "No encontramos la reserva." };
+  }
 
   if (reservation.status !== "confirmed" && reservation.status !== "seated") {
     return { ok: false, error: "Esta reserva ya no está activa." };
