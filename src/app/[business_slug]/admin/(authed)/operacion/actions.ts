@@ -1,6 +1,7 @@
 "use server";
 
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { requireMozoActionContext } from "@/lib/mozo/auth";
@@ -149,28 +150,20 @@ export async function getCajaTabData(
 }
 
 /**
- * Todo lo que el modal de **Cerrar caja** necesita (spec 130): la plata del
- * período, el esperado partido por dueño, las cuentas abiertas que bloquean y
- * lo que el cierre va a barrer del salón.
- *
- * Se pide al abrir el modal y no en el poll de la tab: el reparto por dueño
- * consulta la rendición pendiente de cada mozo, y colgarlo del tick de 30 s
- * eran decenas de queries por tablet para un número que se mira una vez por
- * día.
+ * Todo lo que el modal de **Cerrar caja** necesita: la plata del período, lo
+ * que espera el cajón y los mozos que todavía tienen plata de esta caja (spec
+ * 210 v2). Se pide al abrir el modal, no en el poll de la tab.
  */
 export async function getCierreCajaTabData(
   slug: string,
   cajaId: string,
-  opts: { sinReparto?: boolean } = {},
 ): Promise<ActionResult<CierreCajaData>> {
   const ctx = await requireOperacionContext(slug, {
     soloSupervision: true,
   });
   if (!ctx.ok) return ctx;
 
-  const data = await getCierreCajaData(cajaId, ctx.data.businessId, {
-    sinReparto: opts.sinReparto === true,
-  });
+  const data = await getCierreCajaData(cajaId, ctx.data.businessId);
   if (!data) return actionError("Caja no encontrada.");
   return actionOk(data);
 }
@@ -233,6 +226,14 @@ export async function getEstadoTurnoTabData(
   return actionOk(await getEstadoTurno(ctx.data.businessId));
 }
 
+// Lo que viene del cliente: ids y fechas válidos antes de tocar la base.
+const SaldosCajaInput = z.object({ cajaId: z.string().uuid(), desde: z.string().datetime({ offset: true }) });
+const EntradaDelLibroInput = z.object({
+  cajaId: z.string().uuid(),
+  createdAt: z.string().datetime({ offset: true }),
+  id: z.string().uuid(),
+});
+
 /**
  * Spec 211 · R1/R2 — los mozos con plata de una caja, con las cifras del
  * período abierto de esa caja (`desde`) y el saldo de ahora.
@@ -244,9 +245,16 @@ export async function getSaldosCajaTabData(
 ): Promise<ActionResult<import("@/lib/caja/turno-queries").SaldoMozo[]>> {
   const ctx = await requireOperacionContext(slug, { soloSupervision: true });
   if (!ctx.ok) return ctx;
+  const ok = SaldosCajaInput.safeParse({ cajaId, desde });
+  if (!ok.success) return actionError("Datos inválidos.");
   const { getSaldosMozos } = await import("@/lib/caja/turno-queries");
-  const saldos = await getSaldosMozos(ctx.data.businessId, desde);
-  return actionOk(saldos.filter((m) => m.caja_id === cajaId));
+  try {
+    const saldos = await getSaldosMozos(ctx.data.businessId, desde);
+    return actionOk(saldos.filter((m) => m.caja_id === cajaId));
+  } catch (e) {
+    console.error("[operacion] getSaldosCajaTabData", e);
+    return actionError("No se pudieron cargar los saldos de los mozos.");
+  }
 }
 
 /**
@@ -266,6 +274,7 @@ export async function getEntradaDelLibroTabData(
 > {
   const ctx = await requireOperacionContext(slug, { soloSupervision: true });
   if (!ctx.ok) return ctx;
+  if (!EntradaDelLibroInput.safeParse(input).success) return actionError("Datos inválidos.");
   const { getLibroDeMovimientos, getCajasConEstado } = await import("@/lib/caja/queries");
   const { getMozosByBusiness } = await import("@/lib/mozo/queries");
   const t = new Date(input.createdAt).getTime();

@@ -165,16 +165,36 @@ describe("EfectivoDeLaCaja", () => {
     // A rendir: sólo lo que tienen encima (Beto); el saldo negativo de Cami no resta.
     expect(tile("A rendir")).toHaveTextContent(pesos(30_000));
     expect(tile("A rendir")).toHaveTextContent("En manos de Beto");
-    // Propinas de tarjeta: Beto 5.000 + Cami 4.000.
-    expect(tile("Propinas de los mozos")).toHaveTextContent(pesos(9_000));
+    // Propinas que se quedaron del efectivo: Beto 5.000. Cami no cobró en
+    // efectivo: su propina se la debe la caja (fila «le debemos»), no salió
+    // de ningún efectivo.
+    expect(tile("Propinas de los mozos")).toHaveTextContent(pesos(5_000));
     // Sin deudas reconocidas, ese tile no se muestra.
     expect(screen.queryByText("Quedó como deuda")).not.toBeInTheDocument();
   });
 
-  it("muestra lo cobrado en efectivo del período", async () => {
+  it("el total del período es la suma de los tiles", async () => {
     abrir();
     await screen.findByText("Ana Gómez");
-    expect(screen.getByText("Cobrado en efectivo").closest("p")).toHaveTextContent(pesos(285_000));
+    // 200.000 caja + 50.000 rendido + 30.000 a rendir + 5.000 propinas.
+    expect(screen.getByText("Efectivo del período").closest("p")).toHaveTextContent(pesos(285_000));
+  });
+
+  it("propina pagada por la caja y saldo de antes: los tiles siguen sumando lo que tuvieron en la mano", async () => {
+    // Traía 10.000, cobró 20.000, propina de tarjeta 8.000; la caja ya le
+    // había pagado 3.000 de propina; entregó 15.000. Saldo = 10+20−8−15+3 = 10.
+    const raro = saldo({
+      mozo_id: "mozo-9", mozo_name: "Eva Luz", anterior_cents: 10_000, efectivo_cents: 20_000,
+      propina_tarjeta_cents: 8_000, pagado_cents: 3_000, entregado_cents: 15_000, saldo_cents: 10_000,
+    });
+    getSaldosCajaTabData.mockResolvedValue({ ok: true, data: [raro] });
+    abrir();
+    await screen.findByText("Eva Luz");
+    expect(tile("Rendido por mozos")).toHaveTextContent(pesos(15_000));
+    expect(tile("A rendir")).toHaveTextContent(pesos(10_000));
+    // Se quedó 8.000 − 3.000 que le pagó la caja = 5.000. 15 + 10 + 5 = 30 = 10 + 20.
+    expect(tile("Propinas de los mozos")).toHaveTextContent(pesos(5_000));
+    expect(screen.getByText(/traían de antes/)).toHaveTextContent(pesos(10_000));
   });
 
   it("una deuda reconocida va a su tile y no a «A rendir»", async () => {

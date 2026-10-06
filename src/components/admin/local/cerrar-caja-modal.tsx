@@ -77,7 +77,7 @@ export function CerrarCajaModal({
     setCargando(true);
     setErrorCarga(null);
     try {
-      const res = await getCierreCajaTabData(slug, cajaId, { sinReparto: true });
+      const res = await getCierreCajaTabData(slug, cajaId);
       // Una respuesta vieja (o que llega con el modal cerrado) no pisa nada.
       if (mio !== seq.current) return null;
       if (res.ok) {

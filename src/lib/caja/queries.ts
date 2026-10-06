@@ -321,6 +321,8 @@ export type CajaPayment = {
   attributed_mozo_name: string | null;
   /** #351 — para cruzar el cobro con la rendición pendiente del mismo mozo. */
   attributed_mozo_id: string | null;
+  /** Spec 210 v2 — quién rinde este cobro (null: lo cobró la caja directo). */
+  rinde_mozo_id?: string | null;
   /**
    * El comprobante de esta orden quedó rechazado y no hay otro vivo (spec 147).
    *
@@ -344,7 +346,7 @@ export async function getPaymentsPeriodoActual(
     let query = service
       .from("payments")
       .select(
-        "id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, order_id, orders!inner(order_number, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
+        "id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, rinde_mozo_id, order_id, orders!inner(order_number, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
       )
       .eq("caja_id", cajaId)
       .eq("payment_status", "paid")
@@ -363,6 +365,7 @@ export async function getPaymentsPeriodoActual(
     tip_cents: number;
     created_at: string;
     attributed_mozo_id: string | null;
+    rinde_mozo_id: string | null;
     order_id: string;
     orders:
       | {
@@ -454,6 +457,7 @@ export async function getPaymentsPeriodoActual(
       table_label: tbl?.label ?? null,
       customer_name: ord?.customer_name ?? null,
       attributed_mozo_id: r.attributed_mozo_id,
+      rinde_mozo_id: r.rinde_mozo_id,
       attributed_mozo_name: r.attributed_mozo_id
         ? (mozoNameById.get(r.attributed_mozo_id) ?? null)
         : null,
@@ -1420,6 +1424,7 @@ export async function getLibroDeMovimientos(
     ingresos_cents: 0,
     sangrias_cents: 0,
     propinas_pagadas_cents: 0,
+    rendiciones_cents: 0,
     por_metodo: { ...EMPTY_BY_METHOD },
   };
   for (const e of filtradas) {
@@ -1440,8 +1445,14 @@ export async function getLibroDeMovimientos(
       // Spec 177 — aparte de las sangrías: las dos sacan plata del cajón, pero
       // una se la lleva el dueño y la otra se le paga al personal.
       totales.propinas_pagadas_cents += e.amount_cents;
-    } else {
+    } else if (e.tipo === "rendicion") {
+      // Spec 210 v2 — lo que entregan los mozos ENTRA al cajón: no es sangría.
+      totales.rendiciones_cents += e.amount_cents;
+    } else if (e.tipo === "sangria") {
       totales.sangrias_cents += e.amount_cents;
+    } else {
+      const _exhaustivo: never = e.tipo;
+      void _exhaustivo;
     }
   }
 
@@ -1734,8 +1745,6 @@ export type PendienteDeCaja = {
 export async function getCierreCajaData(
   cajaId: string,
   businessId: string,
-  // Compatibilidad con los llamadores de la v1; el reparto ya no se calcula.
-  _opts: { sinReparto?: boolean } = {},
 ): Promise<CierreCajaData | null> {
   const service = db();
   const { data: cajaRow } = await service

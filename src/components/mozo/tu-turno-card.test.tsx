@@ -60,9 +60,14 @@ describe("TuTurnoCard", () => {
   it("sin efectivo cobrado dice que no hay nada para entregar", async () => {
     conTurno([]);
     render(<TuTurnoCard slug="golf-jcr" />);
-    expect(
-      await screen.findByText("Todavía no cobraste en efectivo en este turno. No tenés nada para entregar."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("No tenés nada para entregar en caja.")).toBeInTheDocument();
+  });
+
+  it("una caja donde sólo cobró con tarjeta (saldo 0, sin entregas) no es «entregá $0»", async () => {
+    conTurno([caja({ saldo_cents: 0 })]);
+    render(<TuTurnoCard slug="golf-jcr" />);
+    expect(await screen.findByText("No tenés nada para entregar en caja.")).toBeInTheDocument();
+    expect(screen.queryByText("Tenés que entregar en caja")).not.toBeInTheDocument();
   });
 
   it("con saldo positivo muestra cuánto entregar y cómo sale el número", async () => {
@@ -162,15 +167,24 @@ describe("TuTurnoCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("si getMiTurno devuelve error no muestra nada", async () => {
+  it("si getMiTurno devuelve error lo dice, en vez de desaparecer", async () => {
     getMiTurno.mockResolvedValue({ ok: false, error: "No tenés acceso a esto." });
-    const { container } = render(<TuTurnoCard slug="golf-jcr" />);
-    await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
+    render(<TuTurnoCard slug="golf-jcr" />);
+    expect(await screen.findByText(/No pudimos cargar tu cuenta del turno/)).toBeInTheDocument();
   });
 
-  it("si getMiTurno falla (red) no muestra nada", async () => {
+  it("si getMiTurno falla (red) lo dice", async () => {
     getMiTurno.mockRejectedValue(new TypeError("Failed to fetch"));
-    const { container } = render(<TuTurnoCard slug="golf-jcr" />);
-    await vi.waitFor(() => expect(container).toBeEmptyDOMElement());
+    render(<TuTurnoCard slug="golf-jcr" />);
+    expect(await screen.findByText(/No pudimos cargar tu cuenta del turno/)).toBeInTheDocument();
+  });
+
+  it("al volver a la app se refresca", async () => {
+    conTurno([caja({ efectivo_cents: 50_000, saldo_cents: 50_000 })]);
+    render(<TuTurnoCard slug="golf-jcr" />);
+    await screen.findByText("Tenés que entregar en caja");
+    conTurno([caja({ efectivo_cents: 50_000, entregado_cents: 50_000, saldo_cents: 0 })]);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(await screen.findByText("Rendiste. No debés nada.")).toBeInTheDocument();
   });
 });

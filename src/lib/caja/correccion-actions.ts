@@ -450,11 +450,12 @@ export async function corregirMovimiento(
 
   const { data } = await service
     .from("caja_movimientos")
-    .select("id, business_id, caja_id, created_at, cancelled_at")
+    .select("id, business_id, caja_id, kind, created_at, cancelled_at")
     .eq("id", input.movimientoId)
     .maybeSingle();
   const mov = data as {
     id: string;
+    kind: string;
     business_id: string;
     caja_id: string;
     created_at: string;
@@ -466,6 +467,12 @@ export async function corregirMovimiento(
   }
   if (mov.cancelled_at !== null) {
     return actionError("Ese movimiento ya está anulado.");
+  }
+  // Spec 210 v2 — la entrega de un mozo (o la propina que le pagó la caja) se
+  // anula desde su rendición, que deja la huella en las dos tablas. La base
+  // lo impide igual (0143, MOVIMIENTO_DE_MOZO).
+  if (mov.kind === "rendicion" || mov.kind === "propina") {
+    return actionError("Una entrega de mozo no se corrige acá: anulala desde la rendición del mozo.");
   }
   if (!(await estaEnPeriodoAbierto(service, mov.caja_id, business.id, mov.created_at))) {
     return actionError(

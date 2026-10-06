@@ -80,8 +80,16 @@ describe.skipIf(!dbAvailable)("caja v2 · pasaje (0140)", () => {
     expect(await esperado()).toBe(cajaAntes - 33_000);
     expect(Number(await rpc("saldo_mozo", { p_mozo_id: s.ctx.mozoId, p_caja_id: s.ctx.cajaId }))).toBe(33_000);
 
-    const { data: t } = await s.sb.from("turnos").select("id").eq("business_id", s.ctx.businessId).is("cerrado_at", null);
+    const { data: t } = await s.sb.from("turnos").select("id, abierto_at").eq("business_id", s.ctx.businessId).is("cerrado_at", null);
     expect(t).toHaveLength(1);
+    // 0142 — el turno arranca con el primer cobro pasado: lo de hoy no es «de antes».
+    const { data: pp } = await s.sb.from("payments").select("created_at").eq("id", pendiente).single();
+    expect(new Date(t![0].abierto_at).getTime()).toBeLessThanOrEqual(new Date(pp!.created_at).getTime());
+    const [saldo] = (await rpc<{ anterior_cents: number; efectivo_cents: number }[]>("saldos_mozos", {
+      p_business_id: s.ctx.businessId, p_desde: t![0].abierto_at,
+    })) ?? [];
+    expect(saldo.anterior_cents).toBe(0);
+    expect(saldo.efectivo_cents).toBe(33_000);
     // Correrlo de nuevo no hace nada.
     expect(await rpc<number>("pasar_al_modelo_nuevo", { p_business_id: s.ctx.businessId })).toBe(0);
   });

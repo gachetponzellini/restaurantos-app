@@ -117,6 +117,8 @@ export type LibroTotales = {
   sangrias_cents: number;
   /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
   propinas_pagadas_cents: number;
+  /** Lo que entregaron los mozos: entra al cajón (spec 210 v2). */
+  rendiciones_cents: number;
   por_metodo: Record<PaymentMethod, number>;
 };
 

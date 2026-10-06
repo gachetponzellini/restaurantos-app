@@ -360,6 +360,11 @@ const ERRORES_RPC: Record<string, string> = {
   MOVIMIENTO_NOT_FOUND: "No se encontró el movimiento.",
   MOVIMIENTO_OTHER_BUSINESS: "Ese movimiento no es de este negocio.",
   MOVIMIENTO_ALREADY_CANCELLED: "Ese movimiento ya está anulado.",
+  // Caja v2 (0137, 0143).
+  MOZO_YA_RINDIO:
+    "Ese cobro ya entró en la rendición del mozo. Para corregirlo, primero anulá su entrega.",
+  MOVIMIENTO_DE_MOZO:
+    "Una entrega de mozo no se corrige acá: anulala desde la rendición del mozo.",
 };
 
 /** Traduce el error crudo de la RPC al castellano del encargado. */

@@ -574,12 +574,10 @@ function CajaCard({
           ) : (
             <ul className="mt-3 max-h-[28rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
               {entries.map((e) => {
-                const dia = e.createdAt.slice(0, 10);
-                const href = `/${slug}/admin/caja/movimientos?caja=${caja.id}&gran=dia&fecha=${dia}`;
                 return e.kind === "cobro" ? (
-                  <CobroRow key={`p-${e.data.id}`} payment={e.data} href={href} onEditar={() => editar(e.data.created_at, e.data.id)} />
+                  <CobroRow key={`p-${e.data.id}`} payment={e.data} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 ) : (
-                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} href={href} onEditar={() => editar(e.data.created_at, e.data.id)} />
+                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 );
               })}
             </ul>
@@ -662,7 +660,7 @@ function CajaCard({
 
 
 
-function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; href?: string; onEditar: () => void }) {
+function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; onEditar: () => void }) {
   // issue #299 — esto era `mov.kind === "sangria"`, así que el pago de propina
   // (spec 177 · D6) caía en el `else` y se dibujaba como «Ingreso», verde y con
   // `+`: plata que salió del cajón figurando como que entró.
@@ -721,7 +719,7 @@ function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; href?: string; 
 }
 
 
-function CobroRow({ payment, onEditar }: { payment: CajaPayment; href?: string; onEditar: () => void }) {
+function CobroRow({ payment, onEditar }: { payment: CajaPayment; onEditar: () => void }) {
   const Icon = methodIcon(payment.method);
   const time = new Date(payment.created_at).toLocaleTimeString("es-AR", {
     timeZone: TZ_AR,

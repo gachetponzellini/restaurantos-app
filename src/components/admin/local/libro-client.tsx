@@ -172,6 +172,13 @@ export function LibroClient({
           value={formatCurrency(totales.ingresos_cents)}
           hint="a la caja"
         />
+        {totales.rendiciones_cents > 0 && (
+          <Totalizador
+            label="Rendiciones"
+            value={formatCurrency(totales.rendiciones_cents)}
+            hint="entregado por mozos"
+          />
+        )}
         <Totalizador
           label="Sangrías"
           value={formatCurrency(totales.sangrias_cents)}

@@ -69,7 +69,7 @@ export function RendirMozoModal({
 
   const ejecutar = (entregado: number, notas?: string) =>
     startTransition(async () => {
-      const r = await rendirMozo({ slug, mozoId: saldo.mozo_id, cajaId: saldo.caja_id, entregadoCents: entregado, notas });
+      const r = await rendirMozo({ slug, mozoId: saldo.mozo_id, cajaId: saldo.caja_id, entregadoCents: entregado, notas, esperadoCents: debe });
       if (!r.ok) {
         toast.error(r.error);
         return;

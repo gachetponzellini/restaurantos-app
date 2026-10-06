@@ -57,6 +57,13 @@ export function EfectivoDeLaCaja({
     setSaldos(null);
   }, [cajaId]);
 
+  // El modal abierto sigue a la lista viva: si el refresh trae otro saldo, se
+  // ve el nuevo (y el servidor rechaza confirmar sobre uno viejo).
+  useEffect(() => {
+    if (!saldos) return;
+    setRindiendo((r) => (r ? (saldos.find((m) => m.mozo_id === r.mozo_id && m.caja_id === r.caja_id) ?? r) : r));
+  }, [saldos]);
+
   useEffect(() => {
     if (!active) return;
     void cargar();
@@ -66,10 +73,19 @@ export function EfectivoDeLaCaja({
 
   const directo = stats.desglose_esperado.efectivo_cents;
   const lista = saldos ?? [];
-  const rendido = lista.reduce((a, m) => a + m.entregado_cents, 0);
-  const aRendir = lista.filter((m) => !m.deuda).reduce((a, m) => a + Math.max(0, m.saldo_cents), 0);
-  const propinas = lista.reduce((a, m) => a + m.propina_tarjeta_cents, 0);
-  const deuda = lista.filter((m) => m.deuda).reduce((a, m) => a + m.saldo_cents, 0);
+  // Cada mozo reparte lo que tuvo en la mano (lo de antes + lo que cobró) en:
+  // lo que entregó, lo que todavía tiene (a rendir o deuda) y su propina de
+  // tarjeta, que se queda de ese efectivo. Si la caja le pagó parte de la
+  // propina, esa parte no salió de su efectivo; si la caja todavía le debe, lo
+  // que se quedó es todo lo que tenía. Así los tiles suman exacto.
+  const suma = (f: (m: SaldoMozo) => number) => lista.reduce((a, m) => a + f(m), 0);
+  const rendido = suma((m) => m.entregado_cents);
+  const aRendir = suma((m) => (m.deuda ? 0 : Math.max(0, m.saldo_cents)));
+  const deuda = suma((m) => (m.deuda ? Math.max(0, m.saldo_cents) : 0));
+  const propinas = suma((m) =>
+    Math.max(0, m.anterior_cents + m.efectivo_cents - m.entregado_cents - Math.max(0, m.saldo_cents)),
+  );
+  const anterior = suma((m) => m.anterior_cents);
   const total = directo + rendido + aRendir + propinas + deuda;
   const conAnterior = lista.some((m) => m.anterior_cents !== 0);
 
@@ -93,8 +109,9 @@ export function EfectivoDeLaCaja({
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="efectivo-titulo" className="text-[0.95rem] font-semibold">Efectivo: dónde está</h3>
         <p className="text-sm text-muted-foreground">
-          Cobrado en efectivo{" "}
-          <span className="font-semibold tabular-nums text-foreground">{formatCurrency(stats.ventas_por_metodo.cash ?? 0)}</span>
+          Efectivo del período{" "}
+          <span className="font-semibold tabular-nums text-foreground">{formatCurrency(total)}</span>
+          {anterior > 0 && <span className="block text-xs">Incluye {formatCurrency(anterior)} que los mozos traían de antes</span>}
         </p>
       </div>
 
@@ -182,7 +199,10 @@ export function EfectivoDeLaCaja({
           onOpenChange={(o) => !o && setRindiendo(null)}
           slug={slug}
           saldo={rindiendo}
-          cobros={payments.filter((p) => p.attributed_mozo_id === rindiendo.mozo_id)}
+          cobros={payments.filter((p) =>
+            // Sólo los que rinde él: lo que cobró la caja con su nombre no está en su saldo.
+            p.rinde_mozo_id === undefined ? p.attributed_mozo_id === rindiendo.mozo_id : p.rinde_mozo_id === rindiendo.mozo_id,
+          )}
           onRendido={() => {
             setRindiendo(null);
             void cargar();

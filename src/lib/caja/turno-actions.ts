@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { formatCurrency } from "@/lib/currency";
 import { requireMozoActionContext } from "@/lib/mozo/auth";
 import { notifyRendicionPendiente } from "@/lib/notifications/events";
 import { canCorregirCobro, canHacerCorte, canRendirMozo, canVerMiTurno } from "@/lib/permissions/can";
@@ -52,12 +53,30 @@ export async function rendirMozo(input: {
   cajaId: string;
   entregadoCents: number;
   notas?: string | null;
+  /**
+   * El saldo que veía la pantalla al confirmar. Si cambió (cobró otra mesa,
+   * otro encargado le registró algo), no se registra sobre un número viejo.
+   */
+  esperadoCents?: number;
 }): Promise<ActionResult<ResultadoRendicion>> {
   const c = await contexto(input.slug);
   if (!c.ok) return c;
   if (!canRendirMozo(c.data.role)) return actionError("Solo encargado o admin pueden registrar una rendición.");
   if (!Number.isSafeInteger(input.entregadoCents) || input.entregadoCents < 0) {
     return actionError("El monto entregado no es válido.");
+  }
+
+  if (input.esperadoCents !== undefined) {
+    const { data: actual, error: saldoErr } = await db().rpc("saldo_mozo", {
+      p_mozo_id: input.mozoId,
+      p_caja_id: input.cajaId,
+    });
+    if (saldoErr) return actionError(traducir(saldoErr.message));
+    if (Number(actual) !== input.esperadoCents) {
+      return actionError(
+        `El saldo cambió mientras lo mirabas: ahora es ${formatCurrency(Number(actual))}. Revisalo y volvé a confirmar.`,
+      );
+    }
   }
 
   const { data, error } = await db().rpc("rendir_mozo_tx", {
@@ -255,6 +274,7 @@ export async function getMiTurno(slug: string): Promise<ActionResult<MiTurno>> {
   if (!c.ok) return c;
   if (!canVerMiTurno(c.data.role)) return actionError("No tenés acceso a esto.");
   const { getSaldosMozos } = await import("./turno-queries");
+  const { getMesasSinCobrarPorMozo } = await import("./queries");
   const { data: turno } = await db()
     .from("turnos")
     .select("abierto_at")
@@ -264,6 +284,9 @@ export async function getMiTurno(slug: string): Promise<ActionResult<MiTurno>> {
   const saldos = (
     await getSaldosMozos(c.data.business.id, (turno as { abierto_at: string } | null)?.abierto_at)
   ).filter((m) => m.mozo_id === c.data.userId);
+  // Las mesas sin cobrar son del mozo, no de una caja: también las tiene el
+  // que todavía no cobró nada (sin fila de saldo).
+  const mesas = saldos[0]?.mesas_sin_cobrar ?? (await getMesasSinCobrarPorMozo(c.data.business.id)).get(c.data.userId) ?? [];
   return actionOk({
     cajas: saldos.map((m) => ({
       caja_name: m.caja_name,
@@ -276,6 +299,6 @@ export async function getMiTurno(slug: string): Promise<ActionResult<MiTurno>> {
       saldo_cents: m.saldo_cents,
       deuda: m.deuda,
     })),
-    mesas_sin_cobrar: (saldos[0]?.mesas_sin_cobrar ?? []).map((x) => x.tableLabel ?? "?"),
+    mesas_sin_cobrar: mesas.map((x) => x.tableLabel ?? "?"),
   });
 }

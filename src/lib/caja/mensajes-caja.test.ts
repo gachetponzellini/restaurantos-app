@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { formatCurrency } from "@/lib/currency";
 import { traducirErrorDeCaja } from "./mensajes-caja";
@@ -30,9 +30,21 @@ describe("traducirErrorDeCaja", () => {
     expect(traducirErrorDeCaja("  YA_ANULADA ")).toBe("Esa entrega ya estaba anulada.");
   });
 
-  it("un código desconocido vuelve tal cual, con su extra", () => {
-    expect(traducirErrorDeCaja("ALGO_RARO")).toBe("ALGO_RARO");
-    expect(traducirErrorDeCaja("ALGO_RARO:42")).toBe("ALGO_RARO:42");
-    expect(traducirErrorDeCaja("Fallo de red")).toBe("Fallo de red");
+  it("un error desconocido o técnico no llega crudo a la pantalla", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const generico = "No se pudo completar. Reintentá en un momento.";
+    expect(traducirErrorDeCaja("ALGO_RARO")).toBe(generico);
+    expect(traducirErrorDeCaja('invalid input syntax for type bigint: "x"')).toBe(generico);
+    expect(err).toHaveBeenCalledTimes(2);
+    err.mockRestore();
+  });
+
+  it("el dato extra puede traer sus propios dos puntos", () => {
+    expect(traducirErrorDeCaja("CAJA_SIN_CONTAR:Barra: planta alta")).toBe("Falta contar: Barra: planta alta.");
+  });
+
+  it("los códigos de 0143", () => {
+    expect(traducirErrorDeCaja("MOVIMIENTO_DE_MOZO")).toMatch(/anulala desde la rendición/);
+    expect(traducirErrorDeCaja("MOZO_WRONG_BUSINESS")).toMatch(/no es del equipo/);
   });
 });

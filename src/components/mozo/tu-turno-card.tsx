@@ -15,39 +15,63 @@ export function TuTurnoCard({ slug }: { slug: string }) {
   const [turno, setTurno] = useState<MiTurno | null>(null);
   const [error, setError] = useState(false);
 
+  // Se refresca solo: cuando el encargado le registra la entrega, el celular
+  // lo muestra sin recargar (al volver a la app y cada dos minutos).
   useEffect(() => {
     let vivo = true;
-    getMiTurno(slug)
-      .then((r) => {
-        if (!vivo) return;
-        if (r.ok) setTurno(r.data);
-        else setError(true);
-      })
-      .catch(() => vivo && setError(true));
+    const cargar = () =>
+      getMiTurno(slug)
+        .then((r) => {
+          if (!vivo) return;
+          if (r.ok) {
+            setTurno(r.data);
+            setError(false);
+          } else setError(true);
+        })
+        .catch(() => vivo && setError(true));
+    void cargar();
+    const i = setInterval(() => void cargar(), 120_000);
+    const alVolver = () => document.visibilityState === "visible" && void cargar();
+    document.addEventListener("visibilitychange", alVolver);
     return () => {
       vivo = false;
+      clearInterval(i);
+      document.removeEventListener("visibilitychange", alVolver);
     };
   }, [slug]);
 
-  if (error) return null;
+  if (error && !turno) {
+    return (
+      <section aria-labelledby="tu-turno" className="rounded-3xl bg-white p-5 ring-1 ring-zinc-200">
+        <h2 id="tu-turno" className="text-sm font-semibold text-zinc-900">Tu turno</h2>
+        <p className="mt-1 text-sm text-zinc-600">No pudimos cargar tu cuenta del turno. Probá de nuevo en un rato.</p>
+      </section>
+    );
+  }
   if (!turno) {
     return <section aria-busy className="h-32 animate-pulse rounded-3xl bg-zinc-100" />;
   }
 
   const mesas = turno.mesas_sin_cobrar;
-  if (turno.cajas.length === 0) {
+  // Una caja donde no tiene nada (sólo cobró con tarjeta, sin propina) no es
+  // «entregá $0»: es nada para entregar.
+  const cajas = turno.cajas.filter((c) => c.saldo_cents !== 0 || c.entregado_cents > 0 || c.pagado_cents > 0 || c.deuda);
+  if (cajas.length === 0) {
     return (
-      <section aria-labelledby="tu-turno" className="rounded-3xl bg-white p-5 ring-1 ring-zinc-200">
-        <h2 id="tu-turno" className="text-sm font-semibold text-zinc-900">Tu turno</h2>
-        <p className="mt-1 text-sm text-zinc-600">Todavía no cobraste en efectivo en este turno. No tenés nada para entregar.</p>
-      </section>
+      <div className="space-y-3">
+        <section aria-labelledby="tu-turno" className="rounded-3xl bg-white p-5 ring-1 ring-zinc-200">
+          <h2 id="tu-turno" className="text-sm font-semibold text-zinc-900">Tu turno</h2>
+          <p className="mt-1 text-sm text-zinc-600">No tenés nada para entregar en caja.</p>
+        </section>
+        {mesas.length > 0 && <MesasSinCobrar mesas={mesas} />}
+      </div>
     );
   }
 
-  const variasCajas = turno.cajas.length > 1;
+  const variasCajas = cajas.length > 1;
   return (
     <div className="space-y-3">
-      {turno.cajas.map((c) => {
+      {cajas.map((c) => {
         const debe = c.saldo_cents;
         const rendido = debe === 0 && (c.entregado_cents > 0 || c.pagado_cents > 0);
         return (
@@ -73,7 +97,7 @@ export function TuTurnoCard({ slug }: { slug: string }) {
 
       <section aria-labelledby="como-sale" className="rounded-3xl bg-white p-5 ring-1 ring-zinc-200">
         <h2 id="como-sale" className="text-sm font-semibold text-zinc-900">Cómo sale el número</h2>
-        {turno.cajas.map((c) => (
+        {cajas.map((c) => (
           <dl key={c.caja_name} className="mt-2 space-y-1.5 text-sm">
             {variasCajas && <p className="text-xs font-semibold text-zinc-500">{c.caja_name}</p>}
             {c.anterior_cents !== 0 && <Fila label="Traías de antes" cents={c.anterior_cents} />}
@@ -92,17 +116,7 @@ export function TuTurnoCard({ slug }: { slug: string }) {
         ))}
       </section>
 
-      <section
-        aria-labelledby="mesas-sin-cobrar"
-        className={cn("rounded-3xl p-5 ring-1", mesas.length ? "bg-amber-50 text-amber-950 ring-amber-200" : "bg-white text-zinc-700 ring-zinc-200")}
-      >
-        <h2 id="mesas-sin-cobrar" className="text-sm font-semibold">
-          {mesas.length ? `Tenés ${mesas.map((m) => `la mesa ${m}`).join(", ")} sin cobrar` : "Mesas sin cobrar"}
-        </h2>
-        <p className="mt-1 text-sm">
-          {mesas.length ? "Cobrala antes de ir a rendir: si no, vas a tener que rendir dos veces." : "Ninguna. Podés ir a rendir."}
-        </p>
-      </section>
+      <MesasSinCobrar mesas={mesas} />
     </div>
   );
 }
@@ -113,5 +127,21 @@ function Fila({ label, cents, tono }: { label: string; cents: number; tono?: str
       <dt className={tono ? undefined : "text-zinc-700"}>{label}</dt>
       <dd className="tabular-nums">{cents < 0 ? `− ${formatCurrency(-cents)}` : formatCurrency(cents)}</dd>
     </div>
+  );
+}
+
+function MesasSinCobrar({ mesas }: { mesas: string[] }) {
+  return (
+    <section
+      aria-labelledby="mesas-sin-cobrar"
+      className={cn("rounded-3xl p-5 ring-1", mesas.length ? "bg-amber-50 text-amber-950 ring-amber-200" : "bg-white text-zinc-700 ring-zinc-200")}
+    >
+      <h2 id="mesas-sin-cobrar" className="text-sm font-semibold">
+        {mesas.length ? `Tenés ${mesas.map((m) => `la mesa ${m}`).join(", ")} sin cobrar` : "Mesas sin cobrar"}
+      </h2>
+      <p className="mt-1 text-sm">
+        {mesas.length ? "Cobrala antes de ir a rendir: si no, vas a tener que rendir dos veces." : "Ninguna. Podés ir a rendir."}
+      </p>
+    </section>
   );
 }

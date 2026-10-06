@@ -65,9 +65,10 @@ export function countCajas(cajas: CajaConEstado[]): number {
 }
 
 /**
- * Rendiciones pendientes = mozos con al menos un pago sin rendir. Mismo
- * predicado `pagos_count > 0` que usa la tab de Rendición (money-adjacent: un
- * "0" falso puede llevar a cerrar el turno creyendo que no hay nada).
+ * Rendiciones pendientes = mozos sin resolver en alguna caja (spec 211, de
+ * `saldos_mozos`): el mismo criterio con el que la base deja cerrar una caja.
+ * Un mozo con saldo en dos cajas cuenta una vez. Money-adjacent: un «0» falso
+ * puede llevar a cerrar el turno creyendo que no hay nada.
  */
 export function countRendicionesPendientes(
   saldos: { mozo_id: string; resuelto: boolean }[],

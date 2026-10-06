@@ -56,7 +56,11 @@ export async function marcarPagosReembolsados(
       refunded_reason: params.motivo,
     })
     .eq("order_id", params.orderId)
-    .eq("payment_status", "paid");
+    .eq("payment_status", "paid")
+    // Lo que devolvió el gateway son cobros de Mercado Pago. Un efectivo o una
+    // tarjeta de la misma orden no se devolvió por ahí: marcarlo dejaría la
+    // caja sin esa plata (y en el modelo nuevo choca con la rendición del mozo).
+    .in("method", ["mp_link", "mp_qr"]);
   if (params.mpPaymentId) query = query.eq("mp_payment_id", params.mpPaymentId);
   const { data: refundados, error: updErr } = await query.select(
     "id, caja_id, amount_cents",

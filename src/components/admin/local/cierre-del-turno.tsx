@@ -59,6 +59,12 @@ export function CierreDelTurno({
     }
   }, [slug]);
 
+  // El modal abierto sigue al estado vivo (el poll de 60 s o un refresh).
+  useEffect(() => {
+    if (!estado) return;
+    setRindiendo((r) => (r ? (estado.saldos.find((m) => m.mozo_id === r.mozo_id && m.caja_id === r.caja_id) ?? r) : r));
+  }, [estado]);
+
   useEffect(() => {
     if (!active) return;
     void cargar();
