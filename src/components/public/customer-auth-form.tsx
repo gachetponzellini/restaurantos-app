@@ -12,7 +12,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--hairline-2)",
   background: "var(--bg)",
   color: "var(--ink)",
-  fontSize: 15,
+  // H-23: ≥16px para que iOS no haga zoom al enfocar.
+  fontSize: 16,
   padding: "0 16px",
   outline: "none",
   boxSizing: "border-box",
@@ -173,7 +174,7 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
             onClick={() => toggleMode(m)}
             style={{
               flex: 1,
-              height: 36,
+              minHeight: 44,
               borderRadius: 7,
               border: "none",
               background: mode === m ? "var(--bg)" : "transparent",
@@ -201,7 +202,9 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
             name="email"
             type="email"
             autoComplete="email"
-            autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             style={inputStyle}
           />
           {fieldErrors.email && (

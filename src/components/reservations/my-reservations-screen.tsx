@@ -110,8 +110,8 @@ export function MyReservationsScreen({
           href={`/${slug}/perfil`}
           aria-label="Volver"
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -125,7 +125,7 @@ export function MyReservationsScreen({
         <Link
           href={`/${slug}/reservar`}
           style={{
-            height: 32,
+            height: 44,
             padding: "0 14px",
             borderRadius: 99,
             background: "var(--primary)",

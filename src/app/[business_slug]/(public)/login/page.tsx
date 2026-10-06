@@ -52,8 +52,8 @@ export default async function CustomerLoginPage({
           href={`/${business_slug}/menu`}
           aria-label="Cerrar"
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
