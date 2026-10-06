@@ -33,8 +33,8 @@ function initialSelection(product: MenuProduct): Selection {
 function validate(product: MenuProduct, selection: Selection): string | null {
   for (const g of product.modifier_groups) {
     const count = selection[g.id]?.length ?? 0;
-    if (count < g.min_selection)
-      return `Elegí al menos ${g.min_selection} en "${g.name}".`;
+    const min = Math.max(g.min_selection, g.is_required ? 1 : 0);
+    if (count < min) return `Elegí al menos ${min} en "${g.name}".`;
     if (count > g.max_selection)
       return `Podés elegir hasta ${g.max_selection} en "${g.name}".`;
   }

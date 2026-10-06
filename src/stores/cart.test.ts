@@ -130,4 +130,25 @@ describe("cart store · tope por línea (H-12)", () => {
     store().getState().updateQuantity("a", 0);
     expect(store().getState().items).toHaveLength(0);
   });
+
+  it("updateQuantity sanea valores no numéricos o fraccionarios", () => {
+    store().getState().addItem({ ...item(2, 1000), id: "a" });
+    store().getState().updateQuantity("a", 3.7);
+    expect(store().getState().items[0].quantity).toBe(3);
+    store().getState().updateQuantity("a", Number.NaN);
+    expect(store().getState().items).toHaveLength(0);
+  });
+
+  it("un carrito guardado antes del tope (v0, qty 150) se lee saneado a 99", () => {
+    localStorage.setItem(
+      "cart:test-migra",
+      JSON.stringify({
+        state: { items: [{ ...item(150, 1000), id: "viejo" }] },
+        version: 0,
+      }),
+    );
+    const migrated = getCartStore("test-migra").getState().items;
+    expect(migrated).toHaveLength(1);
+    expect(migrated[0].quantity).toBe(99);
+  });
 });

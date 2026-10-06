@@ -76,6 +76,7 @@ const GROUPS = [
 }));
 
 let inserted: Record<string, Record<string, unknown>[]>;
+let groupsQueryFails = false;
 
 function fakeClient() {
   function chain(table: string) {
@@ -98,7 +99,9 @@ function fakeClient() {
             })),
           };
         case "modifier_groups":
-          return { data: byIn(GROUPS) };
+          return groupsQueryFails
+            ? { data: null, error: { message: "timeout" } }
+            : { data: byIn(GROUPS) };
         case "customers":
           return { data: { id: "cust1" } };
         case "orders":
@@ -163,6 +166,7 @@ function rechazado(res: Awaited<ReturnType<typeof persistOrder>>): string {
 
 beforeEach(() => {
   inserted = {};
+  groupsQueryFails = false;
 });
 
 describe("persistOrder · modifier_ids contra los grupos del producto (H-01)", () => {
@@ -258,5 +262,16 @@ describe("persistOrder · modifier_ids contra los grupos del producto (H-01)", (
       ]),
     );
     expect(rechazado(res)).toContain("Tallarines");
+  });
+
+  it("si no se pueden leer los grupos, rechaza (no deja pasar un obligatorio vacío)", async () => {
+    groupsQueryFails = true;
+    const res = await persistOrder(
+      input([{ product_id: TALLARINES, modifier_ids: [] }]),
+    );
+    expect(rechazado(res)).toBe(
+      "No pudimos validar las opciones del pedido. Probá de nuevo.",
+    );
+    expect(inserted.orders).toBeUndefined();
   });
 });

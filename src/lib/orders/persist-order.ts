@@ -338,13 +338,18 @@ export async function persistOrder(
   // Corre también con `modifier_ids: []` — es la forma de saltear un grupo
   // obligatorio. No cambia el precio de ningún input válido.
   if (productItems.length > 0) {
-    const { data: groupRows } = await supabase
+    const { data: groupRows, error: groupsError } = await supabase
       .from("modifier_groups")
       .select(
         "id, product_id, name, is_required, min_selection, max_selection, modifiers(id, is_available)",
       )
       .in("product_id", productIds)
       .eq("business_id", business.id);
+    if (groupsError) {
+      return actionError(
+        "No pudimos validar las opciones del pedido. Probá de nuevo.",
+      );
+    }
     const groupsByProduct = new Map<string, ProductModifierGroup[]>();
     for (const g of groupRows ?? []) {
       const list = groupsByProduct.get(g.product_id) ?? [];

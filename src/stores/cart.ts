@@ -66,7 +66,8 @@ export type CartItem = {
 export const MAX_QTY_PER_LINE = 99;
 
 function clampQty(qty: number): number {
-  return Math.min(qty, MAX_QTY_PER_LINE);
+  if (!Number.isFinite(qty)) return 0;
+  return Math.min(Math.max(Math.floor(qty), 0), MAX_QTY_PER_LINE);
 }
 
 export type CartState = {
@@ -105,6 +106,19 @@ function createCartStore(slug: string) {
       {
         name: `cart:${slug}`,
         storage: createJSONStorage(() => localStorage),
+        // v1 (QA #382): los carritos guardados antes del tope pueden traer
+        // más de 99 unidades por línea; se sanean al leerlos.
+        version: 1,
+        migrate: (persisted) => {
+          const state = (persisted ?? {}) as { items?: CartItem[] };
+          const items = Array.isArray(state.items) ? state.items : [];
+          return {
+            ...state,
+            items: items
+              .map((i) => ({ ...i, quantity: clampQty(i.quantity) }))
+              .filter((i) => i.quantity > 0),
+          } as CartState;
+        },
       },
     ),
   );

@@ -50,8 +50,8 @@ function initialSelection(p: CatalogProduct): Selection {
 function validate(p: CatalogProduct, sel: Selection): string | null {
   for (const g of p.modifier_groups) {
     const count = sel[g.id]?.length ?? 0;
-    if (count < g.min_selection)
-      return `Elegí al menos ${g.min_selection} en "${g.name}".`;
+    const min = Math.max(g.min_selection, g.is_required ? 1 : 0);
+    if (count < min) return `Elegí al menos ${min} en "${g.name}".`;
     if (count > g.max_selection)
       return `Hasta ${g.max_selection} en "${g.name}".`;
   }

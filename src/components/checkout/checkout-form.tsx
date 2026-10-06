@@ -163,13 +163,20 @@ export function CheckoutForm({
     }
     setPromoChecking(true);
     setPromoError(null);
-    const result = await previewPromoCode({
-      business_slug: slug,
-      code,
-      subtotal_cents: subtotal,
-      delivery_fee_cents: baseDeliveryFee,
-    });
-    setPromoChecking(false);
+    let result: Awaited<ReturnType<typeof previewPromoCode>>;
+    try {
+      result = await previewPromoCode({
+        business_slug: slug,
+        code,
+        subtotal_cents: subtotal,
+        delivery_fee_cents: baseDeliveryFee,
+      });
+    } catch {
+      setPromoError("No pudimos validar el cupón. Probá de nuevo.");
+      return;
+    } finally {
+      setPromoChecking(false);
+    }
     if (!result.ok) {
       setAppliedPromo(null);
       setPromoError(result.error);
@@ -191,12 +198,18 @@ export function CheckoutForm({
     if (!appliedPromo) return;
     let cancelled = false;
     (async () => {
-      const result = await previewPromoCode({
-        business_slug: slug,
-        code: appliedPromo.code,
-        subtotal_cents: subtotal,
-        delivery_fee_cents: baseDeliveryFee,
-      });
+      let result: Awaited<ReturnType<typeof previewPromoCode>>;
+      try {
+        result = await previewPromoCode({
+          business_slug: slug,
+          code: appliedPromo.code,
+          subtotal_cents: subtotal,
+          delivery_fee_cents: baseDeliveryFee,
+        });
+      } catch {
+        // Sin red: se deja el cupón como estaba; persistOrder lo revalida.
+        return;
+      }
       if (cancelled) return;
       if (!result.ok) {
         setAppliedPromo(null);
