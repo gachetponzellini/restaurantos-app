@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateExpectedCash } from "./expected-cash";
 import { MOVIMIENTO_LABEL, saleDelCajon } from "./movimiento-label";
 import type { CajaMovimientoKind } from "./types";
 
-const TODOS: CajaMovimientoKind[] = ["sangria", "ingreso", "propina"];
+const TODOS: CajaMovimientoKind[] = ["sangria", "ingreso", "propina", "rendicion"];
 
 describe("issue #299 · el pago de propina no es un ingreso", () => {
   it("la propina sale del cajón, igual que la sangría", () => {
@@ -30,15 +29,12 @@ describe("issue #299 · el pago de propina no es un ingreso", () => {
   // `kind === "sangria"`, la propina se mostraba con `+` y el esperado la
   // restaba — el total daba bien y la línea decía lo contrario.
   it("el signo dibujado coincide con lo que el arqueo le hace al cajón", () => {
+    // Lo que hace `efectivo_esperado_caja` (0134): ingreso y rendición suman,
+    // sangría y propina restan. Si un kind nuevo se agrega sin dirección, esto
+    // falla antes de que la pantalla dibuje un «+» que el arqueo resta.
+    const SUMA_EN_LA_BASE = new Set(["ingreso", "rendicion"]);
     for (const kind of TODOS) {
-      const conElMovimiento = calculateExpectedCash({
-        last_closing_cash_cents: 100_000,
-        payments: [],
-        movimientos: [{ kind, amount_cents: 10_000 }],
-      });
-      const bajaElCajon = conElMovimiento < 100_000;
-
-      expect(bajaElCajon).toBe(saleDelCajon(kind));
+      expect(saleDelCajon(kind)).toBe(!SUMA_EN_LA_BASE.has(kind));
     }
   });
 });

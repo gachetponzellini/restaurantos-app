@@ -23,6 +23,8 @@ export const MOVIMIENTO_LABEL: Record<CajaMovimientoKind, string> = {
   // en la misma pantalla viaja adentro del cobro. Es el rótulo que el drawer
   // del libro ya usaba.
   propina: "Propina pagada",
+  // Spec 210 v2 — la entrega de un mozo: su plata entra al cajón recién acá.
+  rendicion: "Rendición",
 };
 
 /**
@@ -36,6 +38,7 @@ const DIRECCION: Record<CajaMovimientoKind, "entra" | "sale"> = {
   sangria: "sale",
   ingreso: "entra",
   propina: "sale",
+  rendicion: "entra",
 };
 
 export function saleDelCajon(kind: CajaMovimientoKind): boolean {

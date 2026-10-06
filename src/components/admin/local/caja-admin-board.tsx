@@ -14,9 +14,11 @@ import { toast } from "sonner";
 import { IntentLink } from "@/components/ui/intent-link";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { CerrarCajaModal } from "@/components/admin/local/cerrar-caja-modal";
-import { CierreDelDia } from "@/components/admin/local/cierre-del-dia";
+import { CierreDelTurno } from "@/components/admin/local/cierre-del-turno";
+import { EfectivoDeLaCaja } from "@/components/admin/local/efectivo-de-la-caja";
+import { HistorialYAsignaciones } from "@/components/admin/local/historial-y-asignaciones";
+import { DetalleSheet } from "@/components/admin/local/detalle-movimiento-sheet";
 import {
-  METHOD_COLOR,
   METHOD_LABEL,
   VentasPorMetodo,
   methodIcon,
@@ -25,18 +27,7 @@ import { CobrosPorOrigen } from "@/components/admin/local/cobros-por-origen";
 import { SegmentedSelector } from "@/components/admin/local/segmented-selector";
 import { MovimientoModal } from "@/components/admin/local/movimiento-modal";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { registrarIngreso, registrarSangria } from "@/lib/caja/actions";
-import { RendicionEnCaja } from "@/components/admin/local/rendicion-en-caja";
 import type {
   CajaData,
   RendicionData,
@@ -53,11 +44,17 @@ import {
   useCajaPreferida,
 } from "@/lib/caja/use-caja-preferida";
 import { useOnActivate } from "@/lib/ui/use-tab-param";
-import { getCajaTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
+import {
+  getCajaTabData,
+  getEntradaDelLibroTabData,
+} from "@/app/[business_slug]/admin/(authed)/operacion/actions";
+import type { LibroEntry } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
 import { TXT } from "@/lib/caja/textos";
 import { cn } from "@/lib/utils";
-import type { CuentaConSaldo, RendicionMozoPendiente } from "@/lib/caja/types";
+import type {
+  CuentaConSaldo,
+} from "@/lib/caja/types";
 import { TZ_AR } from "@/lib/timezone";
 
 type Props = {
@@ -163,6 +160,9 @@ export function CajaAdminBoard({
   // máquina: mirar la Caja Bar desde la compu del salón no tiene por qué
   // cambiar dónde cobra esa compu después. Elegirla en el selector sí.
   const activeCajaId = resolverCajaActiva(cajaPedida, cajaPreferida, cajas);
+  // Spec 211 · R6 — «Contar la caja Bar» desde la franja estando en otra caja:
+  // se cambia de caja y el conteo se abre al entrar.
+  const [contarAlEntrar, setContarAlEntrar] = useState<string | null>(null);
 
 
   // Poll de stats por caja. Depende de `active` (spec 101): con el keep-alive el
@@ -295,13 +295,17 @@ export function CajaAdminBoard({
         onChanged={resincronizar}
         active={active}
         refreshKey={refreshKey}
-        pendientesConMesas={rendicion?.rendicionPendientes ?? []}
-        porEmpleado={
+        puedeEditarComoAdmin={showAssignments}
+        abrirConteo={contarAlEntrar === activeCaja.id}
+        onConteoAbierto={() => setContarAlEntrar(null)}
+        onContarOtraCaja={(id) => {
+          setContarAlEntrar(id);
+          selectCaja(id);
+        }}
+        alPie={
           rendicion ? (
-            <RendicionEnCaja
+            <HistorialYAsignaciones
               slug={slug}
-              payments={paymentsByCaja[activeCaja.id] ?? []}
-              pendientes={rendicion.rendicionPendientes}
               historial={rendicion.rendicionHistorial}
               cajas={cajas}
               assignments={rendicion.cajaAssignments}
@@ -337,8 +341,11 @@ function CajaCard({
   onChanged,
   active,
   refreshKey,
-  pendientesConMesas,
-  porEmpleado,
+  puedeEditarComoAdmin,
+  abrirConteo,
+  onConteoAbierto,
+  onContarOtraCaja,
+  alPie,
 }: {
   caja: CajaConEstado;
   stats: CajaLiveStats | null;
@@ -349,14 +356,36 @@ function CajaCard({
   onChanged: () => void;
   active: boolean;
   refreshKey: number;
-  pendientesConMesas: RendicionMozoPendiente[];
+  puedeEditarComoAdmin: boolean;
+  abrirConteo: boolean;
+  onConteoAbierto: () => void;
+  onContarOtraCaja: (cajaId: string) => void;
   /** #351 — cobrado por empleado + rendición, al pie de la caja. */
-  porEmpleado?: React.ReactNode;
+  alPie?: React.ReactNode;
 }) {
   const [, startTransition] = useTransition();
   const [sangriaOpen, setSangriaOpen] = useState(false);
   const [ingresoOpen, setIngresoOpen] = useState(false);
   const [corteOpen, setCorteOpen] = useState(false);
+  // Spec 211 · R4/R5 — corregir un movimiento ahí mismo, con el formulario del libro.
+  const [editando, setEditando] = useState<{
+    entry: LibroEntry;
+    mozos: { id: string; name: string }[];
+    cajas: { id: string; name: string }[];
+  } | null>(null);
+  const editar = (createdAt: string, id: string) =>
+    startTransition(async () => {
+      const r = await getEntradaDelLibroTabData(slug, { cajaId: caja.id, createdAt, id });
+      if (!r.ok) toast.error(r.error);
+      else setEditando(r.data);
+    });
+
+  useEffect(() => {
+    if (abrirConteo) {
+      setCorteOpen(true);
+      onConteoAbierto();
+    }
+  }, [abrirConteo, onConteoAbierto]);
 
   // Los stats llegan por poll, no con la page. Hasta que caen, los montos no
   // son cero: **no se saben**. Mostrar «$0» hacía que por medio segundo el
@@ -364,12 +393,6 @@ function CajaCard({
   // (issue #189).
   const cargandoStats = stats == null;
   const expected = stats?.expected_cash_cents ?? 0;
-  // Spec 130 · Lo que quedó del turno anterior **después** del retiro del
-  // cierre. Sale de los stats (ya neteado) y no de `ultimo_corte`: el monto
-  // contado en el corte es plata que ya se sacó del cajón, y anunciarla como
-  // saldo anterior —con la sangría que la vacía tres líneas más abajo— es
-  // narrar la misma plata dos veces. Con el retiro hecho, esto es $0.
-  const apertura = stats?.desglose_esperado.apertura_cents ?? 0;
   const ventas = stats?.total_ventas_cents ?? 0;
   const propinas = stats?.total_propinas_cents ?? 0;
   const cobros = stats?.cobros_count ?? 0;
@@ -437,7 +460,7 @@ function CajaCard({
           </p>
         </div>
         {/* Spec 209 · R2 — sangría e ingreso son acciones del turno, no el
-            paso principal: el primario vive en «Cierre del día». */}
+            paso principal: el primario vive en «Cierre del turno». */}
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -458,43 +481,16 @@ function CajaCard({
         </div>
       </header>
 
-      <CierreDelDia
+      <CierreDelTurno
         slug={slug}
-        cajaId={caja.id}
+        cajaActivaId={caja.id}
         active={active}
         refreshKey={refreshKey}
-        pendientesConMesas={pendientesConMesas}
-        onContar={() => setCorteOpen(true)}
+        onContar={(id) => (id === caja.id ? setCorteOpen(true) : onContarOtraCaja(id))}
         onChanged={onChanged}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div
-          className="rounded-2xl p-5 ring-1 ring-border/70"
-          style={{ background: "var(--brand-soft, #F4F4F5)" }}
-        >
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground/70">
-            {TXT.deberiaHaber} en la caja
-          </p>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-foreground tabular-nums">
-            {cargandoStats ? (
-              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-primary/10 align-middle" />
-            ) : (
-              formatCurrency(expected)
-            )}
-          </p>
-          <p className="mt-1 text-xs text-foreground/70">
-            {/* Mientras los stats no llegaron no se sabe la apertura: un
-                «Arranca en $0» prematuro es la misma mentira que el «$0» de
-                arriba (issue #189), así que se reserva el alto y no se dice
-                nada. */}
-            {cargandoStats
-              ? "\u00A0"
-              : apertura !== 0
-                ? `${formatCurrency(apertura)} del corte anterior + movimientos del período`
-                : "Arranca en $0 + movimientos del período"}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 gap-3">
         <div className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Cobrado en el período
@@ -521,11 +517,21 @@ function CajaCard({
         </div>
       </div>
 
-      {/* Spec 209 · R9 — la rendición es el paso 2 del cierre: va arriba de
-          los detalles del período, no al pie de la tab. */}
-      {porEmpleado}
-
       {porMetodo && cobros > 0 && <VentasPorMetodo porMetodo={porMetodo} />}
+
+      {/* Spec 211 · R1 — después de lo cobrado, dónde está el efectivo, y
+          después el cajón: lo que se cuenta. */}
+      <EfectivoDeLaCaja
+        slug={slug}
+        cajaId={caja.id}
+        stats={stats}
+        payments={payments}
+        active={active}
+        refreshKey={refreshKey}
+        onChanged={onChanged}
+      />
+
+      <CajonCard stats={stats} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
@@ -571,15 +577,33 @@ function CajaCard({
                 const dia = e.createdAt.slice(0, 10);
                 const href = `/${slug}/admin/caja/movimientos?caja=${caja.id}&gran=dia&fecha=${dia}`;
                 return e.kind === "cobro" ? (
-                  <CobroRow key={`p-${e.data.id}`} payment={e.data} href={href} />
+                  <CobroRow key={`p-${e.data.id}`} payment={e.data} href={href} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 ) : (
-                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} href={href} />
+                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} href={href} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 );
               })}
             </ul>
           )}
         </section>
       </div>
+
+      {alPie}
+
+      {editando && (
+        <DetalleSheet
+          entry={editando.entry}
+          slug={slug}
+          cajas={editando.cajas}
+          mozos={editando.mozos}
+          puedeCorregir
+          esAdmin={puedeEditarComoAdmin}
+          onClose={() => setEditando(null)}
+          onDone={() => {
+            setEditando(null);
+            onChanged();
+          }}
+        />
+      )}
 
       <MovimientoModal
         open={sangriaOpen}
@@ -638,7 +662,7 @@ function CajaCard({
 
 
 
-function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
+function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; href?: string; onEditar: () => void }) {
   // issue #299 — esto era `mov.kind === "sangria"`, así que el pago de propina
   // (spec 177 · D6) caía en el `else` y se dibujaba como «Ingreso», verde y con
   // `+`: plata que salió del cajón figurando como que entró.
@@ -650,8 +674,7 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
   });
   return (
     <li>
-      <IntentLink
-        href={href}
+      <div
         className={cn(
           "flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50",
           mov.cancelled_at && "opacity-50",
@@ -682,13 +705,23 @@ function MovimientoRow({ mov, href }: { mov: CajaMovimiento; href: string }) {
         </div>
         {mov.reason && <p className="mt-0.5 truncate text-xs text-muted-foreground">{mov.reason}</p>}
       </div>
-      </IntentLink>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-2 shrink-0 self-center"
+          onClick={onEditar}
+          aria-label="Editar este movimiento"
+        >
+          Editar
+        </Button>
+      </div>
     </li>
   );
 }
 
 
-function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
+function CobroRow({ payment, onEditar }: { payment: CajaPayment; href?: string; onEditar: () => void }) {
   const Icon = methodIcon(payment.method);
   const time = new Date(payment.created_at).toLocaleTimeString("es-AR", {
     timeZone: TZ_AR,
@@ -704,8 +737,7 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
   return (
     <li>
       {/* La línea es accionable: lleva al libro, que es donde se corrige. */}
-      <IntentLink
-        href={href}
+      <div
         className="flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50"
       >
       <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
@@ -743,7 +775,17 @@ function CobroRow({ payment, href }: { payment: CajaPayment; href: string }) {
           )}
         </div>
       </div>
-      </IntentLink>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-2 shrink-0 self-center"
+          onClick={onEditar}
+          aria-label="Editar este movimiento"
+        >
+          Editar
+        </Button>
+      </div>
     </li>
   );
 }
@@ -825,6 +867,57 @@ export function CuentasConSaldoAviso({
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+// ── El cajón (spec 211 · R1) ─────────────────────────────────────
+
+/**
+ * Lo que tiene que haber en el cajón si se cuenta ahora, con su cuenta línea
+ * por línea. Los números salen de `desglose_esperado_caja` (base): el total es
+ * exactamente el que firma el cierre.
+ */
+function CajonCard({ stats }: { stats: CajaLiveStats | null }) {
+  if (!stats) {
+    return <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy />;
+  }
+  const d = stats.desglose_esperado;
+  type Linea = { label: string; sub?: string; cents: number; signo: "+" | "−" | "" };
+  const todas: Linea[] = [
+    { label: d.apertura_cents ? "Fondo que quedó del cierre anterior" : "Arranca en", cents: d.apertura_cents, signo: "" },
+    { label: "Cobrado por la caja", sub: "Efectivo que no tiene que rendir ningún mozo", cents: d.efectivo_cents, signo: "+" },
+    { label: "Rendiciones de los mozos", cents: d.rendiciones_cents ?? 0, signo: "+" },
+    { label: "Ingresos", cents: d.ingresos_cents, signo: "+" },
+    { label: "Sangrías", cents: d.sangrias_cents, signo: "−" },
+    { label: "Propinas que se pagaron del cajón", cents: d.propinas_pagadas_cents, signo: "−" },
+  ];
+  const lineas = todas.filter((l, i) => i === 0 || l.cents !== 0);
+
+  return (
+    <section aria-labelledby="cajon-titulo" className="rounded-2xl p-5 ring-1 ring-border/70" style={{ background: "var(--brand-soft, #F4F4F5)" }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 id="cajon-titulo" className="text-[0.95rem] font-semibold">El cajón</h3>
+          <p className="text-xs text-foreground/70">Lo que tiene que haber si lo contás ahora.</p>
+        </div>
+        <p className="text-right">
+          <span className="block text-3xl font-bold tracking-tight tabular-nums">{formatCurrency(stats.expected_cash_cents)}</span>
+          <span className="text-xs text-foreground/70">{TXT.deberiaHaber}</span>
+        </p>
+      </div>
+      <dl className="mt-3 divide-y divide-foreground/10 text-sm">
+        {lineas.map((l) => (
+          <div key={l.label} className="flex items-baseline justify-between gap-3 py-1.5">
+            <dt className="text-foreground/80">
+              {l.signo && `${l.signo} `}
+              {l.label}
+              {l.sub && <span className="block text-xs text-foreground/60">{l.sub}</span>}
+            </dt>
+            <dd className="font-semibold tabular-nums">{formatCurrency(l.cents)}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

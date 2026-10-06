@@ -5,7 +5,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { enLotes, fetchAll } from "@/lib/proveedores/unwrap";
 
-import { calculateExpectedCash, separarRetiroDelCierre } from "./expected-cash";
 import { calcularRendicionPorCanal, canalDelCobro } from "./canal-rendicion";
 import { MOVIMIENTO_LABEL } from "./movimiento-label";
 import { mozosQueDebenRendir } from "./deben-rendir";
@@ -524,7 +523,7 @@ async function getCajaStatsEnVentana(
   },
 ): Promise<CajaLiveStats> {
   const service = db();
-  const { desde, hasta, arrastreBrutoCents } = ventana;
+  const { desde, hasta } = ventana;
 
   // `orders!inner` es seguro: `payments.order_id` es NOT NULL, así que el join
   // no puede descartar cobros y desbalancear los totales.
@@ -543,22 +542,7 @@ async function getCajaStatsEnVentana(
     return q.order("id");
   };
 
-  // `cancelled_at` viaja para que el efectivo esperado ignore los movimientos
-  // anulados (spec 070): siguen en el libro, pero no mueven la caja.
-  const armarMovimientos = () => {
-    let q = service
-      .from("caja_movimientos")
-      .select("id, kind, amount_cents, cancelled_at, corte_id")
-      .eq("caja_id", cajaId)
-      .gt("created_at", desde);
-    if (hasta) q = q.lte("created_at", hasta);
-    return q.order("id");
-  };
-
-  const [pagosLeidos, movimientosLeidos] = await Promise.all([
-    fetchAll(armarPagos, "payments"),
-    fetchAll(armarMovimientos, "caja_movimientos"),
-  ]);
+  const pagosLeidos = await fetchAll(armarPagos, "payments");
 
   const paymentRows = pagosLeidos as unknown as Array<{
     method: PaymentMethod;
@@ -575,24 +559,7 @@ async function getCajaStatsEnVentana(
       delivery_type: ord?.delivery_type ?? "",
     };
   });
-  const movimientosDelPeriodo = movimientosLeidos as Array<{
-    kind: CajaMovimientoKind;
-    amount_cents: number;
-    cancelled_at: string | null;
-    corte_id: string | null;
-  }>;
 
-  // Spec 130 · El retiro del cierre se netea contra la apertura en vez de
-  // contarse como movimiento del turno nuevo: `expected_cash_cents` da
-  // exactamente lo mismo (es el mismo sumando del otro lado de la cuenta) pero
-  // el turno arranca en $0 en vez de mostrar «$262.000 del corte anterior» y,
-  // abajo, la sangría que lo vacía — que es lo que se leyó como «el sistema me
-  // pide un saldo anterior» (Golf, 2/9).
-  const {
-    apertura_cents,
-    retiro_cierre_cents,
-    del_turno: movimientos,
-  } = separarRetiroDelCierre(arrastreBrutoCents, movimientosDelPeriodo);
 
   const ventas_por_metodo: Record<PaymentMethod, number> = {
     ...EMPTY_BY_METHOD,
@@ -636,33 +603,27 @@ async function getCajaStatsEnVentana(
     total_propinas_cents += p.tip_cents;
   }
 
-  const expected_cash_cents = calculateExpectedCash({
-    last_closing_cash_cents: apertura_cents,
-    payments,
-    movimientos,
+  // Spec 210 v2 — el «debería haber» y su desglose los calcula la base, con la
+  // misma función que firma el cierre (`efectivo_esperado_caja`). Antes había
+  // una copia en TS (expected-cash.ts) y de ahí salían los EXPECTED_CHANGED y
+  // los números que no coincidían. Para una ventana cerrada se mira hasta
+  // justo antes del corte: si no, la base encontraría ese mismo corte como el
+  // «anterior» y la ventana quedaría vacía.
+  const { data: d, error: dErr } = await service.rpc("desglose_esperado_caja", {
+    p_caja_id: cajaId,
+    p_hasta: hasta ? new Date(new Date(hasta).getTime() - 1).toISOString() : "infinity",
   });
-
-  // El mismo desglose que usa `calculateExpectedCash`, expuesto para poder
-  // mostrarlo (issue #188). Spec 177 · D5 — el efectivo va **con** la propina
-  // adentro (está en el cajón hasta que se paga) y la propina pagada sale como
-  // su propio renglón. Tiene que espejar la fórmula renglón por renglón o la
-  // pantalla donde se decide si falta plata no cierra.
-  const vivos = movimientos.filter((m) => !m.cancelled_at);
+  if (dErr) throw new Error(`desglose_esperado_caja: ${dErr.message}`);
+  const desglose = d as Record<string, number>;
+  const expected_cash_cents = Number(desglose.esperado_cents);
   const desglose_esperado = {
-    apertura_cents,
-    retiro_cierre_cents,
-    efectivo_cents: payments
-      .filter((p) => p.method === "cash")
-      .reduce((acc, p) => acc + p.amount_cents, 0),
-    ingresos_cents: vivos
-      .filter((m) => m.kind === "ingreso")
-      .reduce((acc, m) => acc + m.amount_cents, 0),
-    sangrias_cents: vivos
-      .filter((m) => m.kind === "sangria")
-      .reduce((acc, m) => acc + m.amount_cents, 0),
-    propinas_pagadas_cents: vivos
-      .filter((m) => m.kind === "propina")
-      .reduce((acc, m) => acc + m.amount_cents, 0),
+    apertura_cents: Number(desglose.apertura_cents),
+    retiro_cierre_cents: Number(desglose.retiro_cierre_cents),
+    efectivo_cents: Number(desglose.efectivo_cents),
+    ingresos_cents: Number(desglose.ingresos_cents),
+    rendiciones_cents: Number(desglose.rendiciones_cents),
+    sangrias_cents: Number(desglose.sangrias_cents),
+    propinas_pagadas_cents: Number(desglose.propinas_pagadas_cents),
   };
 
   return {
@@ -1578,6 +1539,11 @@ export async function getLibroDeMovimientos(
     let bloqueo: string | null = null;
     if (m.cancelled_at) bloqueo = "El movimiento está anulado.";
     else if (arqueado) bloqueo = "Ya entró en un arqueo cerrado.";
+    // Spec 210 v2 — la entrega de un mozo no se edita como una sangría: su
+    // monto es lo que bajó su saldo. Si estuvo mal, se anula la entrega (y su
+    // saldo vuelve) o se registra otra.
+    else if (m.kind === "rendicion")
+      bloqueo = "Una rendición no se edita: anulá la entrega desde la rendición del mozo o registrá otra.";
 
     entries.push({
       tipo: m.kind,
@@ -1906,13 +1872,21 @@ export type CierreCajaData = {
    * superconjunto de `reparto.mozos`: acá entra también el que cobró todo con
    * tarjeta (efectivo $0 pero período abierto, D4).
    */
-  deben_rendir: RendicionMozoPendiente[];
+  deben_rendir: PendienteDeCaja[];
   /**
    * La caja no tiene ningún operador asignado (`caja_user_assignments`). Sin
    * eso, D3 no puede excluir a nadie y el que atiende la caja termina
    * rindiéndose a sí mismo. Se avisa en el modal.
    */
   sin_operadores: boolean;
+};
+
+/** Spec 210 v2 — un mozo con plata de esta caja sin resolver (frena su cierre). */
+export type PendienteDeCaja = {
+  mozo_id: string;
+  mozo_name: string;
+  /** Lo que tiene que entregar a esta caja. Negativo: la caja le debe la propina. */
+  saldo_cents: number;
 };
 
 /**
@@ -1925,13 +1899,8 @@ export type CierreCajaData = {
 export async function getCierreCajaData(
   cajaId: string,
   businessId: string,
-  /**
-   * Spec 209 · la franja «Cierre del día» y el modal de conteo no muestran el
-   * reparto cajón/mozos: sin él se ahorra la segunda lectura de pendientes (la
-   * scopeada a la caja), que es la parte cara, y el reparto vuelve con los
-   * mozos vacíos.
-   */
-  opts: { sinReparto?: boolean } = {},
+  // Compatibilidad con los llamadores de la v1; el reparto ya no se calcula.
+  _opts: { sinReparto?: boolean } = {},
 ): Promise<CierreCajaData | null> {
   const service = db();
   const { data: cajaRow } = await service
@@ -1947,86 +1916,43 @@ export async function getCierreCajaData(
     fondo_fijo_cents: number | null;
   };
   if (caja.business_id !== businessId) return null;
-  // spec 160 · sin esto la pantalla arma un arqueo para una caja que no se
-  // arquea, y recién falla al confirmar contra `cerrar_caja_tx`.
+  // spec 160 · la caja administrativa no se arquea.
   if (caja.is_administrative) return null;
 
-  const stats = await getCajaLiveStats(cajaId, businessId);
+  // Spec 210 v2 — el cajón espera sólo lo que físicamente tiene: la plata de
+  // los mozos entra cuando la entregan. No hay reparto que hacer; lo que frena
+  // el cierre de ESTA caja son las mesas abiertas (se podrían cobrar en ella)
+  // y los mozos con plata de ella sin resolver. El salón lo barre el turno.
+  const [stats, cuentas, pedidos, operadores, { getSaldosMozos }] = await Promise.all([
+    getCajaLiveStats(cajaId, businessId),
+    getCuentasAbiertas(businessId),
+    getPedidosAbiertosSinMesa(businessId),
+    getOperadoresDeCaja(cajaId, businessId),
+    import("./turno-queries"),
+  ]);
   if (!stats) return null;
-
-  // El cierre del bar puede pasar en plena cena: no libera mesas, no pide
-  // rendiciones y no le importa la 12 que sigue comiendo (D9).
-  if (!caja.is_default) {
-    return {
-      stats,
-      fondo_fijo_cents: caja.fondo_fijo_cents ?? 0,
-      reparto: repartirEfectivoEsperado({
-        expected_cash_cents: stats.expected_cash_cents,
-        mozos_sin_rendir: [],
-      }),
-      cuentas_abiertas: [],
-      pedidos_abiertos: [],
-      salon: { mesas_a_liberar: 0, mozos_asignados: 0 },
-      barre_salon: false,
-      deben_rendir: [],
-      sin_operadores: false,
-    };
-  }
-
-  // Dos lecturas del mismo concepto, y la diferencia importa (issue #264):
-  //
-  //  · `pendientes` es de TODO el negocio — es lo que cada mozo debe entregar,
-  //    y se entrega una sola vez, sin importar en qué caja cobró. Alimenta
-  //    `deben_rendir` y el bloqueo del cierre.
-  //  · `pendientesDeEstaCaja` está scopeado a ESTA caja — es lo único que puede
-  //    restarse de SU cajón, porque `stats.expected_cash_cents` también se
-  //    calcula por caja. Antes se usaba el business-wide para las dos cosas, y
-  //    al cajón de la Principal se le descontaba el efectivo que el mozo había
-  //    cobrado en el Bar: plata que jamás estuvo en el esperado de la Principal.
-  const [pendientes, pendientesDeEstaCaja, operadores, cuentas, pedidos, salon] =
-    await Promise.all([
-      getRendicionesPendientesTodosLosMozos(businessId),
-      opts.sinReparto
-        ? Promise.resolve([] as Awaited<ReturnType<typeof getRendicionesPendientesTodosLosMozos>>)
-        : getRendicionesPendientesTodosLosMozos(businessId, cajaId),
-      getOperadoresDeCaja(cajaId, businessId),
-      getCuentasAbiertas(businessId),
-      getPedidosAbiertosSinMesa(businessId),
-      contarSalonPorLiberar(businessId),
-    ]);
-
-  // Spec 139 · D3 — el operador de la caja no rinde, y tampoco se le resta al
-  // cajón: lo que cobró ya está adentro. Antes el reparto le restaba su
-  // efectivo al cajón y el modal mostraba menos plata de la que hay.
-  const debenRendir = mozosQueDebenRendir(pendientes, operadores);
-  const restanDeEsteCajon = mozosQueDebenRendir(pendientesDeEstaCaja, operadores);
+  const saldos = await getSaldosMozos(businessId);
+  const deben_rendir: PendienteDeCaja[] = saldos
+    .filter((m) => m.caja_id === cajaId && !m.resuelto)
+    .map((m) => ({ mozo_id: m.mozo_id, mozo_name: m.mozo_name, saldo_cents: m.saldo_cents }));
 
   return {
     stats,
     fondo_fijo_cents: caja.fondo_fijo_cents ?? 0,
-    reparto: repartirEfectivoEsperado({
-      expected_cash_cents: stats.expected_cash_cents,
-      mozos_sin_rendir: restanDeEsteCajon.map((p) => ({
-        mozo_id: p.mozo_id,
-        mozo_name: p.mozo_name,
-        // Bruto: es lo que el mozo tiene en la mano, y es lo que hay que
-        // restarle al cajón (spec 177 · D5).
-        efectivo_cents: p.efectivo_bruto_cents,
-      })),
-    }),
+    reparto: {
+      en_cajon_cents: stats.expected_cash_cents,
+      mozos: [],
+      descuadre_cents: 0,
+    },
     cuentas_abiertas: cuentas,
     pedidos_abiertos: pedidos,
-    salon,
-    barre_salon: true,
-    deben_rendir: debenRendir,
+    salon: { mesas_a_liberar: 0, mozos_asignados: 0 },
+    barre_salon: false,
+    deben_rendir,
     sin_operadores: operadores.length === 0,
   };
 }
 
-/**
- * Los usuarios asignados a una caja (`caja_user_assignments`, spec 07): los que
- * cobran parados en ella y por eso **no rinden** (spec 139 · D3).
- */
 export async function getOperadoresDeCaja(
   cajaId: string,
   businessId: string,

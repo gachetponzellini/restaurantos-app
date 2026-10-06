@@ -73,31 +73,6 @@ describe.skipIf(!dbAvailable)("caja v2 · turno y cierre (0136)", () => {
     await s.teardown();
   });
 
-  it("pasaje: el negocio que lo pidió entra al modelo nuevo en el cierre de su principal", async () => {
-    await s.sb.from("businesses").update({ caja_modelo_v2_pedido: true }).eq("id", s.ctx.businessId);
-    // Modelo viejo: el cobro entra al cajón como siempre.
-    await cobroMesa(10_000, s.ctx.cajaId);
-    const { data: biz0 } = await s.sb.from("businesses").select("caja_modelo_v2_desde").eq("id", s.ctx.businessId).single();
-    expect(biz0!.caja_modelo_v2_desde).toBeNull();
-    // Cierre de la principal en el modelo viejo: exige rendir (registro viejo directo).
-    await s.sb.from("mozo_rendiciones").insert({
-      business_id: s.ctx.businessId, mozo_id: s.ctx.mozoId, registered_by: s.ctx.encargadoId,
-      expected_cash_cents: 10_000, delivered_cash_cents: 10_000, difference_cents: 0,
-      por_metodo: {}, por_canal: {}, estado: "rendida",
-    });
-    const c = await cerrar(s.ctx.cajaId, { barrer: true });
-    expect(c.error).toBeNull();
-    const { data: biz } = await s.sb.from("businesses").select("caja_modelo_v2_desde").eq("id", s.ctx.businessId).single();
-    expect(biz!.caja_modelo_v2_desde).not.toBeNull();
-    const { data: turnos } = await s.sb.from("turnos").select("id, cerrado_at").eq("business_id", s.ctx.businessId);
-    expect(turnos).toHaveLength(1);
-    expect(turnos![0].cerrado_at).toBeNull();
-    // El cobro siguiente ya es del modelo nuevo.
-    const m = await cobroMesa(7_000, s.ctx.cajaId);
-    const { data: pago } = await s.sb.from("payments").select("rinde_mozo_id").eq("order_id", m.orderId).single();
-    expect(pago!.rinde_mozo_id).toBe(s.ctx.mozoId);
-  });
-
   it("una caja con plata de un mozo sin rendir no cierra (UNRENDERED_MOZOS), aunque no sea la principal", async () => {
     await cobroMesa(40_000, cajaBar);
     const c = await cerrar(cajaBar);

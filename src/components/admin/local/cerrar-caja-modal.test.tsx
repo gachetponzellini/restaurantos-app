@@ -3,7 +3,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { CierreCajaData } from "@/lib/caja/queries";
-import type { RendicionMozoPendiente } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
 
 // Los mocks declaran los parámetros de la action real: sin eso `vi.fn` infiere
@@ -104,22 +103,6 @@ function data(over: Partial<CierreCajaData> = {}): CierreCajaData {
   };
 }
 
-function pendiente(
-  over: Partial<RendicionMozoPendiente> & { mozo_id: string; mozo_name: string },
-): RendicionMozoPendiente {
-  return {
-    efectivo_cents: 71_200,
-    efectivo_bruto_cents: 71_200,
-    tickets_cents: 0,
-    por_metodo: { ...EMPTY_METODO },
-    total_propinas_cents: 0,
-    propina_efectivo_cents: 0,
-    propina_a_entregar_cents: 0,
-    pagos_count: 3,
-    por_canal: {},
-    ...over,
-  };
-}
 
 
 function pesos(cents: number) {
@@ -310,11 +293,11 @@ describe("CerrarCajaModal · conteo ciego (spec 209)", () => {
 
   it("un mozo sin rendir también frena, y se dice dónde rendirlo", async () => {
     DATA = data({
-      deben_rendir: [pendiente({ mozo_id: "m1", mozo_name: "Diego" })],
+      deben_rendir: [{ mozo_id: "m1", mozo_name: "Diego", saldo_cents: 71_200 }],
     });
     abrir();
     expect(await screen.findByText("Rendir a Diego")).toBeInTheDocument();
-    expect(screen.getByText(/desde «Cierre del día»/)).toBeInTheDocument();
+    expect(screen.getByText(/desde «Cierre del turno»/)).toBeInTheDocument();
   });
 
   it("si se corta la red al terminar de contar, lo dice y deja reintentar", async () => {

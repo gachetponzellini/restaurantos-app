@@ -134,20 +134,17 @@ describe.skipIf(!dbAvailable)("cierre de caja transaccional (integration · #358
   });
 
   it("el encargado que cobró un takeaway en efectivo tiene que rendir: la base lo exige", async () => {
+    // Spec 210 v2 — su efectivo no entra al cajón hasta que lo entrega.
     await cobroEnEfectivo({ amount: 80_000, mozo: s.ctx.encargadoId, conMesa: false });
-    const r = await cerrarRpc(80_000, 80_000);
+    const r = await cerrarRpc(0, 0);
     expect(r.error?.message ?? "").toMatch(/UNRENDERED_MOZOS/);
 
-    // Rinde, y ahí cierra.
-    await s.sb.from("mozo_rendiciones").insert({
-      business_id: s.ctx.businessId,
-      mozo_id: s.ctx.encargadoId,
-      registered_by: s.ctx.encargadoId,
-      expected_cash_cents: 80_000,
-      delivered_cash_cents: 80_000,
-      difference_cents: 0,
-      estado: "rendida",
+    // Rinde, y ahí cierra con su plata adentro.
+    const { error } = await s.sb.rpc("rendir_mozo_tx", {
+      p_business_id: s.ctx.businessId, p_mozo_id: s.ctx.encargadoId, p_caja_id: s.ctx.cajaId,
+      p_entregado_cents: 80_000, p_registrado_por: s.ctx.encargadoId, p_notas: null,
     });
+    expect(error).toBeNull();
     expect((await cerrarRpc(80_000, 80_000)).error).toBeNull();
   });
 

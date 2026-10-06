@@ -8,7 +8,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { crearSalon, dbAvailable } from "@/lib/billing/test-helpers/salon-fixture";
 
-const { getCajaLiveStats, getRendicionPendienteMozo } = await import("./queries");
+const { getCajaLiveStats } = await import("./queries");
+const { getSaldosMozos } = await import("./turno-queries");
 
 const s = crearSalon(`test-sin-tope-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
 const N = 1_100;
@@ -44,15 +45,17 @@ describe.skipIf(!dbAvailable)("caja sin tope de 1.000 filas (integration · #360
   }, 120_000);
   afterAll(s.teardown, 60_000);
 
-  it("el esperado de la caja suma los 1.100 cobros", async () => {
+  it("la caja ve los 1.100 cobros; su efectivo es del mozo hasta que rinde", async () => {
     const stats = await getCajaLiveStats(s.ctx.cajaId, s.ctx.businessId);
     expect(stats!.cobros_count).toBe(N);
-    expect(stats!.expected_cash_cents).toBe(100 * N);
+    // Spec 210 v2 — el efectivo que cobró el mozo no entra al cajón hasta la entrega.
+    expect(stats!.expected_cash_cents).toBe(0);
   });
 
   it("lo pendiente de rendir de un mozo suma los 1.100 cobros", async () => {
-    const p = await getRendicionPendienteMozo(s.ctx.mozoId, s.ctx.businessId, "Mozo");
-    expect(p.pagos_count).toBe(N);
-    expect(p.efectivo_cents).toBe(100 * N);
+    const saldos = await getSaldosMozos(s.ctx.businessId);
+    const p = saldos.find((m) => m.mozo_id === s.ctx.mozoId && m.caja_id === s.ctx.cajaId)!;
+    expect(p.cobros_count).toBe(N);
+    expect(p.saldo_cents).toBe(100 * N);
   });
 });

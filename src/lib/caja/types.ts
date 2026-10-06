@@ -49,7 +49,7 @@ export type CajaCorte = {
  * cierre y el libro necesitan poder separar «se lo llevó el dueño» de «se le
  * pagó al personal», y una sangría con `reason` libre no lo permite.
  */
-export type CajaMovimientoKind = "sangria" | "ingreso" | "propina";
+export type CajaMovimientoKind = "sangria" | "ingreso" | "propina" | "rendicion";
 
 export type CajaMovimiento = {
   id: string;
@@ -67,7 +67,7 @@ export type CajaMovimiento = {
 
 // ── Libro de movimientos (spec 070) ─────────────────────────────
 
-export type LibroTipo = "cobro" | "sangria" | "ingreso" | "propina";
+export type LibroTipo = "cobro" | "sangria" | "ingreso" | "propina" | "rendicion";
 
 /**
  * Una línea de caja, sea un cobro o un movimiento. El libro las muestra
@@ -218,6 +218,12 @@ export type CajaLiveStats = {
     /** Efectivo cobrado, **con** la propina adentro (spec 177 · D5). */
     efectivo_cents: number;
     ingresos_cents: number;
+    /**
+     * Spec 210 v2 — lo que entregaron los mozos en esta caja. Su efectivo no
+     * entra al cajón al cobrar: entra acá, cuando lo entregan. Ausente en los
+     * snapshots de cierres anteriores al modelo nuevo.
+     */
+    rendiciones_cents?: number;
     sangrias_cents: number;
     /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
     propinas_pagadas_cents: number;

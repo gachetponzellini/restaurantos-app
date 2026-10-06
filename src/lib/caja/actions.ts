@@ -24,6 +24,7 @@ import {
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { formatCurrency } from "@/lib/currency";
 import { getBusiness } from "@/lib/tenant";
+import { getSaldosMozos } from "./turno-queries";
 
 import { mozosQueDebenRendir } from "./deben-rendir";
 import {
@@ -496,8 +497,9 @@ export async function cerrarCaja(input: {
 
   // D7 · La cuenta abierta se nombra: la RPC también bloquea (por la carrera),
   // pero «OPEN_TABLE_ORDERS:3» no le sirve a nadie a la 1 de la mañana. Acá se
-  // dice qué mesa y cuánto falta cobrar.
-  if (caja.is_default) {
+  // dice qué mesa y cuánto falta cobrar. Spec 210 v2: vale para cualquier caja,
+  // porque la mesa se podría cobrar en ella.
+  {
     const abiertas = await getCuentasAbiertas(business.id);
     if (abiertas.length > 0) {
       const detalle = abiertas
@@ -513,25 +515,26 @@ export async function cerrarCaja(input: {
     }
   }
 
-  // Spec 139 · D1/D5 — la caja principal no cierra dejando a un mozo sin
-  // resolver. La RPC bloquea igual (carrera), pero «UNRENDERED_MOZOS:3» no le
-  // sirve a nadie: acá se dice quién falta y cuánto tiene encima.
-  if (caja.is_default) {
-    const pendientes = mozosQueDebenRendir(
-      await getRendicionesPendientesTodosLosMozos(business.id),
-      await getOperadoresDeCaja(input.cajaId, business.id),
+  // Spec 210 v2 — ninguna caja cierra con plata de un mozo sin resolver EN ELLA.
+  // La RPC lo exige igual (por la carrera); acá se nombra a quién y cuánto.
+  {
+    const pendientes = (await getSaldosMozos(business.id)).filter(
+      (m) => m.caja_id === input.cajaId && !m.resuelto,
     );
     if (pendientes.length > 0) {
       const detalle = pendientes
         .slice(0, 3)
-        .map((m) => `${m.mozo_name} (${formatCurrency(m.efectivo_cents)})`)
+        .map((m) =>
+          m.saldo_cents < 0
+            ? `${m.mozo_name} (la caja le debe ${formatCurrency(-m.saldo_cents)} de propina)`
+            : `${m.mozo_name} (${formatCurrency(m.saldo_cents)})`,
+        )
         .join(", ");
-      const resto =
-        pendientes.length > 3 ? ` y ${pendientes.length - 3} más` : "";
+      const resto = pendientes.length > 3 ? ` y ${pendientes.length - 3} más` : "";
       return actionError(
         pendientes.length === 1
-          ? `Falta la rendición de ${detalle}. Registrala o marcá que no entregó.`
-          : `Faltan ${pendientes.length} rendiciones — ${detalle}${resto}. Registralas o marcá quién no entregó.`,
+          ? `Falta resolver la rendición de ${detalle}: que entregue o marcá que no entregó.`
+          : `Faltan ${pendientes.length} rendiciones — ${detalle}${resto}. Resolvelas antes de cerrar.`,
       );
     }
   }
@@ -647,6 +650,7 @@ export async function cerrarCaja(input: {
     retiro_id: string | null;
     mesas_liberadas: number;
     mozos_limpiados: number;
+    retiro_cents: number | null;
   } | null;
   if (!row) return actionError("No se pudo cerrar la caja.");
 
@@ -665,9 +669,8 @@ export async function cerrarCaja(input: {
     corte: row.corte,
     // #358 — lo que salió es lo contado menos el fondo que queda (0102), no
     // lo contado entero.
-    retiro_cents: row.retiro_id
-      ? Math.max(0, input.closing_cash_cents - (caja.fondo_fijo_cents ?? 0))
-      : 0,
+    // Spec 210 · R7 — lo que salió lo dice la base (antes se recalculaba acá).
+    retiro_cents: Number(row.retiro_cents ?? 0),
     mesasLiberadas: Number(row.mesas_liberadas ?? 0),
     mozosLimpiados: Number(row.mozos_limpiados ?? 0),
   });

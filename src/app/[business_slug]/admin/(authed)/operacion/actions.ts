@@ -218,3 +218,71 @@ export async function getFichajeTabData(
   if (!ctx.ok) return ctx;
   return actionOk(await loadFichaje(ctx.data.businessId, slug));
 }
+
+/**
+ * Spec 211 · R6 — el estado del cierre del turno: mesas abiertas, mozos con
+ * plata sin resolver (en cualquier caja) y cajas sin contar. Lo mismo que
+ * validan `cerrar_caja_tx` y `cerrar_turno_tx`, leído de las mismas funciones.
+ */
+export async function getEstadoTurnoTabData(
+  slug: string,
+): Promise<ActionResult<import("@/lib/caja/turno-queries").EstadoTurno>> {
+  const ctx = await requireOperacionContext(slug, { soloSupervision: true });
+  if (!ctx.ok) return ctx;
+  const { getEstadoTurno } = await import("@/lib/caja/turno-queries");
+  return actionOk(await getEstadoTurno(ctx.data.businessId));
+}
+
+/**
+ * Spec 211 · R1/R2 — los mozos con plata de una caja, con las cifras del
+ * período abierto de esa caja (`desde`) y el saldo de ahora.
+ */
+export async function getSaldosCajaTabData(
+  slug: string,
+  cajaId: string,
+  desde: string,
+): Promise<ActionResult<import("@/lib/caja/turno-queries").SaldoMozo[]>> {
+  const ctx = await requireOperacionContext(slug, { soloSupervision: true });
+  if (!ctx.ok) return ctx;
+  const { getSaldosMozos } = await import("@/lib/caja/turno-queries");
+  const saldos = await getSaldosMozos(ctx.data.businessId, desde);
+  return actionOk(saldos.filter((m) => m.caja_id === cajaId));
+}
+
+/**
+ * Spec 211 · R4/R5 — el renglón del libro de un movimiento de la caja, para
+ * corregirlo ahí mismo con el mismo formulario que el libro (DetalleSheet),
+ * sin mandar al encargado a otra pantalla.
+ */
+export async function getEntradaDelLibroTabData(
+  slug: string,
+  input: { cajaId: string; createdAt: string; id: string },
+): Promise<
+  ActionResult<{
+    entry: import("@/lib/caja/types").LibroEntry;
+    mozos: { id: string; name: string }[];
+    cajas: { id: string; name: string }[];
+  }>
+> {
+  const ctx = await requireOperacionContext(slug, { soloSupervision: true });
+  if (!ctx.ok) return ctx;
+  const { getLibroDeMovimientos, getCajasConEstado } = await import("@/lib/caja/queries");
+  const { getMozosByBusiness } = await import("@/lib/mozo/queries");
+  const t = new Date(input.createdAt).getTime();
+  const [libro, mozos, cajas] = await Promise.all([
+    getLibroDeMovimientos(ctx.data.businessId, {
+      from: new Date(t - 1000).toISOString(),
+      to: new Date(t + 1000).toISOString(),
+      cajaId: input.cajaId,
+    }),
+    getMozosByBusiness(ctx.data.businessId),
+    getCajasConEstado(ctx.data.businessId),
+  ]);
+  const entry = libro.entries.find((e) => e.id === input.id);
+  if (!entry) return actionError("No encontré ese movimiento. Actualizá la caja.");
+  return actionOk({
+    entry,
+    mozos: mozos.map((m) => ({ id: m.user_id, name: m.full_name ?? "Sin nombre" })),
+    cajas: cajas.map((c) => ({ id: c.id, name: c.name })),
+  });
+}

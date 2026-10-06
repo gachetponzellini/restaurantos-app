@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
  * Antes (spec 130) el modal tenía tres bloques —la plata del período, quién
  * tiene el efectivo con un formulario de rendición propio, y contar— y el
  * botón final se apagaba sin decir por qué cuando faltaba cobrar una mesa o
- * rendir a un mozo. Ahora esos pasos viven en la franja «Cierre del día» del
+ * rendir a un mozo. Ahora esos pasos viven en la franja «Cierre del turno» del
  * board, que siempre dice cuál es el próximo; acá se llega con todo resuelto.
  *
  * **Conteo ciego** (spec 209 · R4): primero se cuenta sin ver cuánto debería
@@ -536,7 +536,7 @@ function AnuncioSalon({
 }
 
 /**
- * Lo que falta antes de contar. La franja «Cierre del día» ya lo muestra, así
+ * Lo que falta antes de contar. La franja «Cierre del turno» ya lo muestra, así
  * que esto sólo aparece si cambió algo con el modal abierto: dice qué falta y
  * lleva a resolverlo, en vez de dejar un botón apagado.
  */
@@ -589,7 +589,7 @@ function Bloqueantes({
       </ul>
       {mozos.length > 0 && (
         <p className="mt-3 text-xs text-rose-900">
-          Las rendiciones se hacen desde «Cierre del día», arriba de la caja.
+          Las rendiciones se hacen desde «Cierre del turno», arriba de la caja.
         </p>
       )}
     </div>

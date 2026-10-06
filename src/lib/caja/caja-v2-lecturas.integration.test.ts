@@ -93,6 +93,21 @@ describe.skipIf(!dbAvailable)("caja v2 · lecturas (0138)", () => {
     expect(Number(f.propina_efectivo_cents)).toBe(5_000);
     expect(Number(f.saldo_cents)).toBe(120_000 - 3_000);
     expect(f.resuelto).toBe(false);
+    expect(Number((f as unknown as { anterior_cents: number }).anterior_cents)).toBe(0);
+  });
+
+  it("del turno: lo de antes de `desde` viene como saldo anterior, y la fila sigue cerrando", async () => {
+    const corte = new Date().toISOString();
+    await new Promise((r) => setTimeout(r, 20));
+    await cobro({ mozo: s.ctx.mozoId, amount: 10_000 });
+    const filas = await rpc<(SaldoRow & { anterior_cents: number })[]>("saldos_mozos", {
+      p_business_id: s.ctx.businessId, p_desde: corte,
+    });
+    const f = filas.find((x) => x.mozo_id === s.ctx.mozoId)!;
+    expect(Number(f.efectivo_cents)).toBe(10_000);
+    expect(Number(f.anterior_cents)).toBe(117_000);
+    expect(Number(f.anterior_cents) + Number(f.efectivo_cents) - Number(f.propina_tarjeta_cents)
+      - Number(f.entregado_cents) + Number(f.pagado_cents)).toBe(Number(f.saldo_cents));
     // El encargado cobrando mesas no aparece: su plata entró al cajón.
     expect(filas.some((x) => x.mozo_id === s.ctx.encargadoId)).toBe(false);
   });
