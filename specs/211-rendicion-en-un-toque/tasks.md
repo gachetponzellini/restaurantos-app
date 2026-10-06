@@ -1,11 +1,15 @@
-# 211 · Tareas
+# 211 · Tareas (v2)
 
-- [ ] Test rojo `rendicion-en-caja`: «Entregó $X justo» registra `delivered = expected` (por canal); «Entregó otro monto» con diferencia exige motivo; el caso sin efectivo muestra «Darle $P de propina y cerrar» o «Cerrar su turno»
-- [ ] R2/R3 rediseño de `RendirModal`
-- [ ] R4 links a `/admin/mesa/{id}/cobrar` en el cartel de bloqueo (el motivo devuelve ids además de labels)
-- [ ] R5 página `/admin/caja/rendiciones` (historial + Imprimir, gate `canHacerCorte`); mudar la asignación caja↔usuario a `/admin/caja`; borrar el `<details>`
-- [ ] Test rojo + R6: `canVerMiTurno`, una action que resuelve el mozo por sesión, la tarjeta «Tu turno» en `/mozo` con Suspense; un test que cruza el mismo monto del lado del encargado
-- [ ] R7 textos desde `src/lib/caja/textos.ts`
+Arranca cuando la 210 esté en la base (usa `saldo_mozo`, `efecto_de_correccion`, `cerrar_turno_tx`).
+
+- [ ] Test rojo de la invariante de la pantalla: con datos de fixture, los cinco números de efectivo suman lo cobrado, y el saldo de la primera fila de movimientos = "Debería haber"
+- [ ] R1: reordenar `caja-admin-board.tsx` (cobrado por método → efectivo → cajón → movimientos); barra apilada y tabla por mozo
+- [ ] Test rojo + R2: panel de rendición (entregó justo / otro monto / no entregó / saldo negativo → "Darle $X del cajón"); borrar `RendicionEnCaja` como tarjeta y su `<details>`
+- [ ] R5: extraer `DetalleSheet` → `detalle-movimiento-sheet.tsx` (lo usan el libro y la caja); campos mozo/caja/propina con la aclaración completa; vista previa con `efecto_de_correccion`; test del bloqueo «(ya rindió)»
+- [ ] R4: tabla de movimientos con saldo corrido, filtros, botón Editar / Ver detalle y marcas Corregido/Anulado
+- [ ] R6: franja «Cierre del turno» (paso ③ por caja) + «Cerrar el turno»
+- [ ] R7: `canVerMiTurno` + tarjeta «Tu turno» en `/mozo` (Suspense); test que cruza el mismo número con el del encargado
+- [ ] R3: términos nuevos en `textos.ts`
 - [ ] `pnpm typecheck && pnpm test`
-- [ ] Verificado en vivo con los roles **encargado** y **mozo** reales
+- [ ] Verificado en vivo con los roles **encargado** y **mozo** reales, con dos cajas
 - [ ] Revisión fresca (code-reviewer)

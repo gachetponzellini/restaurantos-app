@@ -6,6 +6,11 @@
 mesas reales. Juan aprobó la dirección y el conteo ciego el 2026-10-06
 ([análisis](../../../../wiki/analyses/2026-10-06-cierre-y-rendicion-ux.md)).
 
+> 🔁 **Revisado por las specs 210 v2 y 211 v2 (2026-10-06).**
+> - **La franja pasa a ser "Cierre del turno"**, global, como MaxiRest: mesas → rendiciones → contar **cada** caja → "Cerrar el turno".
+> - **`cerrar_caja_tx` deja de barrer el salón y de exigir rendiciones.** Todas las cajas cierran igual, con el conteo ciego de esta spec, que sigue vigente.
+> - **La rendición pasa a ser una entrega** a la caja que recibe la plata.
+
 **Input:** Juan: *"hay que hacer que el proceso de cierre de caja y rendición sea
 más intuitivo, que tenga mejor affordance… tiene que ser muy intuitivo y fácil de usar"*.
 
