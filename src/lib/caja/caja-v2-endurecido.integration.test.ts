@@ -171,14 +171,4 @@ describe.skipIf(!dbAvailable)("caja v2 · endurecido (0139)", () => {
     expect(prev.data.cajas[0].despues - prev.data.cajas[0].antes).toBe(9_000);
   });
 
-  it("la rendición v1 no corre en el modelo nuevo (MODELO_NUEVO)", async () => {
-    const r = await rpc("registrar_rendicion_tx", {
-      p_business_id: s.ctx.businessId, p_mozo_id: s.ctx.mozoId, p_registered_by: s.ctx.encargadoId,
-      p_desde_rendicion_id: null, p_created_at: new Date().toISOString(), p_expected_cash_cents: 0,
-      p_delivered_cash_cents: 0, p_difference_cents: 0, p_notes: null, p_por_metodo: {}, p_por_canal: {},
-      p_estado: "rendida", p_propina_pagada_cents: 3_000, p_caja_id: s.ctx.cajaId, p_propina_reason: "x",
-      p_pagos_leidos: null,
-    });
-    expect(r.error?.message).toContain("MODELO_NUEVO");
-  });
 });

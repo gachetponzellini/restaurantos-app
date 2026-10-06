@@ -124,9 +124,4 @@ describe.skipIf(!dbAvailable)("caja v2 · turno y cierre (0136)", () => {
     expect(turnos![1].cerrado_at).toBeNull();
   });
 
-  it("en el modelo viejo, cerrar el turno no corre (MODELO_VIEJO)", async () => {
-    await s.sb.from("businesses").update({ caja_modelo_v2_desde: null }).eq("id", s.ctx.businessId);
-    const r = await rpc("cerrar_turno_tx", { p_business_id: s.ctx.businessId, p_por: s.ctx.encargadoId });
-    expect(r.error?.message).toContain("MODELO_VIEJO");
-  });
 });

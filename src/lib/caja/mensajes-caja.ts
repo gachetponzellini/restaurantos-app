@@ -44,8 +44,6 @@ export function traducirErrorDeCaja(raw: string): string {
       return "Ese cobro ya entró en la rendición del mozo. Para corregirlo, primero anulá su entrega.";
     case "MODELO_VIEJO":
       return "El negocio todavía no pasó a la caja nueva.";
-    case "MODELO_NUEVO":
-      return "Eso es de la caja vieja: el negocio ya usa la caja nueva.";
     case "CAJA_WRONG_BUSINESS":
       return "Esa caja no es de este negocio.";
     case "MOVIMIENTO_DE_MOZO":

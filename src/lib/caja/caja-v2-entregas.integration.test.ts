@@ -185,9 +185,4 @@ describe.skipIf(!dbAvailable)("caja v2 · la rendición es una entrega (0135)", 
     expect(otra.error?.message).toContain("YA_ANULADA");
   });
 
-  it("en el modelo viejo, rendir_mozo_tx no corre (MODELO_VIEJO)", async () => {
-    await s.sb.from("businesses").update({ caja_modelo_v2_desde: null }).eq("id", s.ctx.businessId);
-    const r = await rendir(1_000);
-    expect(r.error?.message).toContain("MODELO_VIEJO");
-  });
 });

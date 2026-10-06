@@ -213,12 +213,4 @@ describe.skipIf(!dbAvailable)("caja v2 · la plata del mozo (0134)", () => {
     expect(error).not.toBeNull();
   });
 
-  it("un negocio en el modelo viejo no cambia nada: el cobro entra al cajón", async () => {
-    await s.sb.from("businesses").update({ caja_modelo_v2_desde: null }).eq("id", s.ctx.businessId);
-    const antes = await esperado(s.ctx.cajaId);
-    const c = await cobro({ mozo: s.ctx.mozoId, amount: 50_000 });
-    expect(c.rinde).toBeNull();
-    expect(await esperado(s.ctx.cajaId)).toBe(antes + 50_000);
-    expect(await saldo(s.ctx.mozoId, s.ctx.cajaId)).toBe(0);
-  });
 });

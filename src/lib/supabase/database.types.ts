@@ -280,6 +280,7 @@ export type Database = {
           afip_mode: string;
           afip_provider: string | null;
           afip_punto_venta: number | null;
+          caja_modelo_v2_desde: string;
           comandas_printer_enabled: boolean;
           control_printer_enabled: boolean;
           control_printer_ip: string | null;
@@ -327,6 +328,7 @@ export type Database = {
           afip_mode?: string;
           afip_provider?: string | null;
           afip_punto_venta?: number | null;
+          caja_modelo_v2_desde?: string;
           comandas_printer_enabled?: boolean;
           control_printer_enabled?: boolean;
           control_printer_ip?: string | null;
@@ -374,6 +376,7 @@ export type Database = {
           afip_mode?: string;
           afip_provider?: string | null;
           afip_punto_venta?: number | null;
+          caja_modelo_v2_desde?: string;
           comandas_printer_enabled?: boolean;
           control_printer_enabled?: boolean;
           control_printer_ip?: string | null;
@@ -2443,13 +2446,19 @@ export type Database = {
       };
       mozo_rendiciones: {
         Row: {
+          anulada_at: string | null;
+          anulada_motivo: string | null;
+          anulada_por: string | null;
           business_id: string;
+          caja_id: string | null;
           created_at: string;
           delivered_cash_cents: number;
           difference_cents: number;
           estado: string;
           expected_cash_cents: number;
+          huella: string | null;
           id: string;
+          movimiento_id: string | null;
           mozo_id: string;
           notes: string | null;
           por_canal: Json;
@@ -2458,13 +2467,19 @@ export type Database = {
           registered_by: string;
         };
         Insert: {
+          anulada_at?: string | null;
+          anulada_motivo?: string | null;
+          anulada_por?: string | null;
           business_id: string;
+          caja_id?: string | null;
           created_at?: string;
           delivered_cash_cents?: number;
           difference_cents?: number;
           estado?: string;
           expected_cash_cents?: number;
+          huella?: string | null;
           id?: string;
+          movimiento_id?: string | null;
           mozo_id: string;
           notes?: string | null;
           por_canal?: Json;
@@ -2473,13 +2488,19 @@ export type Database = {
           registered_by: string;
         };
         Update: {
+          anulada_at?: string | null;
+          anulada_motivo?: string | null;
+          anulada_por?: string | null;
           business_id?: string;
+          caja_id?: string | null;
           created_at?: string;
           delivered_cash_cents?: number;
           difference_cents?: number;
           estado?: string;
           expected_cash_cents?: number;
+          huella?: string | null;
           id?: string;
+          movimiento_id?: string | null;
           mozo_id?: string;
           notes?: string | null;
           por_canal?: Json;
@@ -3153,6 +3174,7 @@ export type Database = {
           refunded_at: string | null;
           refunded_reason: string | null;
           request_id: string | null;
+          rinde_mozo_id: string | null;
           split_id: string | null;
           tip_cents: number;
         };
@@ -3180,6 +3202,7 @@ export type Database = {
           refunded_at?: string | null;
           refunded_reason?: string | null;
           request_id?: string | null;
+          rinde_mozo_id?: string | null;
           split_id?: string | null;
           tip_cents?: number;
         };
@@ -3207,6 +3230,7 @@ export type Database = {
           refunded_at?: string | null;
           refunded_reason?: string | null;
           request_id?: string | null;
+          rinde_mozo_id?: string | null;
           split_id?: string | null;
           tip_cents?: number;
         };
@@ -4813,6 +4837,51 @@ export type Database = {
           },
         ];
       };
+      turnos: {
+        Row: {
+          abierto_at: string;
+          business_id: string;
+          cerrado_at: string | null;
+          cerrado_por: string | null;
+          created_at: string;
+          id: string;
+          resumen: Json | null;
+        };
+        Insert: {
+          abierto_at?: string;
+          business_id: string;
+          cerrado_at?: string | null;
+          cerrado_por?: string | null;
+          created_at?: string;
+          id?: string;
+          resumen?: Json | null;
+        };
+        Update: {
+          abierto_at?: string;
+          business_id?: string;
+          cerrado_at?: string | null;
+          cerrado_por?: string | null;
+          created_at?: string;
+          id?: string;
+          resumen?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "turnos_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: false;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "turnos_cerrado_por_fkey";
+            columns: ["cerrado_por"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       users: {
         Row: {
           created_at: string;
@@ -5043,6 +5112,15 @@ export type Database = {
           reembolsados: number;
         }[];
       };
+      anular_entrega_tx: {
+        Args: {
+          p_anulada_por: string;
+          p_business_id: string;
+          p_motivo: string;
+          p_rendicion_id: string;
+        };
+        Returns: Json;
+      };
       anular_pago_tx: {
         Args: {
           p_business_id: string;
@@ -5054,6 +5132,28 @@ export type Database = {
           fully_paid: boolean;
           payment: Json;
         }[];
+      };
+      barrer_salon: {
+        Args: { p_business_id: string; p_motivo: string; p_por: string };
+        Returns: {
+          mesas_liberadas: number;
+          mozos_limpiados: number;
+        }[];
+      };
+      caja_v2_valida: {
+        Args: { p_business_id: string; p_caja_id: string };
+        Returns: undefined;
+      };
+      cajas_sin_contar: {
+        Args: { p_business_id: string };
+        Returns: {
+          caja_id: string;
+          caja_name: string;
+        }[];
+      };
+      cerrar_turno_tx: {
+        Args: { p_business_id: string; p_por: string; p_resumen?: Json };
+        Returns: Json;
       };
       cobrado_en_base: { Args: { p_order_id: string }; Returns: number };
       cerrar_caja_tx: {
@@ -5074,6 +5174,7 @@ export type Database = {
           mesas_liberadas: number;
           mozos_limpiados: number;
           print_job_id: string;
+          retiro_cents: number;
           retiro_id: string;
         }[];
       };
@@ -5105,9 +5206,25 @@ export type Database = {
           payment: Json;
         }[];
       };
+      desglose_esperado_caja: {
+        Args: { p_caja_id: string; p_hasta: string };
+        Returns: Json;
+      };
       editar_comprobante_tx: {
         Args: { p_business_id: string; p_campos: Json; p_invoice_id: string };
         Returns: undefined;
+      };
+      efectivo_esperado_caja: {
+        Args: { p_caja_id: string; p_hasta: string };
+        Returns: number;
+      };
+      efecto_de_correccion: {
+        Args: { p_business_id: string; p_patch: Json; p_payment_id: string };
+        Returns: Json;
+      };
+      entrego_despues: {
+        Args: { p_caja_id: string; p_desde: string; p_mozo_id: string };
+        Returns: boolean;
       };
       fn_explode_ingredient: {
         Args: { p_ingredient_id: string; p_quantity: number };
@@ -5126,6 +5243,10 @@ export type Database = {
         Returns: undefined;
       };
       devolver_uso_promo: { Args: { p_order_id: string }; Returns: boolean };
+      huella_mozo: {
+        Args: { p_caja_id: string; p_mozo_id: string };
+        Returns: string;
+      };
       increment_promo_use: {
         Args: { p_business_id: string; p_promo_id: string };
         Returns: boolean;
@@ -5137,6 +5258,30 @@ export type Database = {
       is_platform_admin: { Args: never; Returns: boolean };
       march_due_scheduled_orders: { Args: never; Returns: undefined };
       mark_overdue_reservations_no_show: { Args: never; Returns: number };
+      mesas_sin_cobrar_mozo: {
+        Args: { p_business_id: string; p_mozo_id: string };
+        Returns: string;
+      };
+      mozo_que_rinde: {
+        Args: {
+          p_business_id: string;
+          p_caja_id: string;
+          p_mozo_id: string;
+          p_order_id: string;
+        };
+        Returns: string;
+      };
+      mozo_resuelto: {
+        Args: { p_caja_id: string; p_mozo_id: string };
+        Returns: boolean;
+      };
+      mozos_sin_resolver: {
+        Args: { p_caja_id: string };
+        Returns: {
+          mozo_id: string;
+          saldo_cents: number;
+        }[];
+      };
       normalizar_nombre_proveedor: { Args: { p: string }; Returns: string };
       normalizar_texto_insumo: { Args: { p: string }; Returns: string };
       operating_day: { Args: { ts: string }; Returns: string };
@@ -5149,6 +5294,16 @@ export type Database = {
         Returns: Json;
       };
       reconcile_pending_invoices: { Args: never; Returns: undefined };
+      reconocer_deuda_tx: {
+        Args: {
+          p_business_id: string;
+          p_caja_id: string;
+          p_motivo: string;
+          p_mozo_id: string;
+          p_registrado_por: string;
+        };
+        Returns: Json;
+      };
       registrar_items_comprobante_tx: {
         Args: {
           p_business_id: string;
@@ -5205,24 +5360,14 @@ export type Database = {
           split_done: boolean;
         }[];
       };
-      registrar_rendicion_tx: {
+      rendir_mozo_tx: {
         Args: {
           p_business_id: string;
-          p_caja_id: string | null;
-          p_created_at: string;
-          p_delivered_cash_cents: number;
-          p_desde_rendicion_id: string | null;
-          p_difference_cents: number;
-          p_estado: string;
-          p_expected_cash_cents: number;
+          p_caja_id: string;
+          p_entregado_cents: number;
           p_mozo_id: string;
-          p_notes: string | null;
-          p_pagos_leidos?: number | null;
-          p_por_canal: Json;
-          p_por_metodo: Json;
-          p_propina_pagada_cents: number;
-          p_propina_reason: string;
-          p_registered_by: string;
+          p_notas?: string;
+          p_registrado_por: string;
         };
         Returns: Json;
       };
@@ -5238,6 +5383,28 @@ export type Database = {
           movimientos: number;
           saldo_cents: number;
           ultimo_movimiento: string;
+        }[];
+      };
+      saldo_mozo: {
+        Args: { p_caja_id: string; p_mozo_id: string };
+        Returns: number;
+      };
+      saldos_mozos: {
+        Args: { p_business_id: string; p_desde?: string };
+        Returns: {
+          anterior_cents: number;
+          caja_id: string;
+          caja_name: string;
+          cobros_count: number;
+          efectivo_cents: number;
+          entregado_cents: number;
+          mozo_id: string;
+          mozo_name: string;
+          pagado_cents: number;
+          propina_efectivo_cents: number;
+          propina_tarjeta_cents: number;
+          resuelto: boolean;
+          saldo_cents: number;
         }[];
       };
       seed_caja_administrativa: {
