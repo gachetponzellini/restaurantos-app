@@ -51,6 +51,14 @@ import {
 import type { LibroEntry } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
 import { TXT } from "@/lib/caja/textos";
+import {
+  conSaldoCorrido,
+  efectoEnCajon,
+  FILTROS_CAJA,
+  pasaFiltro,
+  type FiltroCaja,
+  type LineaDeCaja,
+} from "@/lib/caja/saldo-corrido";
 import { cn } from "@/lib/utils";
 import type {
   CuentaConSaldo,
@@ -171,12 +179,18 @@ export function CajaAdminBoard({
   // siempre, sin que nadie lo mire. Volver a la tab re-corre el effect → `load()`
   // inmediato: la tab de plata nunca pinta el snapshot viejo mientras espera el
   // primer tick.
+  // La clave son los ids, no el array: el panel re-renderiza con un `cajas`
+  // nuevo en cada refresh y eso cancelaba la primera carga (la caja quedaba en
+  // esqueleto hasta el tick de 30 s).
+  const cajasKey = cajas.map((c) => c.id).join(",");
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
+    const ids = cajasKey ? cajasKey.split(",") : [];
     const load = async () => {
       const entries = await Promise.all(
-        cajas.map(async (c) => {
+        ids.map(async (id) => {
+          const c = { id };
           try {
             const res = await fetch(`/api/caja/stats?caja=${c.id}`);
             const data = await res.json();
@@ -203,13 +217,13 @@ export function CajaAdminBoard({
         );
       }
     };
-    if (cajas.length > 0) load();
+    if (ids.length > 0) load();
     const i = setInterval(load, 30_000);
     return () => {
       cancelled = true;
       clearInterval(i);
     };
-  }, [cajas, refreshKey, active]);
+  }, [cajasKey, refreshKey, active]);
 
   if (cajas.length === 0) {
     return (
@@ -364,6 +378,7 @@ function CajaCard({
   alPie?: React.ReactNode;
 }) {
   const [, startTransition] = useTransition();
+  const [filtro, setFiltro] = useState<FiltroCaja>("todo");
   const [sangriaOpen, setSangriaOpen] = useState(false);
   const [ingresoOpen, setIngresoOpen] = useState(false);
   const [corteOpen, setCorteOpen] = useState(false);
@@ -402,6 +417,8 @@ function CajaCard({
   const periodoDesdeFecha = stats?.periodo_desde ?? caja.periodo_desde;
 
   const periodoLabel = (() => {
+    // Relativo al reloj: el server y el cliente pueden diferir en un minuto
+    // (se marca con suppressHydrationWarning donde se dibuja).
     const d = new Date(periodoDesdeFecha);
     const now = new Date();
     const diffMin = Math.floor((now.getTime() - d.getTime()) / 60_000);
@@ -414,7 +431,7 @@ function CajaCard({
 
   type Entry =
     | { kind: "cobro"; createdAt: string; data: CajaPayment }
-    | { kind: "sangria" | "ingreso"; createdAt: string; data: CajaMovimiento };
+    | { kind: "movimiento"; createdAt: string; data: CajaMovimiento };
   const entries: Entry[] = [
     ...payments.map((p) => ({
       kind: "cobro" as const,
@@ -422,11 +439,21 @@ function CajaCard({
       data: p,
     })),
     ...movimientos.map((m) => ({
-      kind: m.kind as "sangria" | "ingreso",
+      kind: "movimiento" as const,
       createdAt: m.created_at,
       data: m,
     })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  // Spec 211 · R4 — qué le hace cada línea al cajón y cómo queda, hacia atrás
+  // desde «Debería haber» (la línea más nueva lo deja exacto).
+  const lineas: (LineaDeCaja & { entry: Entry })[] = entries.map((e) =>
+    e.kind === "cobro"
+      ? { tipo: "cobro", id: e.data.id, createdAt: e.createdAt, method: e.data.method, amount_cents: e.data.amount_cents, rinde_mozo_id: e.data.rinde_mozo_id, entry: e }
+      : { tipo: "movimiento", id: e.data.id, createdAt: e.createdAt, kind: e.data.kind, amount_cents: e.data.amount_cents, cancelled: e.data.cancelled_at !== null, entry: e },
+  );
+  const corrido = stats ? conSaldoCorrido(lineas, stats.expected_cash_cents) : lineas.map((linea) => ({ linea, efecto: efectoEnCajon(linea), saldoDespues: null as number | null }));
+  const visibles = corrido.filter((f) => pasaFiltro(f.linea, filtro));
 
   return (
     <div className="space-y-4">
@@ -442,7 +469,7 @@ function CajaCard({
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Período activo {periodoLabel}
+            Período activo <span suppressHydrationWarning>{periodoLabel}</span>
             {/* Spec 149 · acá decía «· último corte registrado», que anunciaba
                 un dato sin mostrarlo ni llevar a ningún lado. Ahora es la
                 entrada al cierre archivado. */}
@@ -567,17 +594,39 @@ function CajaCard({
               </p>
             </div>
           </div>
+          {entries.length > 0 && (
+            <div role="group" aria-label="Filtrar movimientos" className="mt-3 flex flex-wrap gap-1.5">
+              {FILTROS_CAJA.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-pressed={filtro === f.id}
+                  onClick={() => setFiltro(f.id)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition",
+                    filtro === f.id ? "bg-foreground text-background ring-foreground" : "bg-card text-foreground/80 ring-border hover:bg-muted",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           {entries.length === 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">
               Todavía no hubo movimientos.
             </p>
+          ) : visibles.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">Ningún movimiento con ese filtro.</p>
           ) : (
             <ul className="mt-3 max-h-[28rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
-              {entries.map((e) => {
+              {visibles.map(({ linea, efecto, saldoDespues }) => {
+                const e = linea.entry;
+                const cajon = { efecto, saldoDespues, mozo: e.kind === "cobro" && e.data.rinde_mozo_id ? e.data.attributed_mozo_name : null };
                 return e.kind === "cobro" ? (
-                  <CobroRow key={`p-${e.data.id}`} payment={e.data} onEditar={() => editar(e.data.created_at, e.data.id)} />
+                  <CobroRow key={`p-${e.data.id}`} payment={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 ) : (
-                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} onEditar={() => editar(e.data.created_at, e.data.id)} />
+                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
                 );
               })}
             </ul>
@@ -658,9 +707,28 @@ function CajaCard({
 
 // ── Sub-componentes ──────────────────────────────────────────────
 
+type Cajon = { efecto: number; saldoDespues: number | null; mozo: string | null };
+
+/** Spec 211 · R4 — qué le hizo la línea al cajón y cómo lo dejó. */
+function EfectoEnCajon({ cajon, esEfectivo, anulado }: { cajon: Cajon; esEfectivo?: boolean; anulado?: boolean }) {
+  const queda = cajon.saldoDespues === null ? null : `queda ${formatCurrency(cajon.saldoDespues)}`;
+  let texto: string;
+  if (anulado) texto = "Anulado: no mueve el cajón";
+  else if (cajon.efecto > 0) texto = `Cajón +${formatCurrency(cajon.efecto)}`;
+  else if (cajon.efecto < 0) texto = `Cajón −${formatCurrency(-cajon.efecto)}`;
+  else if (esEfectivo) texto = `No entra al cajón: lo tiene ${cajon.mozo ?? "el mozo"} hasta que rinda`;
+  else texto = "No mueve el cajón";
+  return (
+    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+      {texto}
+      {queda && <span className="text-foreground/70"> · {queda}</span>}
+    </p>
+  );
+}
 
 
-function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; onEditar: () => void }) {
+
+function MovimientoRow({ mov, cajon, onEditar }: { mov: CajaMovimiento; cajon: Cajon; onEditar: () => void }) {
   // issue #299 — esto era `mov.kind === "sangria"`, así que el pago de propina
   // (spec 177 · D6) caía en el `else` y se dibujaba como «Ingreso», verde y con
   // `+`: plata que salió del cajón figurando como que entró.
@@ -702,6 +770,7 @@ function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; onEditar: () =>
           </p>
         </div>
         {mov.reason && <p className="mt-0.5 truncate text-xs text-muted-foreground">{mov.reason}</p>}
+        <EfectoEnCajon cajon={cajon} anulado={mov.cancelled_at !== null} />
       </div>
         <Button
           type="button"
@@ -719,7 +788,7 @@ function MovimientoRow({ mov, onEditar }: { mov: CajaMovimiento; onEditar: () =>
 }
 
 
-function CobroRow({ payment, onEditar }: { payment: CajaPayment; onEditar: () => void }) {
+function CobroRow({ payment, cajon, onEditar }: { payment: CajaPayment; cajon: Cajon; onEditar: () => void }) {
   const Icon = methodIcon(payment.method);
   const time = new Date(payment.created_at).toLocaleTimeString("es-AR", {
     timeZone: TZ_AR,
@@ -772,6 +841,7 @@ function CobroRow({ payment, onEditar }: { payment: CajaPayment; onEditar: () =>
             </p>
           )}
         </div>
+        <EfectoEnCajon cajon={cajon} esEfectivo={payment.method === "cash"} />
       </div>
         <Button
           type="button"
