@@ -77,10 +77,20 @@ export async function signUpCustomer(
 
   const { business_slug, email, password, phone, next } = parsed.data;
   const supabase = await createSupabaseServerClient();
+  // Con Confirm email activo, el link del mail tiene que volver al negocio y al
+  // `next` del cliente; sin esto Supabase cae en el Site URL (la raíz).
+  // La URL tiene que estar en la allowlist de redirects de Supabase Auth.
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL ?? (await headers()).get("origin") ?? "";
+  const emailRedirectTo = origin
+    ? `${origin.replace(/\/$/, "")}/auth/callback?next=${encodeURIComponent(
+        safeNextPath(next, business_slug),
+      )}`
+    : undefined;
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { phone } },
+    options: { data: { phone }, emailRedirectTo },
   });
 
   if (error) {

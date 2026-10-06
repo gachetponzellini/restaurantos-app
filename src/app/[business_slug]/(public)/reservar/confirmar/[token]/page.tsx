@@ -44,6 +44,11 @@ export default async function ConfirmarReservaPage({
             <p className="font-medium text-green-600">
               ¡Listo! Ya confirmaste tu asistencia. Te esperamos 🙌
             </p>
+          ) : reservation.status === "pending" ? (
+            <p className="text-muted-foreground">
+              El local todavía no confirmó tu reserva. Te avisamos cuando lo
+              haga.
+            </p>
           ) : reservation.status !== "confirmed" &&
             reservation.status !== "seated" ? (
             <p className="text-muted-foreground">

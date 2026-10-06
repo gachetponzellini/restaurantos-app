@@ -77,7 +77,7 @@ export default async function AdminLoginPage({
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <div>
             <p className="font-semibold">
-              Esta cuenta es de cliente y no tiene acceso al panel.
+              Esta cuenta no tiene acceso al panel de este local.
             </p>
             <Link
               href={`/${business_slug}/menu`}

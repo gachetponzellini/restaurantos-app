@@ -73,3 +73,21 @@ describe("confirmReservationAttendance — slug del negocio", () => {
     expect(updates).toHaveLength(0);
   });
 });
+
+describe("confirmReservationAttendance — estado de la reserva", () => {
+  it("una reserva pendiente no se confirma y se explica que el local aún no la aceptó", async () => {
+    tables.reservations = { ...tables.reservations!, status: "pending" };
+    const r = await confirmReservationAttendance(TOKEN, "demo");
+    expect(r).toEqual({
+      ok: false,
+      error: "El local todavía no confirmó tu reserva. Te avisamos cuando lo haga.",
+    });
+    expect(updates).toHaveLength(0);
+  });
+
+  it("una reserva cancelada sigue diciendo que ya no está activa", async () => {
+    tables.reservations = { ...tables.reservations!, status: "cancelled" };
+    const r = await confirmReservationAttendance(TOKEN, "demo");
+    expect(r).toEqual({ ok: false, error: "Esta reserva ya no está activa." });
+  });
+});

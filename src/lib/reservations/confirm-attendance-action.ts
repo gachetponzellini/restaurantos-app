@@ -89,6 +89,12 @@ export async function confirmReservationAttendance(
     return { ok: false, error: "No encontramos la reserva." };
   }
 
+  if (reservation.status === "pending") {
+    return {
+      ok: false,
+      error: "El local todavía no confirmó tu reserva. Te avisamos cuando lo haga.",
+    };
+  }
   if (reservation.status !== "confirmed" && reservation.status !== "seated") {
     return { ok: false, error: "Esta reserva ya no está activa." };
   }
