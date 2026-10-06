@@ -1,23 +1,52 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { actionError, type ActionResult } from "@/lib/actions";
+import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import {
   safeNextPath,
   SignInCustomerInput,
   SignUpCustomerInput,
 } from "@/lib/auth/customer-auth-shared";
+import { limitLogin } from "@/lib/rate-limit";
+import { clientIpFromForwarded } from "@/lib/rrhh/ip-allowlist";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // ─────────────────────────────────────────────────────────────────────
 // SPEC 25 (PENDING) — Verificación por WhatsApp DESACTIVADA.
 // Los imports y las actions de verificación quedan comentados hasta aprobar
 // el template "authentication" en Meta y reactivar el flujo. Ver más abajo.
-// import { actionOk } from "@/lib/actions";
 // import { requestPhoneCode, verifyPhoneCode } from "@/lib/auth/phone-verification";
 // import { getBusiness } from "@/lib/tenant";
 // ─────────────────────────────────────────────────────────────────────
+
+const DEMASIADOS_INTENTOS =
+  "Demasiados intentos. Esperá un minuto y probá de nuevo.";
+
+/** Resultado del alta cuando Confirm email está activo (sin sesión todavía). */
+export type SignUpPendingConfirmation = {
+  status: "confirm_email";
+  email: string;
+};
+
+// H-04: `error.code` de Supabase Auth → mensaje claro para el cliente.
+const SIGNUP_ERROR_MESSAGES: Record<string, string> = {
+  email_address_invalid: "Ese email no es válido.",
+  weak_password:
+    "La contraseña es muy débil. Probá con una más larga o con otros caracteres.",
+  over_email_send_rate_limit: "Demasiados intentos, probá en unos minutos.",
+  over_request_rate_limit: "Demasiados intentos, probá en unos minutos.",
+};
+
+// H-05: mismo techo por IP que el login del staff (`sign-in.ts`). Va antes de
+// tocar Supabase Auth.
+async function checkAuthRateLimit(): Promise<boolean> {
+  const h = await headers();
+  const ip = clientIpFromForwarded(h.get("x-forwarded-for"));
+  const { success } = await limitLogin(ip ?? "unknown");
+  return success;
+}
 
 export async function signInCustomer(
   input: unknown,
@@ -25,6 +54,8 @@ export async function signInCustomer(
   const parsed = SignInCustomerInput.safeParse(input);
   if (!parsed.success)
     return actionError(parsed.error.issues[0]?.message ?? "Datos inválidos.");
+
+  if (!(await checkAuthRateLimit())) return actionError(DEMASIADOS_INTENTOS);
 
   const { business_slug, email, password, next } = parsed.data;
   const supabase = await createSupabaseServerClient();
@@ -36,10 +67,12 @@ export async function signInCustomer(
 
 export async function signUpCustomer(
   input: unknown,
-): Promise<ActionResult<never>> {
+): Promise<ActionResult<SignUpPendingConfirmation>> {
   const parsed = SignUpCustomerInput.safeParse(input);
   if (!parsed.success)
     return actionError(parsed.error.issues[0]?.message ?? "Datos inválidos.");
+
+  if (!(await checkAuthRateLimit())) return actionError(DEMASIADOS_INTENTOS);
 
   const { business_slug, email, password, phone, next } = parsed.data;
   const supabase = await createSupabaseServerClient();
@@ -50,12 +83,22 @@ export async function signUpCustomer(
   });
 
   if (error) {
-    return actionError("No pudimos completar la operación, probá de nuevo.");
+    const code = (error as { code?: string }).code;
+    console.error("[signUpCustomer] signUp falló", code ?? "sin_code");
+    return actionError(
+      (code && SIGNUP_ERROR_MESSAGES[code]) ||
+        "No pudimos completar la operación, probá de nuevo.",
+    );
   }
 
-  // Confirm email OFF: existing email returns user with empty identities and no session.
   if (!data.session) {
-    return actionError("Ya existe una cuenta con ese email. Probá ingresar.");
+    // Email ya registrado: Supabase no lo delata con un error, devuelve un
+    // user "ofuscado" con `identities` vacías.
+    if (data.user?.identities?.length === 0) {
+      return actionError("Ya existe una cuenta con ese email. Probá ingresar.");
+    }
+    // Confirm email activo: alta válida, falta que confirme el mail.
+    return actionOk({ status: "confirm_email", email });
   }
 
   // ─── SPEC 25 (PENDING) — disparo de verificación por WhatsApp, desactivado ───
