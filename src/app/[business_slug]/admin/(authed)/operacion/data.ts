@@ -23,7 +23,6 @@ import {
   getCajaUserAssignments,
   getCuentasConSaldo,
   getRendicionesHistorial,
-  getRendicionesPendientesTodosLosMozos,
 } from "@/lib/caja/queries";
 import { getCuentasCorrientes } from "@/lib/caja/cuenta-corriente-queries";
 import type { CuentasCorrientesData } from "@/lib/caja/cuenta-corriente-queries";
@@ -33,7 +32,6 @@ import type {
   CajaUserAssignment,
   CuentaConSaldo,
   MozoRendicion,
-  RendicionMozoPendiente,
 } from "@/lib/caja/types";
 import { getMozosByBusiness } from "@/lib/mozo/queries";
 import type { MozoMember } from "@/lib/mozo/queries";
@@ -114,7 +112,8 @@ export type CajaData = {
 };
 
 export type RendicionData = {
-  rendicionPendientes: RendicionMozoPendiente[];
+  /** Spec 210 v2 — mozos con plata por caja (para el contador de la tab). */
+  saldosMozos: import("@/lib/caja/turno-queries").SaldoMozo[];
   rendicionHistorial: (MozoRendicion & {
     mozo_name: string;
     registered_by_name: string | null;
@@ -347,9 +346,10 @@ export async function loadRendicion(
   businessId: string,
   service: SupabaseClient,
 ): Promise<RendicionData> {
-  const [rendicionPendientes, rendicionHistorial, cajaAssignments, membersRes] =
+  const { getSaldosMozos } = await import("@/lib/caja/turno-queries");
+  const [saldosMozos, rendicionHistorial, cajaAssignments, membersRes] =
     await Promise.all([
-      getRendicionesPendientesTodosLosMozos(businessId),
+      getSaldosMozos(businessId),
       getRendicionesHistorial(businessId),
       getCajaUserAssignments(businessId),
       service
@@ -359,7 +359,7 @@ export async function loadRendicion(
         .is("disabled_at", null),
     ]);
   return {
-    rendicionPendientes,
+    saldosMozos,
     rendicionHistorial,
     cajaAssignments,
     businessMembers: (membersRes.data ?? []) as {

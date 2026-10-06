@@ -1,8 +1,6 @@
-import type { MesaSinCobrar } from "./mesas-sin-cobrar";
 import type {
   CanalRendicion,
   LiquidacionDeCanal,
-  PendienteDeCanal,
 } from "./canal-rendicion";
 export type Caja = {
   id: string;
@@ -378,44 +376,6 @@ export type MozoRendicion = {
   /** Esperado / entregado / diferencia por canal (spec 203). `{}` en las viejas. */
   por_canal: Partial<Record<CanalRendicion, LiquidacionDeCanal>>;
   created_at: string;
-};
-
-export type RendicionMozoPendiente = {
-  mozo_id: string;
-  mozo_name: string;
-  /** Rol en el negocio. Decide si tiene que rendir (issue #264). */
-  mozo_role?: string;
-  /** Lo que entrega: efectivo neto de propina (spec 151). */
-  efectivo_cents: number;
-  /** Lo que tiene encima: el mismo efectivo con la propina adentro (spec 177). */
-  efectivo_bruto_cents: number;
-  tickets_cents: number;
-  por_metodo: Record<PaymentMethod, number>;
-  total_propinas_cents: number;
-  /** #351 — propina que vino en efectivo: ya la tiene, no se le da del cajón. */
-  propina_efectivo_cents: number;
-  /** #351 — propina de tarjeta/QR/transferencia: se le entrega del cajón. */
-  propina_a_entregar_cents: number;
-  /**
-   * #351 — mesas suyas sin cobrar. Con alguna, no puede rendir. Sólo lo llena
-   * `getRendicionesPendientesTodosLosMozos`; la action lo re-chequea aparte.
-   */
-  mesas_sin_cobrar?: MesaSinCobrar[];
-  pagos_count: number;
-  /** Lo mismo, partido por canal (spec 203). Sólo canales con cobros. */
-  por_canal: Partial<Record<CanalRendicion, PendienteDeCanal>>;
-  /**
-   * #359 — la rendición que fija el piso de este período (`null` si nunca
-   * rindió). La RPC verifica que siga siendo la última: si otro rindió en el
-   * medio, esta rendición ya no es sobre lo que se leyó.
-   */
-  desde_rendicion_id?: string | null;
-  /**
-   * Cuántos cobros se leyeron para armar esto, ANTES de filtrar por rol
-   * (0124). La RPC los vuelve a contar bajo su lock: si entró uno en el medio,
-   * rechaza en vez de dejarlo huérfano entre dos períodos.
-   */
-  pagos_leidos?: number;
 };
 
 export type CajaUserAssignment = {

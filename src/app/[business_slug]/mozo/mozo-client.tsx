@@ -1,5 +1,6 @@
 "use client";
 
+import { TuTurnoCard } from "@/components/mozo/tu-turno-card";
 import {
   useCallback,
   useEffect,
@@ -1858,6 +1859,9 @@ function YoSection({
 
   return (
     <div className="space-y-4">
+      {/* Spec 211 · R7 — cuánto tengo que entregar, igual que lo ve el encargado. */}
+      <TuTurnoCard slug={slug} />
+
       {/* Perfil */}
       <section className="rounded-3xl bg-white p-5 ring-1 ring-zinc-200">
         <div className="flex items-center gap-4">

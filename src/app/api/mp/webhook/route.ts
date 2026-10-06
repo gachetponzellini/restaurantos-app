@@ -150,10 +150,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    await service
+    // Si la base rechaza el cambio (p. ej. una guarda de caja), no se toca el
+    // split: un 500 hace que MP reintente en vez de dejar el cobro a medias.
+    const { error: payErr } = await service
       .from("payments")
       .update({ mp_payment_id: paymentId, payment_status: nextStatus })
       .eq("id", prow.id);
+    if (payErr) {
+      console.error("[mp/webhook] payments update falló", payErr.message);
+      return NextResponse.json({ error: "payment_update_failed" }, { status: 500 });
+    }
 
     if (nextStatus === "paid" && prow.split_id) {
       const { data: splitRow } = await service

@@ -5,13 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { enLotes, fetchAll } from "@/lib/proveedores/unwrap";
 
-import { calcularRendicionPorCanal, canalDelCobro } from "./canal-rendicion";
 import { MOVIMIENTO_LABEL } from "./movimiento-label";
-import { mozosQueDebenRendir } from "./deben-rendir";
-import {
-  repartirEfectivoEsperado,
-  type RepartoEfectivo,
-} from "./reparto-efectivo";
 import {
   agruparVentasPorOrigen,
   cruzarOrigenYMetodo,
@@ -42,7 +36,6 @@ import type {
   PaymentMethod,
   PaymentMethodConfig,
   RendicionDelCorte,
-  RendicionMozoPendiente,
   ResumenDeCorte,
   VentaOrigen,
 } from "./types";
@@ -593,7 +586,7 @@ async function getCajaStatsEnVentana(
     // una diferencia que nadie puede explicar: el mismo bug que la propina tuvo
     // hasta la spec 098, dos renglones más arriba. Va aparte, en `total_fiado`.
     //
-    // El arqueo (`calculateExpectedCash`) no necesita esta guarda: ya suma sólo
+    // El arqueo (`efectivo_esperado_caja`) no necesita esta guarda: ya suma sólo
     // `cash`. El que sumaba todo era este.
     if (p.method === "cuenta_corriente") {
       total_fiado_cents += venta;
@@ -928,170 +921,6 @@ async function getRendicionesDeVentana(
 }
 
 // ── Rendición de mozos ──────────────────────────────────────────
-
-async function getUltimaRendicionMozo(
-  mozoId: string,
-  businessId: string,
-): Promise<MozoRendicion | null> {
-  const service = db();
-  const { data } = await service
-    .from("mozo_rendiciones")
-    .select("*")
-    .eq("business_id", businessId)
-    .eq("mozo_id", mozoId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data as MozoRendicion | null;
-}
-
-export async function getRendicionPendienteMozo(
-  mozoId: string,
-  businessId: string,
-  mozoName: string,
-  /**
-   * Scope opcional por caja, para el **reparto del arqueo** (issue #264).
-   *
-   * Lo que el mozo DEBE rendir es de todo el negocio: la plata la tiene encima
-   * una sola vez y la entrega una sola vez. Pero el reparto de una caja explica
-   * el efectivo esperado **de ese cajón**, y ese esperado se calcula por caja
-   * (`getCajaStatsEnVentana` filtra `caja_id`). Sin este scope, al cajón de la
-   * Principal se le restaba lo que el mozo había cobrado en el Bar —plata que
-   * nunca estuvo en el esperado de la Principal— y el modal mostraba menos de
-   * lo que había que contar.
-   *
-   * Sin `cajaId` el comportamiento es el de siempre: todo el negocio.
-   */
-  cajaId?: string,
-  /**
-   * Techo del período, inclusive (issue #264).
-   *
-   * El período de un mozo tenía piso —su última rendición— pero no techo, y la
-   * rendición se insertaba con `now()` de otra transacción. Un cobro que entrara
-   * entre la lectura y el insert quedaba **huérfano para siempre**: no lo cubría
-   * esta rendición (se leyó antes) ni la siguiente (su `created_at` es anterior
-   * al de la fila que define el nuevo piso).
-   *
-   * Con un techo explícito, el que rinde y el que guarda usan exactamente el
-   * mismo corte, y lo que caiga después queda para la próxima.
-   */
-  hastaIso?: string,
-  /** Rol del usuario, para decidir si tiene que rendir (issue #264). */
-  mozoRole?: string,
-): Promise<RendicionMozoPendiente> {
-  const ultima = await getUltimaRendicionMozo(mozoId, businessId);
-  const service = db();
-
-  const armar = () => {
-    let query = service
-      .from("payments")
-      .select("id, method, amount_cents, tip_cents, orders(table_id, delivery_type)")
-      .eq("attributed_mozo_id", mozoId)
-      // Scope por negocio (spec 36 · R-C2): sin esto, un mozo activo en dos
-      // locales (House/Golf) veía en su rendición los pagos del OTRO negocio.
-      .eq("business_id", businessId)
-      .eq("payment_status", "paid");
-
-    if (ultima) {
-      query = query.gt("created_at", ultima.created_at);
-    }
-    if (cajaId) {
-      query = query.eq("caja_id", cajaId);
-    }
-    if (hastaIso) {
-      query = query.lte("created_at", hastaIso);
-    }
-    return query.order("id");
-  };
-
-  // #360 — un mozo que nunca rindió arrastra toda su historia: sin paginar,
-  // pasadas las 1.000 filas lo que tenía que entregar salía más chico.
-  const data = await fetchAll(armar, "payments");
-  const payments = data as unknown as Array<{
-    method: PaymentMethod;
-    amount_cents: number;
-    tip_cents: number;
-    orders: { table_id: string | null; delivery_type: string | null } | null;
-  }>;
-
-  // Spec 203 — cada cobro con su canal; el encargado rinde sólo lo sin mesa.
-  const rendicion = calcularRendicionPorCanal(
-    payments.map((p) => ({
-      method: p.method,
-      amount_cents: p.amount_cents,
-      tip_cents: p.tip_cents,
-      canal: canalDelCobro({
-        table_id: p.orders?.table_id ?? null,
-        delivery_type: p.orders?.delivery_type ?? null,
-      }),
-    })),
-    mozoRole,
-  );
-
-  return {
-    mozo_id: mozoId,
-    mozo_name: mozoName,
-    mozo_role: mozoRole,
-    efectivo_cents: rendicion.efectivo_cents,
-    efectivo_bruto_cents: rendicion.efectivo_bruto_cents,
-    tickets_cents: rendicion.tickets_cents,
-    por_metodo: rendicion.por_metodo,
-    total_propinas_cents: rendicion.total_propinas_cents,
-    propina_efectivo_cents: rendicion.propina_efectivo_cents,
-    propina_a_entregar_cents: rendicion.propina_a_entregar_cents,
-    pagos_count: rendicion.pagos_count,
-    por_canal: rendicion.por_canal,
-    desde_rendicion_id: ultima?.id ?? null,
-    pagos_leidos: payments.length,
-  };
-}
-
-export async function getRendicionesPendientesTodosLosMozos(
-  businessId: string,
-  /** Scope por caja — sólo para el reparto del arqueo. Ver `getRendicionPendienteMozo`. */
-  cajaId?: string,
-): Promise<RendicionMozoPendiente[]> {
-  const service = db();
-
-  const { data: mozos } = await service
-    .from("business_users")
-    .select("user_id, full_name, role")
-    .eq("business_id", businessId)
-    .in("role", ["mozo", "encargado"]);
-
-  if (!mozos || mozos.length === 0) return [];
-
-  // #351 — las mesas sin cobrar de todos, en una sola query: la card de
-  // rendición deshabilita el botón con esto.
-  const mesasPorMozo = cajaId ? null : await getMesasSinCobrarPorMozo(businessId);
-
-  // En paralelo, no en cascada (spec 103): esto corre en la carga inicial de
-  // `/admin/operacion` y con 8 mozos eran 8 round-trips encadenados —cada uno
-  // con su propia consulta de pagos— antes de que la página pudiera cerrar.
-  const pendientes = await Promise.all(
-    (
-      mozos as Array<{
-        user_id: string;
-        full_name: string | null;
-        role: string;
-      }>
-    ).map((m) =>
-      getRendicionPendienteMozo(
-        m.user_id,
-        businessId,
-        m.full_name ?? "Sin nombre",
-        cajaId,
-        undefined,
-        m.role,
-      ),
-    ),
-  );
-  if (!mesasPorMozo) return pendientes;
-  return pendientes.map((p) => ({
-    ...p,
-    mesas_sin_cobrar: mesasPorMozo.get(p.mozo_id) ?? [],
-  }));
-}
 
 /**
  * #351 — las mesas sin cobrar del negocio, por mozo. Abiertas con consumo o
@@ -1858,7 +1687,13 @@ export type CierreCajaData = {
    */
   fondo_fijo_cents: number;
   /** El esperado partido por dueño (D5). Sólo la principal reparte (D9). */
-  reparto: RepartoEfectivo;
+  reparto: {
+    /** Lo que tiene que estar físicamente en el cajón. */
+    en_cajon_cents: number;
+    /** Herencia del modelo viejo: en v2 los mozos van en `deben_rendir`. */
+    mozos: { mozo_id: string; mozo_name: string; efectivo_cents: number }[];
+    descuadre_cents: number;
+  };
   /** Bloquean el cierre. Vacío en una caja que no barre el salón. */
   cuentas_abiertas: CuentaAbierta[];
   /** Avisan, no bloquean. */
@@ -1964,37 +1799,6 @@ export async function getOperadoresDeCaja(
     .eq("caja_id", cajaId)
     .eq("business_id", businessId);
   return ((data as { user_id: string }[] | null) ?? []).map((a) => a.user_id);
-}
-
-/**
- * Lo que el cierre va a barrer, para poder anunciarlo **antes** de apretar
- * (D8): hoy el encargado se entera por un toast, cuando ya pasó.
- */
-async function contarSalonPorLiberar(
-  businessId: string,
-): Promise<{ mesas_a_liberar: number; mozos_asignados: number }> {
-  const service = db();
-  const { data: plans } = await service
-    .from("floor_plans")
-    .select("id")
-    .eq("business_id", businessId);
-  const planIds = ((plans as { id: string }[] | null) ?? []).map((p) => p.id);
-  if (planIds.length === 0) return { mesas_a_liberar: 0, mozos_asignados: 0 };
-
-  const { data } = await service
-    .from("tables")
-    .select("operational_status, mozo_id")
-    .in("floor_plan_id", planIds);
-
-  const rows = (data ?? []) as Array<{
-    operational_status: string;
-    mozo_id: string | null;
-  }>;
-  return {
-    mesas_a_liberar: rows.filter((t) => t.operational_status !== "libre")
-      .length,
-    mozos_asignados: rows.filter((t) => t.mozo_id !== null).length,
-  };
 }
 
 /**

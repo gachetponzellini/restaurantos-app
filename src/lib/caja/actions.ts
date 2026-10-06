@@ -1,49 +1,32 @@
 "use server";
 
-import {
-  CANALES,
-  liquidarPorCanal,
-  type CanalRendicion,
-} from "@/lib/caja/canal-rendicion";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { assignMozoToTable } from "@/lib/mozo/actions";
 import { requireMozoActionContext } from "@/lib/mozo/auth";
-import { notifyRendicionPendiente } from "@/lib/notifications/events";
 import {
   canAcceptCajaDifference,
   canAssignMozo,
   canHacerCorte,
   canMakeSangria,
   canManageCajas,
-  canRendirMozo,
-  DIFERENCIA_CAJA_OK_CENTS,
 } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { formatCurrency } from "@/lib/currency";
 import { getBusiness } from "@/lib/tenant";
 import { getSaldosMozos } from "./turno-queries";
 
-import { mozosQueDebenRendir } from "./deben-rendir";
 import {
   getCajaLiveStats,
   getCuentasAbiertas,
-  getDefaultCaja,
   getMovimientosPeriodoActual,
-  getOperadoresDeCaja,
-  getRendicionesPendientesTodosLosMozos,
-  getRendicionPendienteMozo,
-  getMesasSinCobrarPorMozo,
 } from "./queries";
-import { motivoBloqueoRendicion } from "./mesas-sin-cobrar";
 import type {
   CajaCorte,
   CierreResumenSnapshot,
-  MozoRendicion,
   PaymentMethod,
-  RendicionEstado,
   VentaOrigen,
 } from "./types";
 
@@ -831,229 +814,6 @@ export async function upsertPaymentMethodConfig(
   revalidatePath(`/${businessSlug}/mozo`);
   revalidatePath(`/${businessSlug}/admin/operacion`);
   return actionOk(undefined);
-}
-
-// ── Rendición de mozos ──────────────────────────────────────────
-
-/**
- * Registra la rendición de un mozo y **cierra su período** (spec 07), ahora con
- * estado (spec 139 · D1).
- *
- * `estado = 'no_entrego'` es la salida para el mozo que se fue: no inventa una
- * rendición que cuadre ni deja al encargado trabado a la 1 de la mañana — deja
- * la deuda escrita, con nombre y motivo, y avisa al admin. El monto entregado
- * se ignora y se persiste en $0: lo que se declara es que no entregó nada.
- *
- * Lo que NO hace, a propósito: aplicar `canAcceptCajaDifference`. Ese techo es
- * del arqueo de caja; un faltante de rendición no se acepta, se cobra (D6).
- */
-export async function registrarRendicionMozo(
-  mozoId: string,
-  delivered_cash_cents: number,
-  notes: string | null,
-  businessSlug: string,
-  estado: RendicionEstado = "rendida",
-  /**
-   * De qué cajón sale la propina (spec 177 · Parte B). Sin esto, la caja por
-   * defecto — que es de donde sale la plata en un local de una sola caja.
-   */
-  cajaId?: string,
-  /**
-   * Spec 203 · D4 — lo entregado por canal. Obligatorio cuando hay efectivo en
-   * más de un canal; con uno solo, `delivered_cash_cents` va a ese canal.
-   */
-  entregadoPorCanal?: Partial<Record<CanalRendicion, number>>,
-): Promise<ActionResult<{ rendicion: MozoRendicion; propina_pagada_cents: number }>> {
-  const business = await getBusiness(businessSlug);
-  if (!business) return actionError("Negocio no encontrado.");
-
-  const ctxResult = await requireMozoActionContext(business.id);
-  if (!ctxResult.ok) return ctxResult;
-  const ctx = ctxResult.data;
-
-  if (!canRendirMozo(ctx.role)) {
-    return actionError("Solo encargado o admin pueden registrar una rendición.");
-  }
-  if (delivered_cash_cents < 0) {
-    return actionError("El monto entregado no puede ser negativo.");
-  }
-
-  const service = createSupabaseServiceClient() as unknown as GenericClient;
-
-  const { data: mozoUser } = await service
-    .from("business_users")
-    .select("user_id, full_name, role")
-    .eq("business_id", business.id)
-    .eq("user_id", mozoId)
-    .maybeSingle();
-  if (!mozoUser) return actionError("El mozo no pertenece a este negocio.");
-
-  // #351 — con una mesa suya sin cobrar no se rinde: lo que se cobre después
-  // caería en un período nuevo y obligaría a una segunda rendición. La card ya
-  // deshabilita el botón; esto es lo que lo hace cumplir.
-  const mesasSinCobrar =
-    (await getMesasSinCobrarPorMozo(business.id)).get(mozoId) ?? [];
-  if (mesasSinCobrar.length > 0) {
-    return actionError(motivoBloqueoRendicion(mesasSinCobrar));
-  }
-
-  // issue #264 — el corte se fija ANTES de leer, y es el mismo que se guarda.
-  //
-  // Antes esto leía «todo lo cobrado desde la última rendición» sin techo, y
-  // después insertaba la fila con el `now()` del server. Entre las dos cosas hay
-  // un round-trip contra la base, y un cobro que entrara en ese hueco quedaba
-  // huérfano: no lo cubría esta rendición —se leyó antes— ni la siguiente, cuyo
-  // piso es el `created_at` de esta fila, posterior al del cobro. Ese efectivo
-  // dejaba de figurar en «deben rendir» para siempre, pero seguía contado en el
-  // esperado del cajón: el faltante aparecía en el arqueo sin dueño.
-  //
-  // Fijando el corte y guardándolo como `created_at`, el período que cierra y el
-  // que abre se tocan exactamente, sin hueco ni solape.
-  //
-  // Residual honesto: el corte sale del reloj de Node y los `created_at` de los
-  // pagos, del de Postgres. Si Node adelantara MÁS de lo que tarda el
-  // round-trip, un pago podría volver a caer en el hueco. Antes el hueco existía
-  // siempre; ahora hace falta desincronización de relojes. Cerrarlo del todo
-  // pide mover la rendición entera a una RPC transaccional —como
-  // `registrar_pago_tx`— y eso es otra tanda: no se hace acá para no duplicar la
-  // aritmética de la rendición en SQL, que es justo lo que causó el #253.
-  //
-  // 0124 — cerrado del todo. El techo ya no sale del reloj de Node: la action
-  // lee TODO lo cobrado hasta ahora y le pasa a `registrar_rendicion_tx` cuántos
-  // cobros leyó. La RPC toma el lock exclusivo del mozo (los cobros toman el
-  // compartido), vuelve a contar y fija la hora con el reloj de la base: si
-  // entró un cobro en el medio, rechaza y se vuelve a leer. La aritmética sigue
-  // acá, en TS; la base sólo verifica que se hizo sobre los mismos cobros.
-  const corteIso = new Date().toISOString();
-
-  const pendiente = await getRendicionPendienteMozo(
-    mozoId,
-    business.id,
-    (mozoUser as { full_name: string | null }).full_name ?? "Sin nombre",
-    undefined,
-    undefined,
-    // Spec 203 — con el rol, el encargado rinde sólo takeaway y delivery.
-    (mozoUser as { role: string | null }).role ?? undefined,
-  );
-
-  // Spec 203 · D4 — el entregado se reparte por canal. Con un solo canal con
-  // efectivo el monto del formulario es de ese canal; con varios, cada uno trae
-  // el suyo y el total es la suma. Declarar que no entregó es declarar $0: el
-  // monto del formulario no se usa, así no hay dos verdades en la misma fila.
-  const conEfectivo = CANALES.filter(
-    (c) => (pendiente.por_canal[c]?.efectivo_cents ?? 0) > 0,
-  );
-  let entregadoCanales: Partial<Record<CanalRendicion, number>>;
-  if (entregadoPorCanal) {
-    if (Object.values(entregadoPorCanal).some((v) => (v ?? 0) < 0)) {
-      return actionError("El monto entregado no puede ser negativo.");
-    }
-    entregadoCanales = entregadoPorCanal;
-  } else if (conEfectivo.length > 1 && estado === "rendida") {
-    return actionError("Cargá lo entregado de cada canal por separado.");
-  } else {
-    entregadoCanales = conEfectivo[0] ? { [conEfectivo[0]]: delivered_cash_cents } : {};
-  }
-  const liquidacion = liquidarPorCanal(
-    pendiente.por_canal,
-    entregadoCanales,
-    estado === "no_entrego",
-  );
-  const expected_cash_cents = pendiente.efectivo_cents;
-  const entregado = liquidacion.delivered_cash_cents;
-  const difference_cents = entregado - expected_cash_cents;
-  const hayDiferenciaEnCanal = Object.values(liquidacion.por_canal).some(
-    (c) => c.diferencia_cents !== 0,
-  );
-  const motivo = notes?.trim() || null;
-
-  if (estado === "no_entrego" && !motivo) {
-    return actionError("Decí por qué no entregó: queda registrado como deuda.");
-  }
-  if (estado === "rendida" && (difference_cents !== 0 || hayDiferenciaEnCanal) && !motivo) {
-    return actionError(
-      "Hay diferencia entre lo esperado y lo entregado. Registrá el motivo.",
-    );
-  }
-
-  // Spec 178 — la propina que se va a pagar entra al snapshot de la fila, para
-  // que el papel diga lo que se firmó y no lo que el libro tenga después. Es el
-  // mismo criterio de `por_metodo`. Cero si no entregó: la 177 no paga contra
-  // una deuda abierta.
-  const propina_pagada_cents =
-    estado === "rendida" ? pendiente.total_propinas_cents : 0;
-
-  // #359 — la rendición y el pago de su propina (spec 177 · Parte B) van en
-  // una transacción, con lock por mozo: dos rendiciones a la vez del mismo
-  // mozo leían el mismo pendiente y pagaban la propina dos veces. La RPC
-  // además verifica que el piso que se leyó siga siendo el último.
-  //
-  // Un `no_entrego` no cobra propina: declaró que no entregó nada, pagarle
-  // sería sacar plata del cajón contra una deuda abierta.
-  let cajaPropina: string | null = null;
-  if (propina_pagada_cents > 0) {
-    cajaPropina = cajaId ?? (await getDefaultCaja(business.id))?.id ?? null;
-    if (!cajaPropina) {
-      return actionError(
-        "El negocio no tiene ninguna caja donde registrar el pago de la propina.",
-      );
-    }
-  }
-
-  const { data: inserted, error } = await service.rpc("registrar_rendicion_tx", {
-    p_business_id: business.id,
-    p_mozo_id: mozoId,
-    p_registered_by: ctx.userId,
-    p_desde_rendicion_id: pendiente.desde_rendicion_id ?? null,
-    // El mismo instante con el que se leyó: define el piso del próximo período.
-    p_created_at: corteIso,
-    p_expected_cash_cents: expected_cash_cents,
-    p_delivered_cash_cents: entregado,
-    p_difference_cents: difference_cents,
-    p_notes: motivo,
-    p_por_metodo: pendiente.por_metodo,
-    p_por_canal: liquidacion.por_canal,
-    p_estado: estado,
-    p_propina_pagada_cents: propina_pagada_cents,
-    p_caja_id: cajaPropina,
-    // El nombre va adentro del motivo a propósito: el papel del cierre
-    // (spec 139) arma sus renglones con `reason` y sin esto la línea diría
-    // sólo «Propina», que en una lista de seis es inútil.
-    p_propina_reason: `Propina · ${(mozoUser as { full_name: string | null }).full_name ?? "Mozo"}`,
-    p_pagos_leidos: pendiente.pagos_leidos ?? null,
-  });
-
-  if (error) {
-    if (error.message.includes("RENDICION_CONCURRENTE")) {
-      return actionError(
-        "Entró un cobro de este mozo (o alguien registró su rendición) mientras cargabas. Actualizá la pantalla y volvé a rendir con el número al día.",
-      );
-    }
-    return actionError(`No se pudo registrar la rendición: ${error.message}`);
-  }
-
-  const rendicion = inserted as MozoRendicion;
-
-  // D6 · no traba el cierre, pero no queda invisible: el dueño se entera de la
-  // plata que quedó afuera del cajón. Best-effort, como el resto de la spec 27.
-  const faltanteGrande =
-    difference_cents < 0 &&
-    Math.abs(difference_cents) >= DIFERENCIA_CAJA_OK_CENTS;
-  if (estado === "no_entrego" || faltanteGrande) {
-    await notifyRendicionPendiente({
-      businessId: business.id,
-      mozoName: (mozoUser as { full_name: string | null }).full_name ?? "Un mozo",
-      estado,
-      expectedCents: expected_cash_cents,
-      deliveredCents: entregado,
-      differenceCents: difference_cents,
-      reason: motivo,
-      actorUserId: ctx.userId,
-    });
-  }
-
-  revalidatePath(`/${businessSlug}/admin/operacion`);
-  return actionOk({ rendicion, propina_pagada_cents });
 }
 
 // ── Asignación caja↔usuario ─────────────────────────────────────

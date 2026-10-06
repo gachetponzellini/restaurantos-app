@@ -8,7 +8,7 @@ import type { CajaMovimientoKind } from "./types";
  * condición binaria** (`kind === "sangria" ? … : …`). El peor caso era la lista
  * del período en `caja-admin-board`: una propina caía en la rama del `else` y
  * se dibujaba como «Ingreso», en verde y con signo `+`. El arqueo daba bien
- * —`calculateExpectedCash` sí la resta— pero la línea decía que entró plata que
+ * —`efectivo_esperado_caja` sí la resta— pero la línea decía que entró plata que
  * había salido, y ésa es justo la línea que se lee para entender el número que
  * hay que contar.
  *

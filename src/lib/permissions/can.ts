@@ -222,6 +222,15 @@ export function canRendirMozo(role: BusinessRole): boolean {
 }
 
 /**
+ * Spec 211 · R7 — ver «Tu turno» en el celular: cuánto tengo que entregar. Es
+ * siempre lo PROPIO (el mozo sale de la sesión, nunca de un parámetro), así
+ * que lo ve cualquiera que cobre: mozo, encargado o admin.
+ */
+export function canVerMiTurno(role: BusinessRole): boolean {
+  return role === "mozo" || role === "encargado" || role === "admin";
+}
+
+/**
  * Corregir, agregar o anular una fichada (spec 179). Es sueldo: el mismo
  * círculo que corrige la caja. La `terminal` no — es una cuenta compartida por
  * todo el salón, y el rastro diría «terminal», no quién.

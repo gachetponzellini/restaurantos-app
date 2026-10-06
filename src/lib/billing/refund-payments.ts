@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { traducirErrorDeCaja } from "@/lib/caja/mensajes-caja";
+
 type GenericClient = SupabaseClient;
 
 /**
@@ -9,9 +11,9 @@ type GenericClient = SupabaseClient;
  *
  * ## Por qué esto vive en un solo lugar (issue #272)
  *
- * La caja no lee `orders.payment_status`: lee `payments`. `calculateExpectedCash`
- * suma las filas con `payment_status = 'paid'` y `getCajaStatsEnVentana` arma
- * con ellas el «cobrado en el período».
+ * La caja no lee `orders.payment_status`: lee `payments`. El esperado de la
+ * caja (`efectivo_esperado_caja`) suma las filas con `payment_status = 'paid'`
+ * y `getCajaStatsEnVentana` arma con ellas el «cobrado en el período».
  *
  * `anularCobro` siempre lo hizo bien. Los otros dos caminos que devuelven plata
  * —rechazar un pedido (spec 139) y la cancelación del propio cliente— marcaban
@@ -56,7 +58,16 @@ export async function marcarPagosReembolsados(
     .eq("order_id", params.orderId)
     .eq("payment_status", "paid");
   if (params.mpPaymentId) query = query.eq("mp_payment_id", params.mpPaymentId);
-  const { data: refundados } = await query.select("id, caja_id, amount_cents");
+  const { data: refundados, error: updErr } = await query.select(
+    "id, caja_id, amount_cents",
+  );
+  // La plata ya se devolvió en el gateway: si la base no lo asienta, la caja
+  // la seguiría esperando. Antes el error se tragaba y devolvía «0 cobros»;
+  // ahora corta, y el webhook de MP reintenta (es idempotente: sólo toca `paid`).
+  if (updErr) {
+    console.error("marcarPagosReembolsados · payments", updErr);
+    throw new Error(`No se pudo asentar el reembolso: ${traducirErrorDeCaja(updErr.message)}`);
+  }
 
   const filas = (refundados ?? []) as Array<{
     id: string;

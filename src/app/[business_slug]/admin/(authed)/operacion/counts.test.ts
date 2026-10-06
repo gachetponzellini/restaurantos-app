@@ -10,7 +10,7 @@ import {
 } from "./counts";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import type { FloorPlanWithTables } from "@/lib/admin/floor-plan/queries";
-import type { CajaConEstado, RendicionMozoPendiente } from "@/lib/caja/types";
+import type { CajaConEstado } from "@/lib/caja/types";
 import type { PresentEmployee } from "@/lib/rrhh/clock-actions";
 
 // Fixtures mínimos: sólo los campos que el predicado mira, casteados al tipo.
@@ -23,18 +23,7 @@ const table = (
     FloorPlanWithTables["tables"][number];
 const plan = (tables: FloorPlanWithTables["tables"]): FloorPlanWithTables =>
   ({ plan: {}, tables }) as unknown as FloorPlanWithTables;
-const pendiente = (
-  pagos_count: number,
-  mozo_role = "mozo",
-  mozo_name = "Alguien",
-) =>
-  ({
-    pagos_count,
-    mozo_role,
-    mozo_name,
-    mozo_id: `${mozo_name}-${mozo_role}`,
-    efectivo_cents: 0,
-  }) as RendicionMozoPendiente;
+const saldo = (mozo_id: string, resuelto: boolean) => ({ mozo_id, resuelto });
 
 describe("operacion/counts — predicados de pills (FR-012)", () => {
   it("countPedidosNuevos: pending + confirmed cuentan; el resto no", () => {
@@ -61,24 +50,14 @@ describe("operacion/counts — predicados de pills (FR-012)", () => {
     expect(countSalonOcupadas(floorPlans)).toBe(2);
   });
 
-  it("countRendicionesPendientes: solo mozos con pagos_count > 0", () => {
-    const pendientes = [
-      pendiente(0, "mozo", "Ana"),
-      pendiente(3, "mozo", "Beto"),
-      pendiente(1, "mozo", "Cami"),
-    ];
-    expect(countRendicionesPendientes(pendientes)).toBe(2);
+  it("countRendicionesPendientes: cuenta mozos sin resolver (spec 211)", () => {
+    const saldos = [saldo("ana", true), saldo("beto", false), saldo("cami", false)];
+    expect(countRendicionesPendientes(saldos)).toBe(2);
   });
 
-  it("countRendicionesPendientes: el encargado cuenta si tiene takeaway o delivery (spec 203)", () => {
-    // La pendiente del encargado ya viene sin el salón (#264): si trae cobros,
-    // son de mostrador o delivery y los tiene que rendir.
-    const pendientes = [
-      pendiente(4, "mozo", "Pedro"),
-      pendiente(9, "encargado", "Sofía"),
-      pendiente(0, "admin", "Martín"),
-    ];
-    expect(countRendicionesPendientes(pendientes)).toBe(2);
+  it("countRendicionesPendientes: un mozo con saldo en dos cajas cuenta una vez", () => {
+    const saldos = [saldo("pedro", false), saldo("pedro", false), saldo("sofia", true)];
+    expect(countRendicionesPendientes(saldos)).toBe(1);
   });
 
   it("countReservasPorSentar: solo las confirmadas (las sentadas ya están en mesa)", () => {

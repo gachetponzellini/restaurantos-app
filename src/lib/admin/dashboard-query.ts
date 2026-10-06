@@ -560,7 +560,7 @@ export async function getCashControl(
     // issue #272 · hallazgo 5 — los dos filtros que le faltaban a «Sangrías».
     //
     // `cancelled_at`: un movimiento anulado (spec 070) sigue en el libro para
-    // que quede la huella, pero no mueve la caja. `calculateExpectedCash` ya lo
+    // que quede la huella, pero no mueve la caja. `efectivo_esperado_caja` ya lo
     // filtra; esta tarjeta no, así que la sangría que el encargado cargó mal y
     // corrigió seguía contando como plata sacada.
     //

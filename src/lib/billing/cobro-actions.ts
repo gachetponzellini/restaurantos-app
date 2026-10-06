@@ -44,6 +44,7 @@ import {
   sumActiveItems,
   type DestinoDelExcedente,
 } from "./totals";
+import { traducirErrorDeCaja } from "@/lib/caja/mensajes-caja";
 import type { OrderSplit, Payment } from "./types";
 
 type GenericClient = SupabaseClient;
@@ -251,7 +252,7 @@ export async function closeOrderIfFullyPaid(
   // pagar $9.000 de una cuenta de $10.000 es pagar completo, y sumando el bruto
   // esta cuenta daba que faltaban $1.000 para siempre.
   //
-  // El bruto sigue siendo el que vale para la caja: `calculateExpectedCash` lee
+  // El bruto sigue siendo el que vale para la caja: `efectivo_esperado_caja` lee
   // `payments.amount_cents` tal cual, porque eso es lo que hay en el cajón. Son
   // dos magnitudes distintas y conviven a propósito.
   //
@@ -1006,13 +1007,14 @@ export async function forzarPago(
     return actionError("El pago ya está marcado como cobrado.");
   }
 
-  await service
+  const { error: payErr } = await service
     .from("payments")
     .update({
       payment_status: "paid",
       notes: `${p.notes ?? ""}\n[forzado: ${motivo.trim()}]`.trim(),
     })
     .eq("id", paymentId);
+  if (payErr) return actionError(traducirErrorDeCaja(payErr.message));
 
   // #352 — sub-cuenta y lo pagado de la orden, con la regla común (0117). Acá
   // se sumaba el bruto a mano, sin tocar `total_paid_cents`.

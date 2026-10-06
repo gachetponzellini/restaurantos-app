@@ -787,7 +787,7 @@ function TabsInner({
               /* #351 — la rendición vive en Caja: la pill cuenta quién
                  falta rendir, no cuántas cajas hay configuradas. */
               compute={(d) =>
-                countRendicionesPendientes(d.rendicion.rendicionPendientes)
+                countRendicionesPendientes(d.rendicion.saldosMozos)
               }
             />
           }

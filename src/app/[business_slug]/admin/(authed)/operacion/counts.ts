@@ -1,8 +1,7 @@
-import { mozosQueDebenRendir } from "@/lib/caja/deben-rendir";
 import type { AdminOrder } from "@/lib/admin/orders-query";
 import type { FloorPlanWithTables } from "@/lib/admin/floor-plan/queries";
 import { matchesSalon, matchesSalonReserva } from "@/lib/admin/salon-filter";
-import type { CajaConEstado, RendicionMozoPendiente } from "@/lib/caja/types";
+import type { CajaConEstado } from "@/lib/caja/types";
 import type { ReservationStatus } from "@/lib/reservations/types";
 import type { PresentEmployee } from "@/lib/rrhh/clock-actions";
 
@@ -71,15 +70,11 @@ export function countCajas(cajas: CajaConEstado[]): number {
  * "0" falso puede llevar a cerrar el turno creyendo que no hay nada).
  */
 export function countRendicionesPendientes(
-  pendientes: RendicionMozoPendiente[],
+  saldos: { mozo_id: string; resuelto: boolean }[],
 ): number {
-  // issue #264 — el mismo criterio que el cierre y que la tab.
-  //
-  // Contaba `pagos_count > 0` a secas, así que el que maneja la caja sumaba
-  // todas las noches y la pill nunca bajaba a cero. Un badge que no llega a
-  // cero se deja de mirar, y la noche que significa algo —un mozo de verdad con
-  // efectivo encima— ya nadie lo ve.
-  return mozosQueDebenRendir(pendientes, []).length;
+  // Spec 210 v2 — cuenta los mozos con plata sin resolver en alguna caja: lo
+  // mismo que frena el cierre. Un mozo con plata de dos cajas cuenta una vez.
+  return new Set(saldos.filter((m) => !m.resuelto).map((m) => m.mozo_id)).size;
 }
 
 /**

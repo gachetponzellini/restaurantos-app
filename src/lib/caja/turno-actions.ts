@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
-import { formatCurrency } from "@/lib/currency";
 import { requireMozoActionContext } from "@/lib/mozo/auth";
 import { notifyRendicionPendiente } from "@/lib/notifications/events";
-import { canCorregirCobro, canHacerCorte, canRendirMozo } from "@/lib/permissions/can";
+import { canCorregirCobro, canHacerCorte, canRendirMozo, canVerMiTurno } from "@/lib/permissions/can";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
+
+import { traducirErrorDeCaja as traducir } from "./mensajes-caja";
 
 /**
  * Spec 210/211 v2 — las acciones de la caja nueva. Cada una es una RPC de la
@@ -23,51 +24,6 @@ const db = () => createSupabaseServiceClient() as unknown as GenericClient;
 
 /** Faltante desde el que la entrega de menos se le avisa al dueño (igual que antes). */
 const AVISAR_FALTANTE_CENTS = 500_000;
-
-/** Los códigos de la base, en palabras de la pantalla. */
-export async function mensajeDeCaja(raw: string): Promise<string> {
-  return traducir(raw);
-}
-
-function traducir(raw: string): string {
-  const [code, extra] = raw.split(":");
-  const c = code.trim();
-  switch (c) {
-    case "MOZO_HAS_OPEN_TABLES":
-      return `Tiene mesa ${extra ?? ""} sin cobrar. Cobrala antes de rendir.`.replace("  ", " ");
-    case "NOTES_REQUIRED":
-      return "Escribí qué pasó: hace falta el motivo.";
-    case "AMOUNT_NOT_POSITIVE":
-      return "Cargá cuánto entregó. Si no trajo nada, marcá «No entregó».";
-    case "AMOUNT_NEGATIVE":
-      return "El monto no puede ser negativo.";
-    case "NADA_QUE_RENDIR":
-      return "No tiene nada para entregar.";
-    case "NADA_QUE_RECONOCER":
-      return "No debe nada en esta caja.";
-    case "SALDO_A_FAVOR_DEL_MOZO":
-      return `La caja le debe ${formatCurrency(Number(extra ?? 0))} de propina: no tiene que entregar nada.`;
-    case "CAJA_INVALID":
-      return "Esa caja no se puede usar para rendir.";
-    case "ARQUEO_CERRADO":
-      return "Esa entrega ya entró en un cierre de caja: no se puede anular.";
-    case "YA_ANULADA":
-      return "Esa entrega ya estaba anulada.";
-    case "OPEN_TABLE_ORDERS":
-      return "Hay mesas con la cuenta abierta. Cobralas antes de cerrar.";
-    case "UNRENDERED_MOZOS":
-      return "Hay mozos que no rindieron lo de esta caja. Resolvé las rendiciones antes de cerrar.";
-    case "CAJA_SIN_CONTAR":
-      return `Falta contar: ${extra ?? "una caja"}.`;
-    case "MOZO_YA_RINDIO":
-      return "Ese cobro ya entró en la rendición del mozo. Para corregirlo, primero anulá su entrega.";
-    case "MODELO_VIEJO":
-    case "MODELO_NUEVO":
-      return "El negocio todavía no pasó a la caja nueva.";
-    default:
-      return raw;
-  }
-}
 
 async function contexto(slug: string) {
   const business = await getBusiness(slug);
@@ -271,5 +227,55 @@ export async function efectoDeCorreccion(input: {
     amount_cents: Number(r.amount_cents),
     cajas: (r.cajas ?? []).map((x) => ({ ...x, antes: Number(x.antes), despues: Number(x.despues) })),
     mozos: (r.mozos ?? []).map((x) => ({ ...x, antes: Number(x.antes), despues: Number(x.despues) })),
+  });
+}
+
+export type MiTurno = {
+  /** Una fila por caja en la que tiene plata (casi siempre una). */
+  cajas: {
+    caja_name: string;
+    anterior_cents: number;
+    efectivo_cents: number;
+    propina_tarjeta_cents: number;
+    propina_efectivo_cents: number;
+    entregado_cents: number;
+    pagado_cents: number;
+    saldo_cents: number;
+    deuda: boolean;
+  }[];
+  mesas_sin_cobrar: string[];
+};
+
+/**
+ * Spec 211 · R7 — «Tu turno» en el celular del mozo: lo mismo que ve el
+ * encargado (`saldos_mozos`), de él solo. El mozo sale de la sesión.
+ */
+export async function getMiTurno(slug: string): Promise<ActionResult<MiTurno>> {
+  const c = await contexto(slug);
+  if (!c.ok) return c;
+  if (!canVerMiTurno(c.data.role)) return actionError("No tenés acceso a esto.");
+  const { getSaldosMozos } = await import("./turno-queries");
+  const { data: turno } = await db()
+    .from("turnos")
+    .select("abierto_at")
+    .eq("business_id", c.data.business.id)
+    .is("cerrado_at", null)
+    .maybeSingle();
+  const saldos = (
+    await getSaldosMozos(c.data.business.id, (turno as { abierto_at: string } | null)?.abierto_at)
+  ).filter((m) => m.mozo_id === c.data.userId);
+  return actionOk({
+    cajas: saldos.map((m) => ({
+      caja_name: m.caja_name,
+      anterior_cents: m.anterior_cents,
+      efectivo_cents: m.efectivo_cents,
+      propina_tarjeta_cents: m.propina_tarjeta_cents,
+      propina_efectivo_cents: m.propina_efectivo_cents,
+      entregado_cents: m.entregado_cents,
+      pagado_cents: m.pagado_cents,
+      saldo_cents: m.saldo_cents,
+      deuda: m.deuda,
+    })),
+    mesas_sin_cobrar: (saldos[0]?.mesas_sin_cobrar ?? []).map((x) => x.tableLabel ?? "?"),
   });
 }
