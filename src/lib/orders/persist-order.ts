@@ -23,6 +23,10 @@ import type {
 
 import { resolveComboUpcharge } from "./combo-pricing";
 import {
+  validateProductModifiers,
+  type ProductModifierGroup,
+} from "./product-modifiers";
+import {
   operatingDay,
   orderSlotsForDay,
   validateScheduledOrder,
@@ -324,6 +328,48 @@ export async function persistOrder(
         price_delta_cents: Number(m.price_delta_cents),
         is_available: m.is_available,
       });
+    }
+  }
+
+  // ── H-01 (QA #382): los adicionales de cada línea contra los grupos de SU
+  // producto. Lo de arriba sólo garantiza que existan, sean del negocio y estén
+  // disponibles; acá se exige además que pertenezcan al producto de la línea,
+  // sin repetidos, y que se cumplan `is_required` / `min` / `max` de cada grupo.
+  // Corre también con `modifier_ids: []` — es la forma de saltear un grupo
+  // obligatorio. No cambia el precio de ningún input válido.
+  if (productItems.length > 0) {
+    const { data: groupRows, error: groupsError } = await supabase
+      .from("modifier_groups")
+      .select(
+        "id, product_id, name, is_required, min_selection, max_selection, modifiers(id, is_available)",
+      )
+      .in("product_id", productIds)
+      .eq("business_id", business.id);
+    if (groupsError) {
+      return actionError(
+        "No pudimos validar las opciones del pedido. Probá de nuevo.",
+      );
+    }
+    const groupsByProduct = new Map<string, ProductModifierGroup[]>();
+    for (const g of groupRows ?? []) {
+      const list = groupsByProduct.get(g.product_id) ?? [];
+      list.push({
+        id: g.id,
+        name: g.name,
+        is_required: g.is_required,
+        min_selection: Number(g.min_selection),
+        max_selection: Number(g.max_selection),
+        modifiers: g.modifiers ?? [],
+      });
+      groupsByProduct.set(g.product_id, list);
+    }
+    for (const item of productItems) {
+      const check = validateProductModifiers(
+        productById.get(item.product_id)!.name,
+        groupsByProduct.get(item.product_id) ?? [],
+        item.modifier_ids,
+      );
+      if (!check.ok) return actionError(check.error);
     }
   }
 

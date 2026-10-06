@@ -169,3 +169,20 @@ export function CancelReservationButton({ id }: { id: string }) {
     </>
   );
 }
+
+/** H-14 — en lugar del botón cuando ya pasó la ventana de cancelación online. */
+export function CancelOutOfWindowNote() {
+  return (
+    <p
+      style={{
+        margin: 0,
+        fontSize: 13,
+        color: "var(--ink-3)",
+        lineHeight: 1.4,
+        textAlign: "center",
+      }}
+    >
+      Para cancelar, avisale al local.
+    </p>
+  );
+}

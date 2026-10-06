@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { I } from "@/components/delivery/primitives";
 import { CustomerAuthForm } from "@/components/public/customer-auth-form";
 import { LoginWithGoogleButton } from "@/components/public/login-button";
+import { safeNextPath } from "@/lib/auth/customer-auth-shared";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBusiness } from "@/lib/tenant";
 
@@ -19,10 +20,7 @@ export default async function CustomerLoginPage({
   const business = await getBusiness(business_slug);
   if (!business) notFound();
 
-  const safeNext =
-    next && next.startsWith("/") && !next.startsWith("//")
-      ? next
-      : `/${business_slug}/menu`;
+  const safeNext = safeNextPath(next, business_slug);
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -54,8 +52,8 @@ export default async function CustomerLoginPage({
           href={`/${business_slug}/menu`}
           aria-label="Cerrar"
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

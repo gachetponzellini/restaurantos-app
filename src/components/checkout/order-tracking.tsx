@@ -107,6 +107,17 @@ export function OrderTracking({
   const step = statusToStep(status);
   const cancelled = status === "cancelled";
   const itemCount = items.reduce((s, it) => s + it.quantity, 0);
+  // H-21 (QA #382): cancelar recalcula los totales de la orden a $0 pero deja el
+  // subtotal de cada ítem, y la pantalla mostraba «Pedido $16.000 · Total $0».
+  // Para un pedido cancelado se muestra el total ORIGINAL (de los ítems),
+  // tachado, con la leyenda de que no se cobra.
+  const subtotalOriginal =
+    items.reduce((s, it) => s + it.subtotal_cents, 0) || subtotalCents;
+  const totalOriginal = subtotalOriginal + deliveryFeeCents;
+  const tachado: React.CSSProperties = {
+    textDecoration: "line-through",
+    color: "var(--ink-3)",
+  };
 
   return (
     <div
@@ -408,7 +419,11 @@ export function OrderTracking({
               }}
             >
               <span>Subtotal</span>
-              <span>{formatCurrency(subtotalCents)}</span>
+              {cancelled ? (
+                <span style={tachado}>{formatCurrency(subtotalOriginal)}</span>
+              ) : (
+                <span>{formatCurrency(subtotalCents)}</span>
+              )}
             </div>
             <div
               style={{
@@ -441,8 +456,25 @@ export function OrderTracking({
               }}
             >
               <span>Total</span>
-              <span>{formatCurrency(totalCents)}</span>
+              {cancelled ? (
+                <span style={tachado}>{formatCurrency(totalOriginal)}</span>
+              ) : (
+                <span>{formatCurrency(totalCents)}</span>
+              )}
             </div>
+            {cancelled && (
+              <div
+                style={{
+                  textAlign: "right",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#B94A2A",
+                  marginTop: 4,
+                }}
+              >
+                Cancelado · no se cobra
+              </div>
+            )}
           </div>
         </div>
 

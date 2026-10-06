@@ -29,16 +29,26 @@ export function AddressesScreen({
   if (confirming) lastStreet.current = confirming.street;
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  // H-15 — borrado optimista: la fila sale y el diálogo se cierra al toque; si
+  // el server falla, la fila vuelve (rollback).
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(new Set());
+  const visible = addresses.filter((a) => !removedIds.has(a.id));
 
   const handleDelete = (addr: SavedAddress) => {
+    setRemovedIds((prev) => new Set(prev).add(addr.id));
+    setConfirming(null);
     startTransition(async () => {
       const r = await deleteSavedAddress(slug, addr.id);
       if (!r.ok) {
+        setRemovedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(addr.id);
+          return next;
+        });
         toast.error(r.error);
         return;
       }
       toast.success(entrega.porLote ? "Lote borrado." : "Dirección borrada.");
-      setConfirming(null);
       router.refresh();
     });
   };
@@ -57,7 +67,7 @@ export function AddressesScreen({
       <Header slug={slug} title={entrega.guardadasLabel} />
 
       <div style={{ flex: 1, padding: "8px 16px 40px" }}>
-        {addresses.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState porLote={entrega.porLote} />
         ) : (
           <>
@@ -80,7 +90,7 @@ export function AddressesScreen({
               {/* La borrada se va de costado y las de abajo suben a ocupar
                   su lugar. */}
               <AnimatePresence initial={false} mode="popLayout">
-                {addresses.map((a) => (
+                {visible.map((a) => (
                   <m.div
                     key={a.id}
                     layout
@@ -129,8 +139,8 @@ function Header({ slug, title }: { slug: string; title: string }) {
         href={`/${slug}/perfil`}
         aria-label="Volver"
         style={{
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -200,8 +210,8 @@ function AddressRow({
         onClick={onDelete}
         aria-label="Borrar dirección"
         style={{
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
           border: "none",
           background: "none",
           cursor: "pointer",

@@ -58,6 +58,18 @@ export type CartItem = {
   modifiers: CartModifier[];
 };
 
+/**
+ * Tope de unidades por línea (H-12 · QA #382). Es el mismo máximo que valida el
+ * schema del server (`quantity.max(99)`): sin tope acá el cliente llegaba a 101
+ * y recién en el checkout se enteraba.
+ */
+export const MAX_QTY_PER_LINE = 99;
+
+function clampQty(qty: number): number {
+  if (!Number.isFinite(qty)) return 0;
+  return Math.min(Math.max(Math.floor(qty), 0), MAX_QTY_PER_LINE);
+}
+
 export type CartState = {
   items: CartItem[];
   addItem: (item: CartItem) => void;
@@ -75,11 +87,16 @@ function createCartStore(slug: string) {
     persist(
       (set) => ({
         items: [],
-        addItem: (item) => set((s) => ({ items: [...s.items, item] })),
+        addItem: (item) =>
+          set((s) => ({
+            items: [...s.items, { ...item, quantity: clampQty(item.quantity) }],
+          })),
         updateQuantity: (id, qty) =>
           set((s) => ({
             items: s.items
-              .map((i) => (i.id === id ? { ...i, quantity: qty } : i))
+              .map((i) =>
+                i.id === id ? { ...i, quantity: clampQty(qty) } : i,
+              )
               .filter((i) => i.quantity > 0),
           })),
         removeItem: (id) =>
@@ -89,6 +106,19 @@ function createCartStore(slug: string) {
       {
         name: `cart:${slug}`,
         storage: createJSONStorage(() => localStorage),
+        // v1 (QA #382): los carritos guardados antes del tope pueden traer
+        // más de 99 unidades por línea; se sanean al leerlos.
+        version: 1,
+        migrate: (persisted) => {
+          const state = (persisted ?? {}) as { items?: CartItem[] };
+          const items = Array.isArray(state.items) ? state.items : [];
+          return {
+            ...state,
+            items: items
+              .map((i) => ({ ...i, quantity: clampQty(i.quantity) }))
+              .filter((i) => i.quantity > 0),
+          } as CartState;
+        },
       },
     ),
   );

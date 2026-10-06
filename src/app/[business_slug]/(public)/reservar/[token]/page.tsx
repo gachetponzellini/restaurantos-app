@@ -1,7 +1,12 @@
 import { notFound, redirect } from "next/navigation";
+import { fromZonedTime } from "date-fns-tz";
 
 import { ConfirmReservationFromIntent } from "./confirm-reservation-from-intent";
 import { getReservationIntentByToken } from "@/lib/reservations/chatbot-actions";
+import {
+  formatReservationDay,
+  formatReservationSlotWhen,
+} from "@/lib/reservations/format-when";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBusiness } from "@/lib/tenant";
 
@@ -49,8 +54,10 @@ export default async function ReservarTokenPage({
     (user.user_metadata?.name as string | undefined) ??
     null;
   const prefillPhone =
-    intent.intent.customer_phone ??
-    (user.phone as string | undefined) ??
+    intent.intent.customer_phone ||
+    // H-19: el alta guarda el teléfono en `user_metadata.phone`.
+    (user.phone as string | undefined) ||
+    (user.user_metadata?.phone as string | undefined) ||
     null;
 
   return (
@@ -60,6 +67,18 @@ export default async function ReservarTokenPage({
       businessName={business.name}
       logoUrl={business.logo_url ?? null}
       intent={intent.intent}
+      whenLabel={formatReservationSlotWhen(
+        intent.intent.date,
+        intent.intent.slot,
+        business.timezone,
+      )}
+      dayLabel={formatReservationDay(
+        fromZonedTime(
+          `${intent.intent.date}T${intent.intent.slot}:00`,
+          business.timezone,
+        ),
+        business.timezone,
+      )}
       prefillName={prefillName}
       prefillPhone={prefillPhone}
     />

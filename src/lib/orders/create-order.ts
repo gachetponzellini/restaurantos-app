@@ -7,14 +7,14 @@ import { limitCreateOrder } from "@/lib/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { persistOrder, type CreateOrderResult } from "./persist-order";
-import { CreateOrderInput } from "./schema";
+import { CreateOrderInput, primerErrorDeValidacion } from "./schema";
 
 export async function createOrder(
   input: unknown,
 ): Promise<ActionResult<CreateOrderResult>> {
   const parsed = CreateOrderInput.safeParse(input);
   if (!parsed.success) {
-    return actionError("Datos inválidos. Revisá los campos del formulario.");
+    return actionError(primerErrorDeValidacion(parsed.error));
   }
 
   const h = await headers();

@@ -28,6 +28,34 @@ describe("safeNextPath", () => {
   });
 });
 
+describe("safeNextPath — H-02 (open redirect)", () => {
+  const casos: Array<[string, string]> = [
+    ["/\\evil.example", "backslash tras la barra (/%5Cevil.example decodificado)"],
+    ["/\\\\evil.example", "doble backslash"],
+    ["//evil", "doble slash"],
+    ["https://evil", "esquema https"],
+    ["javascript:alert(1)", "esquema javascript"],
+    ["/\t/evil", "tab entre las barras (el navegador lo elimina → //evil)"],
+    ["/\n/evil", "salto de línea"],
+    ["/\r/evil", "retorno de carro"],
+    ["/ok\\evil", "backslash en cualquier posición"],
+    ["/ok\u0000x", "carácter de control"],
+    ["evil.example", "sin barra inicial"],
+  ];
+  it.each(casos)("rechaza %j (%s)", (next) => {
+    expect(safeNextPath(next, "demo")).toBe("/demo/menu");
+  });
+
+  it.each([
+    "/demo/checkout",
+    "/demo/reservar?fecha=2026-10-07",
+    "/demo/perfil/reservas#top",
+    "/",
+  ])("acepta el path same-origin %j", (next) => {
+    expect(safeNextPath(next, "demo")).toBe(next);
+  });
+});
+
 describe("SignInCustomerInput — schema", () => {
   it("acepta email y contraseña válidos", () => {
     const r = SignInCustomerInput.safeParse({

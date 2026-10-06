@@ -33,8 +33,8 @@ function initialSelection(product: MenuProduct): Selection {
 function validate(product: MenuProduct, selection: Selection): string | null {
   for (const g of product.modifier_groups) {
     const count = selection[g.id]?.length ?? 0;
-    if (count < g.min_selection)
-      return `Elegí al menos ${g.min_selection} en "${g.name}".`;
+    const min = Math.max(g.min_selection, g.is_required ? 1 : 0);
+    if (count < min) return `Elegí al menos ${min} en "${g.name}".`;
     if (count > g.max_selection)
       return `Podés elegir hasta ${g.max_selection} en "${g.name}".`;
   }
@@ -125,6 +125,20 @@ export function ProductSheet({
 
   return (
     <BottomSheet open={open} onClose={() => onOpenChange(false)}>
+      {/* H-27 (QA #382): el sheet es un modal. `BottomSheet` es una primitiva
+          compartida y no recibe aria-label, así que el diálogo accesible vive
+          acá, envolviendo el contenido sin alterar el layout (columna flex). */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={product.name}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
       <div
         style={{
           flex: 1,
@@ -424,6 +438,7 @@ export function ProductSheet({
             {formatCurrency(lineTotal)}
           </AnimatedValue>
         </button>
+      </div>
       </div>
     </BottomSheet>
   );

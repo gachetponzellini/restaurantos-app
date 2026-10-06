@@ -17,11 +17,11 @@ export default async function ConfirmarReservaPage({
   params: Promise<{ business_slug: string; token: string }>;
 }) {
   const { business_slug, token } = await params;
-  const reservation = await getReservationByConfirmToken(token);
+  const reservation = await getReservationByConfirmToken(token, business_slug);
 
   async function confirm() {
     "use server";
-    await confirmReservationAttendance(token);
+    await confirmReservationAttendance(token, business_slug);
     revalidatePath(`/${business_slug}/reservar/confirmar/${token}`);
   }
 
@@ -43,6 +43,11 @@ export default async function ConfirmarReservaPage({
           {reservation.alreadyConfirmed ? (
             <p className="font-medium text-green-600">
               ¡Listo! Ya confirmaste tu asistencia. Te esperamos 🙌
+            </p>
+          ) : reservation.status === "pending" ? (
+            <p className="text-muted-foreground">
+              El local todavía no confirmó tu reserva. Te avisamos cuando lo
+              haga.
             </p>
           ) : reservation.status !== "confirmed" &&
             reservation.status !== "seated" ? (

@@ -5,6 +5,7 @@ import { CheckoutForm } from "@/components/checkout/checkout-form";
 // import { VerifyAccountBanner } from "@/components/public/verify-account-banner";
 import { listUserAddresses } from "@/lib/customers/addresses";
 import { getCustomerProfile } from "@/lib/customers/profile";
+import { contactoInicial } from "@/lib/orders/contacto-inicial";
 import { orderSlotsForDay } from "@/lib/orders/scheduled";
 import { getAssignedCoupon } from "@/lib/promos/assigned-coupon";
 import {
@@ -70,17 +71,13 @@ export default async function CheckoutPage({
 
   // Prefer the customer row (set on previous orders) over session metadata —
   // the customer row reflects the last name/phone the user actually typed.
-  const initialName =
-    profile.name ??
-    (user.user_metadata?.full_name as string | undefined) ??
-    (user.user_metadata?.name as string | undefined) ??
-    "";
-  const initialEmail = profile.email ?? user.email ?? "";
-  const initialPhone =
-    profile.phone ??
-    (user.phone as string | undefined) ??
-    (user.user_metadata?.phone as string | undefined) ??
-    "";
+  // H-19 (QA #382): `contactoInicial` descarta los strings vacíos; Supabase
+  // devuelve `user.phone === ""` y con `??` eso tapaba `user_metadata.phone`.
+  const {
+    name: initialName,
+    email: initialEmail,
+    phone: initialPhone,
+  } = contactoInicial(profile, user);
 
   // SPEC 25 (PENDING) — gate suave desactivado:
   // const showVerifyBanner = user.user_metadata?.phone_verified !== true;
@@ -100,6 +97,7 @@ export default async function CheckoutPage({
       businessTimezone={business.timezone}
       todaySlots={todaySlots}
       deliveryFeeCents={Number(business.delivery_fee_cents)}
+      minOrderCents={Number(business.min_order_cents ?? 0)}
       estimatedMinutes={business.estimated_delivery_minutes}
       estimatedPickupMinutes={
         (business as { estimated_pickup_minutes?: number | null })

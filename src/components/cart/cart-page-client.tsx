@@ -10,7 +10,13 @@ import { AnimatedValue } from "@/components/motion/animated-value";
 import { EASE_IN, EASE_OUT } from "@/components/motion/presets";
 import { formatCurrency } from "@/lib/currency";
 import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
-import { cartItemSubtotal, cartTotal, useCart } from "@/stores/cart";
+import { faltanteParaMinimoEnvio } from "@/lib/orders/minimo-envio";
+import {
+  MAX_QTY_PER_LINE,
+  cartItemSubtotal,
+  cartTotal,
+  useCart,
+} from "@/stores/cart";
 
 export function CartPageClient({
   slug,
@@ -33,8 +39,15 @@ export function CartPageClient({
 
   const subtotal = cartTotal(items);
   const isEmpty = items.length === 0;
-  const underMin = !isEmpty && minOrderCents > 0 && subtotal < minOrderCents;
-  const missing = Math.max(0, minOrderCents - subtotal);
+  // H-13: el mínimo es sólo del envío a domicilio. Acá es un aviso informativo
+  // y NO bloquea «Ir a pagar»: el que retira no tiene mínimo. El checkout lo
+  // exige recién cuando el modo es envío.
+  const missing = faltanteParaMinimoEnvio({
+    deliveryType: "delivery",
+    subtotalCents: subtotal,
+    minOrderCents,
+  });
+  const underMin = !isEmpty && missing > 0;
   const total = subtotal;
 
   return (
@@ -290,8 +303,11 @@ export function CartPageClient({
                         onClick={() => updateQuantity(it.id, it.quantity - 1)}
                         aria-label="Menos"
                         style={{
-                          width: 32,
-                          height: 28,
+                          // H-24: área táctil de 44×44 sin cambiar el look —
+                          // el margen negativo devuelve el tamaño visual de 32×28.
+                          width: 44,
+                          height: 44,
+                          margin: "-8px -6px",
                           border: "none",
                           background: "none",
                           cursor: "pointer",
@@ -315,12 +331,24 @@ export function CartPageClient({
                       <button
                         onClick={() => updateQuantity(it.id, it.quantity + 1)}
                         aria-label="Más"
+                        // H-12: tope de unidades por línea (el server rechaza > 99).
+                        disabled={it.quantity >= MAX_QTY_PER_LINE}
+                        title={
+                          it.quantity >= MAX_QTY_PER_LINE
+                            ? `Máximo ${MAX_QTY_PER_LINE} por producto`
+                            : undefined
+                        }
                         style={{
-                          width: 32,
-                          height: 28,
+                          width: 44,
+                          height: 44,
+                          margin: "-8px -6px",
                           border: "none",
                           background: "none",
-                          cursor: "pointer",
+                          opacity: it.quantity >= MAX_QTY_PER_LINE ? 0.35 : 1,
+                          cursor:
+                            it.quantity >= MAX_QTY_PER_LINE
+                              ? "not-allowed"
+                              : "pointer",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -438,7 +466,12 @@ export function CartPageClient({
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  Te faltan {formatCurrency(missing)} para el pedido mínimo
+                  El envío a domicilio tiene un mínimo de{" "}
+                  {formatCurrency(minOrderCents)}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  Te faltan {formatCurrency(missing)} para pedir con envío. Si
+                  retirás en el local, no hay mínimo.
                 </div>
                 <div
                   style={{
@@ -474,14 +507,12 @@ export function CartPageClient({
           >
             <Link
               className="m-press"
-              href={underMin ? "#" : `/${slug}/checkout`}
-              onClick={(e) => underMin && e.preventDefault()}
-              aria-disabled={underMin}
+              href={`/${slug}/checkout`}
               style={{
                 width: "100%",
                 height: 56,
                 borderRadius: 14,
-                background: underMin ? "#D8CFC0" : "var(--accent)",
+                background: "var(--accent)",
                 color: "#fff",
                 display: "flex",
                 alignItems: "center",
@@ -491,12 +522,10 @@ export function CartPageClient({
                 fontWeight: 600,
                 letterSpacing: -0.1,
                 textDecoration: "none",
-                cursor: underMin ? "not-allowed" : "pointer",
+                cursor: "pointer",
               }}
             >
-              <span>
-                {underMin ? `Faltan ${formatCurrency(missing)}` : "Ir a pagar"}
-              </span>
+              <span>Ir a pagar</span>
               <AnimatedValue value={total}>
                 {formatCurrency(total)}
               </AnimatedValue>

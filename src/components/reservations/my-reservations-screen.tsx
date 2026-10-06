@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { formatInTimeZone } from "date-fns-tz";
-import { es } from "date-fns/locale";
 
 import { I } from "@/components/delivery/primitives";
-import { CancelReservationButton } from "@/components/reservations/cancel-reservation-button";
+import {
+  CancelOutOfWindowNote,
+  CancelReservationButton,
+} from "@/components/reservations/cancel-reservation-button";
+import { canCancelReservation } from "@/lib/reservations/cancel-window";
+import { formatReservationWhen } from "@/lib/reservations/format-when";
 import type { Reservation, ReservationStatus } from "@/lib/reservations/types";
 
 type Row = Reservation & { tables: { label: string } | null };
@@ -36,24 +39,33 @@ const STATUS_DOT: Record<ReservationStatus, string> = {
   cancelled: "#C25A5A",
 };
 
-type Tab = "upcoming" | "past";
+type Tab = "upcoming" | "past" | "cancelled";
 
 export function MyReservationsScreen({
   slug,
   timezone,
+  leadTimeMin,
   reservations,
 }: {
   slug: string;
   timezone: string;
+  /** `reservation_settings.lead_time_min`: ventana para cancelar online. */
+  leadTimeMin: number;
   reservations: Row[];
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
 
-  const { upcoming, past } = useMemo(() => {
+  const { upcoming, past, cancelled } = useMemo(() => {
     const now = Date.now();
     const upcoming: Row[] = [];
     const past: Row[] = [];
+    const cancelled: Row[] = [];
     for (const r of reservations) {
+      // H-32 — una cancelada no es una «pasada», aunque su fecha sea futura.
+      if (r.status === "cancelled") {
+        cancelled.push(r);
+        continue;
+      }
       // Spec 131 — la pendiente va en "próximas": todavía puede pasar, y es
       // justo la que el cliente quiere mirar (y cancelar si se arrepiente).
       const isActiveStatus =
@@ -64,10 +76,11 @@ export function MyReservationsScreen({
     }
     // Upcoming: ascending (next first); Past: descending (most recent first)
     upcoming.sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at));
-    return { upcoming, past };
+    return { upcoming, past, cancelled };
   }, [reservations]);
 
-  const visible = tab === "upcoming" ? upcoming : past;
+  const visible =
+    tab === "upcoming" ? upcoming : tab === "past" ? past : cancelled;
 
   return (
     <div
@@ -97,8 +110,8 @@ export function MyReservationsScreen({
           href={`/${slug}/perfil`}
           aria-label="Volver"
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -112,7 +125,7 @@ export function MyReservationsScreen({
         <Link
           href={`/${slug}/reservar`}
           style={{
-            height: 32,
+            height: 44,
             padding: "0 14px",
             borderRadius: 99,
             background: "var(--primary)",
@@ -151,6 +164,12 @@ export function MyReservationsScreen({
           active={tab === "past"}
           onClick={() => setTab("past")}
         />
+        <TabButton
+          label="Canceladas"
+          count={cancelled.length}
+          active={tab === "cancelled"}
+          onClick={() => setTab("cancelled")}
+        />
       </div>
 
       {/* Body */}
@@ -159,7 +178,13 @@ export function MyReservationsScreen({
       ) : (
         <div style={{ padding: "12px 16px 32px", display: "flex", flexDirection: "column", gap: 10 }}>
           {visible.map((r) => (
-            <ReservationCard key={r.id} row={r} slug={slug} timezone={timezone} />
+            <ReservationCard
+              key={r.id}
+              row={r}
+              slug={slug}
+              timezone={timezone}
+              leadTimeMin={leadTimeMin}
+            />
           ))}
         </div>
       )}
@@ -219,24 +244,24 @@ function ReservationCard({
   row,
   slug,
   timezone,
+  leadTimeMin,
 }: {
   row: Row;
   slug: string;
   timezone: string;
+  leadTimeMin: number;
 }) {
-  const dayLabel = formatInTimeZone(
-    new Date(row.starts_at),
-    timezone,
-    "EEE d 'de' MMM",
-    { locale: es },
-  );
-  const timeLabel = formatInTimeZone(new Date(row.starts_at), timezone, "HH:mm");
-  // Auditoría de reservas · baja — no ofrecer «Cancelar» en una reserva ya
-  // sentada ni en una que ya pasó: el server la rechaza y el cliente sólo veía
-  // un error. (El plazo exacto de anticipación lo sigue validando el server.)
-  const canCancel =
-    (row.status === "pending" || row.status === "confirmed") &&
-    new Date(row.starts_at).getTime() > Date.now();
+  const whenLabel = formatReservationWhen(row.starts_at, timezone);
+  // H-14 — «Cancelar» sólo dentro de la ventana online (misma regla que el
+  // server). Pasada la ventana, y antes de la hora, se avisa al local.
+  const isActiveBooking = row.status === "pending" || row.status === "confirmed";
+  const canCancel = canCancelReservation({
+    status: row.status,
+    startsAt: row.starts_at,
+    leadTimeMin,
+  });
+  const cancelOutOfWindow =
+    isActiveBooking && !canCancel && new Date(row.starts_at).getTime() > Date.now();
   const isClosed = [
     "completed",
     "no_show",
@@ -320,20 +345,9 @@ function ReservationCard({
             fontSize: 24,
             color: "var(--ink)",
             lineHeight: 1.05,
-            textTransform: "capitalize",
           }}
         >
-          {dayLabel}
-        </span>
-        <span
-          className="d-display"
-          style={{
-            fontSize: 24,
-            color: "var(--primary)",
-            lineHeight: 1.05,
-          }}
-        >
-          {timeLabel} hs
+          {whenLabel}
         </span>
       </div>
 
@@ -377,6 +391,18 @@ function ReservationCard({
         >
           <CancelReservationButton id={row.id} />
         </div>
+      ) : cancelOutOfWindow ? (
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid var(--hairline)",
+          }}
+        >
+          <CancelOutOfWindowNote />
+        </div>
       ) : null}
     </div>
   );
@@ -384,6 +410,7 @@ function ReservationCard({
 
 function EmptyState({ slug, tab }: { slug: string; tab: Tab }) {
   const isUpcoming = tab === "upcoming";
+  const isCancelled = tab === "cancelled";
   return (
     <div
       style={{
@@ -416,7 +443,11 @@ function EmptyState({ slug, tab }: { slug: string; tab: Tab }) {
           className="d-display"
           style={{ fontSize: 26, color: "var(--ink)", lineHeight: 1.1 }}
         >
-          {isUpcoming ? "Sin reservas próximas" : "Sin reservas pasadas"}
+          {isUpcoming
+            ? "Sin reservas próximas"
+            : isCancelled
+              ? "Sin reservas canceladas"
+              : "Sin reservas pasadas"}
         </div>
         <div
           style={{
@@ -429,7 +460,9 @@ function EmptyState({ slug, tab }: { slug: string; tab: Tab }) {
         >
           {isUpcoming
             ? "Reservá una mesa y la vas a ver acá."
-            : "Cuando tengas reservas completadas o canceladas, van a aparecer en esta pestaña."}
+            : isCancelled
+              ? "Las reservas que canceles van a aparecer en esta pestaña."
+              : "Cuando tengas reservas completadas, van a aparecer en esta pestaña."}
         </div>
       </div>
       {isUpcoming ? (
