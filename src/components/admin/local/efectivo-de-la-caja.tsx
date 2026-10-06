@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RendirMozoModal } from "@/components/admin/local/rendir-mozo-modal";
 import { getSaldosCajaTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import type { CajaPayment } from "@/lib/caja/queries";
+import { TXT } from "@/lib/caja/textos";
 import type { SaldoMozo } from "@/lib/caja/turno-queries";
 import type { CajaLiveStats } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
@@ -153,8 +154,8 @@ export function EfectivoDeLaCaja({
                 <th scope="col" className="px-2.5 py-2 font-medium">Mozo</th>
                 {conAnterior && <th scope="col" className="px-2.5 py-2 text-right font-medium">Anterior</th>}
                 <th scope="col" className="px-2.5 py-2 text-right font-medium">Cobró en efectivo</th>
-                <th scope="col" className="px-2.5 py-2 text-right font-medium">Su propina</th>
-                <th scope="col" className="px-2.5 py-2 text-right font-medium">Entregó</th>
+                <th scope="col" className="px-2.5 py-2 text-right font-medium">{TXT.suPropina}</th>
+                <th scope="col" className="px-2.5 py-2 text-right font-medium">{TXT.entrego}</th>
                 <th scope="col" className="px-2.5 py-2 text-right font-medium">Le queda</th>
                 <th scope="col" className="px-2.5 py-2"><span className="sr-only">Acción</span></th>
               </tr>
@@ -179,7 +180,7 @@ export function EfectivoDeLaCaja({
                   </td>
                   <td className="px-2.5 py-2 text-right whitespace-nowrap">
                     {m.resuelto && m.saldo_cents === 0 ? (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Rindió</span>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{TXT.rindio}</span>
                     ) : (
                       <Button size="sm" variant={m.deuda ? "ghost" : "outline"} onClick={() => setRindiendo(m)} aria-label={`Rendir a ${m.mozo_name}`}>
                         {m.deuda ? "Debe · ver" : m.saldo_cents < 0 ? "Darle propina" : "Rendir"}

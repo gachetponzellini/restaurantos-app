@@ -21,6 +21,7 @@ import type { CajaPayment } from "@/lib/caja/queries";
 import type { SaldoMozo } from "@/lib/caja/turno-queries";
 import { reconocerDeuda, rendirMozo } from "@/lib/caja/turno-actions";
 import { formatCurrency } from "@/lib/currency";
+import { TXT } from "@/lib/caja/textos";
 import { TZ_AR } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
@@ -143,7 +144,7 @@ export function RendirMozoModal({
               ))}
               <div className="flex items-baseline justify-between gap-3 bg-muted/50 px-4 py-3">
                 <dt className="text-base font-semibold">
-                  {leDebeLaCaja ? "La caja le debe de propina" : "Tiene que entregar"}
+                  {leDebeLaCaja ? "La caja le debe de propina" : TXT.tieneQueEntregar}
                 </dt>
                 <dd className="text-xl font-bold tabular-nums">{formatCurrency(Math.abs(debe))}</dd>
               </div>

@@ -14,6 +14,13 @@ export const TXT = {
   contarSinCerrar: "Contar sin cerrar",
   contarYCerrar: "Contar y cerrar",
   diferencia: "Diferencia",
+  // Spec 211 · R3 — la rendición del mozo.
+  tieneQueEntregar: "Tiene que entregar",
+  entrego: "Entregó",
+  saldo: "Saldo",
+  suPropina: "Su propina",
+  rendido: "Rendido",
+  rindio: "Rindió",
 } as const;
 
 export type Veredicto = {
