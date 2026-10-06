@@ -5,12 +5,21 @@ import { z } from "zod";
  * Usamos un discriminated union por `kind` — omitirlo defaultea a `"product"`
  * por back-compat con ítems persistidos antes de la feature.
  */
+const cantidadPorLinea = z
+  .number()
+  .int("La cantidad tiene que ser un número entero.")
+  .min(1, "La cantidad mínima por producto es 1.")
+  .max(99, "La cantidad máxima por producto es 99.");
+
 const OrderProductItem = z.object({
   kind: z.literal("product").optional(),
-  product_id: z.string().uuid(),
-  quantity: z.number().int().min(1).max(99),
-  notes: z.string().max(200).optional(),
-  modifier_ids: z.array(z.string().uuid()).default([]),
+  product_id: z.string().uuid("Producto inválido."),
+  quantity: cantidadPorLinea,
+  notes: z
+    .string()
+    .max(200, "La nota del producto es demasiado larga (máx. 200 caracteres).")
+    .optional(),
+  modifier_ids: z.array(z.string().uuid("Opción inválida.")).default([]),
 });
 
 const OrderSelectedChoice = z.object({
@@ -23,9 +32,12 @@ const OrderSelectedChoice = z.object({
 
 const OrderDailyMenuItem = z.object({
   kind: z.literal("daily_menu"),
-  daily_menu_id: z.string().uuid(),
-  quantity: z.number().int().min(1).max(99),
-  notes: z.string().max(200).optional(),
+  daily_menu_id: z.string().uuid("Menú inválido."),
+  quantity: cantidadPorLinea,
+  notes: z
+    .string()
+    .max(200, "La nota del producto es demasiado larga (máx. 200 caracteres).")
+    .optional(),
   selected_choices: z.array(OrderSelectedChoice).default([]),
 });
 
@@ -99,34 +111,60 @@ export type StaffOrderItemInput = z.infer<typeof StaffOrderItemInput>;
 
 export const CreateOrderInput = z
   .object({
-    business_slug: z.string().min(1),
-    delivery_type: z.enum(["delivery", "pickup"]),
-    customer_name: z.string().min(1).max(100),
-    customer_phone: z.string().min(6).max(20),
-    customer_email: z.string().email("Email inválido.").max(200).optional(),
-    delivery_address: z.string().max(200).optional(),
-    delivery_notes: z.string().max(500).optional(),
+    business_slug: z.string().min(1, "Falta el negocio."),
+    delivery_type: z.enum(["delivery", "pickup"], {
+      error: "Elegí envío a domicilio o retiro.",
+    }),
+    customer_name: z
+      .string()
+      .min(1, "Ingresá tu nombre.")
+      .max(100, "El nombre es demasiado largo (máx. 100 caracteres)."),
+    customer_phone: z
+      .string()
+      .min(6, "Ingresá un teléfono válido (al menos 6 dígitos).")
+      .max(20, "El teléfono es demasiado largo (máx. 20 caracteres)."),
+    customer_email: z.string().email("Email inválido.").max(200, "El email es demasiado largo.").optional(),
+    delivery_address: z
+      .string()
+      .max(200, "La dirección es demasiado larga (máx. 200 caracteres).")
+      .optional(),
+    delivery_notes: z
+      .string()
+      .max(500, "Las notas de entrega son demasiado largas (máx. 500 caracteres).")
+      .optional(),
     /**
      * Indicación para cocina («ENTREGAR x» en la comanda). El checkout público
      * NO la expresa —la escribe el encargado—, pero viaja acá porque
      * `cargarPedidoStaff` mapea su input a esta forma antes de persistir.
      */
-    kitchen_notes: z.string().max(120).optional(),
-    payment_method: z.enum(["cash", "mp"]).optional(),
+    kitchen_notes: z
+      .string()
+      .max(120, "La indicación para cocina es demasiado larga (máx. 120 caracteres).")
+      .optional(),
+    payment_method: z
+      .enum(["cash", "mp"], { error: "Elegí un medio de pago válido." })
+      .optional(),
     /**
      * Optional promo code typed by the customer in checkout. The DB lookup
      * is case-insensitive — we don't normalize here. Empty strings are
      * treated as "no code" by persist-order.
      */
-    promo_code: z.string().trim().max(40).optional(),
+    promo_code: z
+      .string()
+      .trim()
+      .max(40, "El código de cupón es demasiado largo.")
+      .optional(),
     /**
      * Pedido diferido (spec 31): instante ISO de retiro futuro. Ausente = "para
      * ahora". Las reglas contextuales (horario, anticipación, ventana) se
      * validan server-side con los `business_hours` del negocio en persist-order;
      * acá sólo la coherencia que no necesita contexto.
      */
-    scheduled_at: z.string().datetime({ offset: true }).optional(),
-    items: z.array(OrderItemInput).min(1),
+    scheduled_at: z
+      .string()
+      .datetime({ offset: true, error: "La hora programada no es válida." })
+      .optional(),
+    items: z.array(OrderItemInput).min(1, "Agregá al menos un producto al pedido."),
   })
   .superRefine((data, ctx) => {
     if (data.delivery_type === "delivery" && !data.delivery_address) {
@@ -144,6 +182,39 @@ export const CreateOrderInput = z
   });
 
 export type CreateOrderInput = z.infer<typeof CreateOrderInput>;
+
+const MENSAJE_GENERICO = "Datos inválidos. Revisá los campos del formulario.";
+
+/** Mensajes por defecto de Zod (en inglés): no se le muestran al cliente. */
+const MENSAJE_DE_ZOD = /^(Too (big|small)|Invalid|Required|Expected|Unrecognized|Input )/;
+
+type Issue = z.core.$ZodIssue;
+
+/**
+ * El primer error de validación como texto para el cliente (H-12 · QA #382).
+ *
+ * Antes `createOrder` devolvía siempre «Datos inválidos…» sin decir qué campo;
+ * el cliente con 101 unidades no tenía forma de saber que era la cantidad. Los
+ * campos de `CreateOrderInput` traen su mensaje en español; si por algún
+ * motivo sale uno de los de Zod por defecto (inglés), se cae al genérico en
+ * lugar de mostrarlo.
+ *
+ * Para una unión (`invalid_union`) se baja a la rama que más se parece al input:
+ * la de menos errores.
+ */
+export function primerErrorDeValidacion(error: z.ZodError): string {
+  const mensaje = (issue: Issue | undefined): string | null => {
+    if (!issue) return null;
+    if (issue.code === "invalid_union") {
+      const ramas = [...issue.errors].sort((a, b) => a.length - b.length);
+      return mensaje(ramas[0]?.[0]) ?? null;
+    }
+    return issue.message && !MENSAJE_DE_ZOD.test(issue.message)
+      ? issue.message
+      : null;
+  };
+  return mensaje(error.issues[0]) ?? MENSAJE_GENERICO;
+}
 
 /**
  * Input para cargar un pedido para llevar / delivery a mano desde operación
