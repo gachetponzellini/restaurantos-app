@@ -13,6 +13,7 @@
 - La propina de tarjeta/QR el mozo **se la queda de lo que trae**: entrega el neto.
 - *"Habría que copiar de MaxiRest, tendría que ser la misma lógica"*: un turno para todo el local, y cada caja se cuenta igual.
 - *"Hay dos cajas y son independientes: a la hora de cobrar ponen a qué caja va la plata, y si se confunden después lo corrigen"*. Y además: *"en el 95% de los casos los mozos van a tener sólo una caja"*.
+- *"No tiene sentido que te deje cerrar una caja sin haber rendido todo"*.
 
 Relevamiento de MaxiRest con datos de KCC:
 [`maxirest/cajas-y-turnos.md`](../../../../wiki/negocio/competencia/maxirest/cajas-y-turnos.md#verificación-con-datos-reales-de-kcc-2026-10-06).
@@ -50,10 +51,12 @@ Tres reglas. Cada una cierra un hueco de los de arriba.
    cobro.** Queda como una línea de esa caja ("Rendición de Pedro +$371.600"). Puede
    entregar en partes. Lo que no entregó sigue en su **saldo por caja**, que no se pierde
    con ningún cierre. Las cajas son independientes: la plata de una nunca termina en la otra.
-3. **El turno es uno para todo el local, como en MaxiRest:**
-   - cada caja se cuenta y se cierra igual;
-   - **cerrar el turno** exige mesas cobradas, rendiciones resueltas y cajas contadas;
-   - recién ahí libera el salón.
+3. **Una caja no cierra con plata pendiente, y el turno es uno para todo el local, como en
+   MaxiRest:**
+   - cada caja se cuenta y se cierra igual, pero **sólo con las mesas cobradas y todo lo
+     de esa caja rendido**, o con la deuda reconocida;
+   - **cerrar el turno** exige todas las cajas cerradas;
+   - recién ahí libera el salón y saca el papel del turno.
 
 Con esto, los números de efectivo **siempre** cierran:
 `cobrado en efectivo = lo cobró la caja + rendido + a rendir + propinas de los mozos + deudas`.
@@ -124,20 +127,21 @@ apertura (fondo que quedó del corte anterior)
 - **Tabla nueva `turnos`:** `business_id`, `nombre` (Mediodía/Noche, opcional),
   `abierto_at`, `cerrado_at`, `cerrado_por` y `resumen` (jsonb para el papel). Siempre
   hay **uno abierto** por negocio, garantizado con un índice único parcial.
-- **`cerrar_turno_tx`** bloquea y valida lo mismo que muestra la franja (209 · R1):
-  - no quedan **cuentas de mesa abiertas** (`OPEN_TABLE_ORDERS`);
-  - **todo mozo**, en **cada** caja, tiene saldo 0 o deuda reconocida en este turno (`UNRESOLVED_MOZOS`);
-  - **toda caja de turno** con movimientos en el turno tiene un corte posterior a su
-    último movimiento (`CAJA_SIN_CONTAR`).
+- **`cerrar_caja_tx`** bloquea la caja y valida, en la base:
+  - no quedan **cuentas de mesa abiertas** (`OPEN_TABLE_ORDERS`), porque se podrían
+    cobrar en esta caja;
+  - **ningún mozo tiene saldo pendiente en esta caja**: o lo entregó, o tiene la deuda
+    reconocida con motivo (`UNRENDERED_MOZOS`).
+- **`cerrar_turno_tx`** valida que **toda caja de turno** con movimientos en el turno tenga
+  un corte posterior a su último movimiento (`CAJA_SIN_CONTAR`). Las mesas y los mozos ya
+  están resueltos, porque ninguna caja cerró sin eso.
 
   Después:
   - barre el salón (libera mesas y limpia la distribución, con audit);
   - cierra el turno y abre el siguiente;
   - encola el papel del turno: cajas, rendiciones y deudas.
-- **`cerrar_caja_tx`** deja de barrer el salón y de exigir rendiciones. **Cada caja cierra
-  cuando quiere, independiente de la otra.** Si un mozo todavía tiene saldo de esa caja,
-  lo entrega después y entra en el período siguiente de esa misma caja. **Todas las cajas
-  cierran igual:** conteo ciego, diferencia y retiro (209). `p_barrer_salon` desaparece.
+- **`cerrar_caja_tx`** deja de barrer el salón: eso pasa a `cerrar_turno_tx`. **Todas las
+  cajas cierran igual**, con las mismas dos condiciones de arriba: conteo ciego, diferencia y retiro (209). `p_barrer_salon` desaparece.
   Que la Principal ya no sea especial en el cierre no cambia que sea `is_default` para
   la comandera fiscal.
 
@@ -182,7 +186,9 @@ apertura (fondo que quedó del corte anterior)
   corriente del mozo: nunca se pierde un peso entre cierres y la entrega parcial sale
   gratis. MaxiRest tiene la estructura (`mxrenmov`, "Rend Parcial").
 - **D3 · Turno global, conteo por caja**, como MaxiRest (`mxpaa` turno único, `mxrcj`
-  por `prefijo` + turno). Elimina la asimetría Principal/Bar.
+  por `prefijo` + turno). Elimina la asimetría Principal/Bar. **Ninguna caja cierra con
+  plata pendiente** (decisión de Juan): se revierte la spec 130 · D9 ("la Bar cierra en
+  plena cena"), que en el Golf nunca se usó (la segunda caja no tiene ningún cierre).
 - **D4 · Se rinde sólo el efectivo.** MaxiRest permite configurar rendir también cupones
   de tarjeta (`mxfor.rinde`). Queda fuera de alcance, y el modelo lo admite después.
 
@@ -198,10 +204,11 @@ apertura (fondo que quedó del corte anterior)
   - **Dado:** el cobro de $91.000 debía ir a la Principal.
   - **Cuando** se corrige la caja (con motivo), **entonces** el saldo de Pedro pasa de la
     Bar a la Principal. La vista previa lo dice antes de guardar.
-- **La Bar cierra antes de que el mozo rinda.**
+- **Una caja con plata pendiente no cierra.**
   - **Dado:** Pedro tiene $91.000 de la Bar sin entregar.
-  - **Cuando** la Bar cierra a las 00:40, **entonces** cierra con lo que hay en su cajón.
-  - **Cuando** Pedro entrega después, **entonces** entra al período siguiente de la Bar.
+  - **Cuando** se intenta cerrar la Bar, **entonces** `UNRENDERED_MOZOS`.
+  - **Cuando** Pedro entrega, o se le reconoce la deuda, **entonces** la Bar cierra con lo
+    que hay en su cajón.
 - **Propina de tarjeta neta.**
   - **Dado:** Pedro cobró $380.000 en efectivo (cuentas) y tiene $8.400 de propina con tarjeta.
   - **Entonces:** tiene que entregar $371.600.
@@ -214,12 +221,16 @@ apertura (fondo que quedó del corte anterior)
 - **Entrega parcial.**
   - **Dado:** Lucía debe $182.400 y entrega $150.000.
   - **Entonces:** el cajón sube $150.000 y su saldo queda en $32.400.
-  - **Cuando** se intenta cerrar el turno, **entonces** `UNRESOLVED_MOZOS`, hasta que
+  - **Cuando** se intenta cerrar esa caja, **entonces** `UNRENDERED_MOZOS`, hasta que
     entregue o se reconozca la deuda.
-- **La Bar cierra en plena cena.**
-  - **Dado:** hay mesas abiertas y mozos sin rendir.
-  - **Cuando** se cierra la Caja Bar, **entonces** cierra, porque su cajón sólo espera lo
-    que entró ahí.
+- **Mesa abierta.**
+  - **Dado:** queda la mesa 7 con la cuenta abierta.
+  - **Cuando** se intenta cerrar cualquier caja, **entonces** `OPEN_TABLE_ORDERS`, con la
+    mesa nombrada.
+- **Cerrar el turno.**
+  - **Dado:** las dos cajas están cerradas y no entró nada después.
+  - **Cuando** se cierra el turno, **entonces** se libera el salón y sale el papel.
+  - **Si** entró un cobro en una caja después de su cierre, **entonces** `CAJA_SIN_CONTAR`.
 - **Corregir un cobro de un mozo que ya rindió.**
   - **Dado:** Diego ya rindió.
   - **Cuando** se intenta corregir un cobro suyo, **entonces** `MOZO_YA_RINDIO`.

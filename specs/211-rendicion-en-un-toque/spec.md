@@ -111,7 +111,9 @@ significado. El modelo de la 210 es el que garantiza que esos números siempre c
     muestra el estado de **cada** caja ("Bar ✓ cerrada 00:40 · falta la Principal").
   - **El primario sigue siendo el próximo paso:** "Cobrar mesa 7", "Rendir a Ana",
     "Contar la Caja Principal".
-  - **Contar una caja:** el flujo ciego de la 209, igual para todas.
+  - **Contar una caja:** el flujo ciego de la 209, igual para todas. **Sólo se habilita
+    con las mesas cobradas y los mozos de esa caja resueltos.** Si no, el botón dice qué
+    falta ("Falta que Pedro rinda $91.000 a la Caja Bar").
   - **Con todo en verde, "Cerrar el turno"** (`cerrar_turno_tx`): se liberan las mesas,
     se limpia la distribución y sale el papel del turno.
 - **R7 · El celular del mozo: tarjeta "Tu turno"** en `/mozo`.
