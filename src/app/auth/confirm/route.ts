@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
+import { isSafeNextPath } from "@/lib/auth/customer-auth-shared";
 import { destinoDeLinkCaido } from "@/lib/auth/link-caido";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -28,11 +29,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type");
   const rawNext = searchParams.get("next");
 
-  const fallback = "/";
-  const next =
-    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : fallback;
+  const next = isSafeNextPath(rawNext) ? rawNext : "/";
 
   if (!tokenHash || !isValidType(type)) {
     console.warn("[auth/confirm] missing token_hash or invalid type", {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isSafeNextPath } from "@/lib/auth/customer-auth-shared";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -8,11 +9,7 @@ export async function GET(request: NextRequest) {
   const rawNext = searchParams.get("next");
 
   // Only allow redirects to same-origin paths (no protocol, no //).
-  const fallback = "/";
-  const next =
-    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : fallback;
+  const next = isSafeNextPath(rawNext) ? rawNext : "/";
 
   console.log("[auth/callback]", { hasCode: !!code, rawNext, next });
 

@@ -16,6 +16,7 @@ import {
   fetchAvailability,
   fetchFlexibleAvailability,
 } from "@/lib/reservations/availability-actions";
+import { isClosedDay } from "@/lib/reservations/closed-day";
 import { arrivalSlots } from "@/lib/reservations/flexible-availability";
 import { buildLargeGroupWhatsappLink } from "@/lib/reservations/whatsapp-link";
 import {
@@ -210,6 +211,9 @@ export function ReservarFlow({
     () => buildDateStrip(minDate, settings.advance_days_max),
     [minDate, settings.advance_days_max],
   );
+  // H-18 — días que el local cierra: chips deshabilitados y, si se llega por
+  // «Otra», un mensaje propio en vez de «No quedan lugares».
+  const dateClosed = isClosedDay(settings.schedule, date);
 
   // Flexible: servicios aplicables a la fecha (día exacto o "todos los días").
   const serviceNames = useMemo(() => {
@@ -482,8 +486,8 @@ export function ReservarFlow({
             position: "absolute",
             top: 16,
             left: 12,
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             borderRadius: 99,
             background: "rgba(255,255,255,0.95)",
             display: "flex",
@@ -502,7 +506,7 @@ export function ReservarFlow({
               position: "absolute",
               top: 20,
               right: 16,
-              height: 40,
+              height: 44,
               paddingLeft: 4,
               paddingRight: 14,
               borderRadius: 99,
@@ -543,7 +547,7 @@ export function ReservarFlow({
               position: "absolute",
               top: 20,
               right: 16,
-              height: 40,
+              height: 44,
               padding: "0 16px",
               borderRadius: 99,
               background: "var(--ink)",
@@ -680,12 +684,16 @@ export function ReservarFlow({
         >
           {dateStrip.map((d) => {
             const active = d.iso === date;
+            const closed = isClosedDay(settings.schedule, d.iso);
             return (
               <button
                 key={d.iso}
                 type="button"
+                disabled={closed}
+                aria-label={closed ? `${d.weekday} ${d.day} ${d.month}, cerrado` : undefined}
                 onClick={() => setDate(d.iso)}
                 style={{
+                  opacity: closed ? 0.4 : 1,
                   flexShrink: 0,
                   width: 60,
                   padding: "10px 4px 8px",
@@ -697,7 +705,7 @@ export function ReservarFlow({
                   flexDirection: "column",
                   alignItems: "center",
                   gap: 2,
-                  cursor: "pointer",
+                  cursor: closed ? "not-allowed" : "pointer",
                   transition: "all 200ms",
                   fontFamily: "inherit",
                 }}
@@ -763,6 +771,8 @@ export function ReservarFlow({
                 inset: 0,
                 opacity: 0,
                 cursor: "pointer",
+                // H-23: ≥16px para que iOS no haga zoom al abrir el selector.
+                fontSize: 16,
               }}
             />
           </label>
@@ -844,7 +854,7 @@ export function ReservarFlow({
           {multiSalon && !salonId ? (
             <PickSalonHint />
           ) : serviceNames.length === 0 ? (
-            <EmptySlots />
+            <EmptySlots closed={dateClosed} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -950,7 +960,7 @@ export function ReservarFlow({
           ) : loadingSlots ? (
             <SlotsSkeleton />
           ) : slots && slots.length === 0 ? (
-            <EmptySlots />
+            <EmptySlots closed={dateClosed} />
           ) : grouped ? (
             <div
               className="m-rise"
@@ -988,6 +998,7 @@ export function ReservarFlow({
                 value={name}
                 onChange={setName}
                 maxLength={80}
+                autoComplete="name"
               />
               <Field
                 id="r-phone"
@@ -996,6 +1007,9 @@ export function ReservarFlow({
                 onChange={setPhone}
                 maxLength={40}
                 placeholder="+54 9 11 …"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
               />
               <Field
                 id="r-notes"
@@ -1436,7 +1450,28 @@ function FullService({ reason }: { reason?: string }) {
   );
 }
 
-function EmptySlots() {
+function EmptySlots({ closed = false }: { closed?: boolean }) {
+  if (closed) {
+    return (
+      <div
+        style={{
+          padding: "20px 16px",
+          textAlign: "center",
+          borderRadius: 12,
+          border: "1px dashed var(--hairline-2)",
+          color: "var(--ink-2)",
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}
+      >
+        El local está cerrado ese día.
+        <br />
+        <span style={{ color: "var(--ink-3)", fontSize: 12 }}>
+          Probá con otra fecha.
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       style={{
@@ -1484,6 +1519,9 @@ function Field({
   maxLength,
   placeholder,
   multiline,
+  type,
+  inputMode,
+  autoComplete,
 }: {
   id: string;
   label: string;
@@ -1492,6 +1530,9 @@ function Field({
   maxLength?: number;
   placeholder?: string;
   multiline?: boolean;
+  type?: "text" | "tel";
+  inputMode?: "tel";
+  autoComplete?: string;
 }) {
   const baseStyle: React.CSSProperties = {
     width: "100%",
@@ -1500,7 +1541,8 @@ function Field({
     border: "1px solid var(--hairline-2)",
     background: "var(--bg)",
     color: "var(--ink)",
-    fontSize: 15,
+    // H-23: ≥16px para que iOS no haga zoom al enfocar.
+    fontSize: 16,
     outline: "none",
     fontFamily: "inherit",
   };
@@ -1529,6 +1571,9 @@ function Field({
       ) : (
         <input
           id={id}
+          type={type}
+          inputMode={inputMode}
+          autoComplete={autoComplete}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           maxLength={maxLength}

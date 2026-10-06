@@ -2,6 +2,32 @@ import { z } from "zod";
 
 const TIME_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// H-20 — mensajes en español rioplatense para los campos que ve el cliente.
+// Sin esto, Zod devuelve "Too small: expected number to be >=1".
+const DATE_YMD_ES = z
+  .string({ error: "Elegí una fecha." })
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Elegí una fecha válida.");
+const SLOT_ES = z
+  .string({ error: "Elegí un horario." })
+  .regex(TIME_HHMM, "Elegí un horario válido.");
+const PARTY_SIZE_ES = z.coerce
+  .number({ error: "Indicá cuántas personas son." })
+  .int("La cantidad de personas tiene que ser un número entero.")
+  .min(1, "Tiene que ser al menos 1 persona.")
+  .max(100, "Máximo 100 personas por reserva.");
+const CUSTOMER_NAME_ES = z
+  .string({ error: "Ingresá tu nombre." })
+  .trim()
+  .min(1, "Ingresá tu nombre.")
+  .max(80, "El nombre puede tener hasta 80 caracteres.");
+const CUSTOMER_PHONE_MAX_ES = "El teléfono puede tener hasta 40 caracteres.";
+const NOTES_ES = z
+  .string()
+  .trim()
+  .max(500, "Las notas pueden tener hasta 500 caracteres.")
+  .optional()
+  .transform((v) => (!v ? null : v));
+
 export const TableShapeSchema = z.enum(["circle", "square", "rect"]);
 export const TableStatusSchema = z.enum(["active", "disabled"]);
 
@@ -131,34 +157,29 @@ export const DeleteReservationServiceGroupInputSchema = z.object({
 export const CreateFlexibleReservationInputSchema = z
   .object({
   business_slug: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
+  date: DATE_YMD_ES,
   /** Nombre del servicio (matchea reservation_services.name). */
   service: z.string().trim().min(1).max(40),
   /** Hora de llegada (HH:MM). Obligatoria: el local siempre carga la reserva con horario. */
   arrival_time: z
     .string({ error: "Elegí un horario de llegada." })
     .regex(TIME_HHMM, "Hora inválida"),
-  party_size: z.coerce.number().int().min(1).max(100),
+  party_size: PARTY_SIZE_ES,
   /** Mesa puntual (opcional). Si no viene, la reserva es genérica. */
   table_id: z.string().uuid().optional(),
   /** Zona/salón (para genéricas). */
   floor_plan_id: z.string().uuid().optional(),
-  customer_name: z.string().trim().min(1).max(80),
+  customer_name: CUSTOMER_NAME_ES,
   /** Obligatorio para el cliente (web/chatbot); opcional cuando lo carga el
    *  encargado (`source: "admin"`): el libro del club no siempre lo tiene.
    *  La columna es NOT NULL, así que sin teléfono se guarda "". */
   customer_phone: z
     .string()
     .trim()
-    .max(40)
+    .max(40, CUSTOMER_PHONE_MAX_ES)
     .optional()
     .transform((v) => v ?? ""),
-  notes: z
-    .string()
-    .trim()
-    .max(500)
-    .optional()
-    .transform((v) => (!v ? null : v)),
+  notes: NOTES_ES,
   source: z.enum(["web", "chatbot", "admin"]).default("web"),
   /**
    * Spec 077 — el encargado confirmó que se pasa del cupo del servicio. Sólo
@@ -167,24 +188,23 @@ export const CreateFlexibleReservationInputSchema = z
   allow_overbook: z.boolean().optional().default(false),
   })
   .refine((v) => v.source === "admin" || v.customer_phone.length >= 4, {
-    message: "Necesitamos un teléfono de contacto.",
+    message: "Ingresá un teléfono válido.",
     path: ["customer_phone"],
   });
 export type CreateFlexibleReservationInput = z.infer<typeof CreateFlexibleReservationInputSchema>;
 
 export const CreateReservationInputSchema = z.object({
   business_slug: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
-  slot: z.string().regex(TIME_HHMM, "Hora inválida"),
-  party_size: z.coerce.number().int().min(1).max(100),
-  customer_name: z.string().trim().min(1).max(80),
-  customer_phone: z.string().trim().min(4).max(40),
-  notes: z
-    .string()
+  date: DATE_YMD_ES,
+  slot: SLOT_ES,
+  party_size: PARTY_SIZE_ES,
+  customer_name: CUSTOMER_NAME_ES,
+  customer_phone: z
+    .string({ error: "Ingresá un teléfono válido." })
     .trim()
-    .max(500)
-    .optional()
-    .transform((v) => (!v ? null : v)),
+    .min(4, "Ingresá un teléfono válido.")
+    .max(40, CUSTOMER_PHONE_MAX_ES),
+  notes: NOTES_ES,
   /** Salón elegido cuando el negocio tiene más de uno. Si no viene, el
    *  flujo asume el primer floor_plan (legacy single-salón). */
   floor_plan_id: z.string().uuid().optional(),
@@ -272,8 +292,8 @@ export type UpdateReservationDetailsInput = z.infer<typeof UpdateReservationDeta
 
 export const AvailabilityQuerySchema = z.object({
   business_slug: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
-  party_size: z.coerce.number().int().min(1).max(100),
+  date: DATE_YMD_ES,
+  party_size: PARTY_SIZE_ES,
   /** Si viene, restringe los horarios a las mesas de ese salón. */
   floor_plan_id: z.string().uuid().optional(),
 });
@@ -285,9 +305,9 @@ export const ListSalonesQuerySchema = z.object({
 /** Spec 059 — disponibilidad del modo flexible: mesas libres + cubiertos de un servicio. */
 export const FlexibleAvailabilityQuerySchema = z.object({
   business_slug: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
+  date: DATE_YMD_ES,
   service: z.string().trim().min(1).max(40),
-  party_size: z.coerce.number().int().min(1).max(100),
+  party_size: PARTY_SIZE_ES,
   floor_plan_id: z.string().uuid().optional(),
   /**
    * Spec 077 — el flujo del cliente lo manda en `true` para que el veredicto

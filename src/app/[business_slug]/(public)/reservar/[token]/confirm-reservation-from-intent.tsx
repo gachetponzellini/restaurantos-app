@@ -23,6 +23,10 @@ type Props = {
   businessName: string;
   logoUrl: string | null;
   intent: Intent;
+  /** «mié 7 de oct · 21:00 hs», ya en la TZ del negocio (H-30). */
+  whenLabel: string;
+  /** «mié 7 de oct». */
+  dayLabel: string;
   prefillName: string | null;
   prefillPhone: string | null;
 };
@@ -44,6 +48,8 @@ export function ConfirmReservationFromIntent({
   businessName,
   logoUrl,
   intent,
+  whenLabel,
+  dayLabel,
   prefillName,
   prefillPhone,
   // notes are intentionally re-shown editable even if the chatbot pre-filled
@@ -55,7 +61,6 @@ export function ConfirmReservationFromIntent({
   const [notes, setNotes] = useState(intent.notes ?? "");
   const [pending, startTransition] = useTransition();
 
-  const dayLabel = formatDayLong(intent.date);
   const timeLabel = intent.slot;
 
   function onSubmit() {
@@ -108,8 +113,8 @@ export function ConfirmReservationFromIntent({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: 999,
             border: "1px solid var(--hairline-2)",
             color: "var(--ink)",
@@ -153,7 +158,7 @@ export function ConfirmReservationFromIntent({
           className="d-display"
           style={{ fontSize: 38, lineHeight: 1.05, color: "var(--ink)" }}
         >
-          {dayLabel} · {timeLabel}
+          {whenLabel}
         </div>
         <div style={{ marginTop: 6, fontSize: 14, color: "var(--ink-2)" }}>
           {intent.party_size}{" "}
@@ -185,6 +190,7 @@ export function ConfirmReservationFromIntent({
             onChange={setName}
             maxLength={80}
             placeholder="Nombre completo"
+            autoComplete="name"
           />
           <Field
             id="r-phone"
@@ -193,6 +199,9 @@ export function ConfirmReservationFromIntent({
             onChange={setPhone}
             maxLength={40}
             placeholder="+54 9 11 …"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
           />
           <Field
             id="r-notes"
@@ -254,19 +263,6 @@ export function ConfirmReservationFromIntent({
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
 
-function formatDayLong(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return new Intl.DateTimeFormat("es-AR", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  })
-    .format(dt)
-    .replace(/\./g, "");
-}
-
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -325,6 +321,9 @@ function Field({
   maxLength,
   placeholder,
   multiline,
+  type,
+  inputMode,
+  autoComplete,
 }: {
   id: string;
   label: string;
@@ -333,6 +332,9 @@ function Field({
   maxLength?: number;
   placeholder?: string;
   multiline?: boolean;
+  type?: "text" | "tel";
+  inputMode?: "tel";
+  autoComplete?: string;
 }) {
   const baseStyle: React.CSSProperties = {
     width: "100%",
@@ -341,7 +343,8 @@ function Field({
     border: "1px solid var(--hairline-2)",
     background: "var(--bg)",
     color: "var(--ink)",
-    fontSize: 15,
+    // H-23: ≥16px para que iOS no haga zoom al enfocar.
+    fontSize: 16,
     outline: "none",
     fontFamily: "inherit",
   };
@@ -366,6 +369,9 @@ function Field({
       ) : (
         <input
           id={id}
+          type={type}
+          inputMode={inputMode}
+          autoComplete={autoComplete}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           maxLength={maxLength}

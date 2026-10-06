@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MyReservationsScreen } from "@/components/reservations/my-reservations-screen";
+import { getReservationSettings } from "@/lib/reservations/queries";
 import type { Reservation } from "@/lib/reservations/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
@@ -36,10 +37,15 @@ export default async function MisReservasPage({
     tables: { label: string } | null;
   })[];
 
+  const settings = await getReservationSettings(business.id, {
+    useService: true,
+  });
+
   return (
     <MyReservationsScreen
       slug={business_slug}
       timezone={business.timezone}
+      leadTimeMin={settings.lead_time_min}
       reservations={reservations}
     />
   );

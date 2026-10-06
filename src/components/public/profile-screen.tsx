@@ -47,8 +47,8 @@ export function ProfileScreen({
           href={`/${slug}/menu`}
           aria-label="Cerrar"
           style={{
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -94,6 +94,7 @@ export function ProfileScreen({
               background: "none",
               border: "none",
               padding: 0,
+              minHeight: 44,
               color: "var(--ink-3)",
               fontSize: 14,
               fontWeight: 500,

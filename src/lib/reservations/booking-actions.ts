@@ -55,6 +55,7 @@ import { excedeTopeDeReservas, TOPE_RESERVAS_MSG } from "@/lib/reservations/tope
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { dentroDelHorizonte } from "@/lib/reservations/horizonte";
+import { canCancelReservation } from "@/lib/reservations/cancel-window";
 
 type GenericClient = SupabaseClient;
 
@@ -1278,8 +1279,15 @@ export async function cancelOwnReservation(
   }
 
   const settings = await getReservationSettings(r.business_id, { useService: true });
-  const cutoff = new Date(new Date(r.starts_at).getTime() - settings.lead_time_min * 60_000);
-  if (Date.now() > cutoff.getTime()) {
+  // H-14: la UI usa la misma regla (`canCancelReservation`) para no ofrecer el
+  // botón fuera de la ventana.
+  if (
+    !canCancelReservation({
+      status: r.status,
+      startsAt: r.starts_at,
+      leadTimeMin: settings.lead_time_min,
+    })
+  ) {
     return actionError("Ya pasó la ventana para cancelar online. Avisá al local.");
   }
 

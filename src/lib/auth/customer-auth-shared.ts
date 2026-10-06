@@ -5,9 +5,27 @@ import { z } from "zod";
 // Server Actions solo puede exportar funciones async — no helpers sync ni
 // schemas. Acá se pueden importar tanto del server como de tests/cliente.
 
-export function safeNextPath(next: string | undefined, slug: string): string {
-  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
-  return `/${slug}/menu`;
+/**
+ * H-02 — un `next` es seguro sólo si es un path same-origin. Rechaza `//`,
+ * `/\\` (el navegador normaliza `\` a `/`, así que `/\evil` termina siendo
+ * `//evil`), backslashes en cualquier posición, caracteres de control (tab,
+ * CR, LF y NUL que el parser de URLs elimina) y esquemas.
+ */
+export function isSafeNextPath(next: string | null | undefined): next is string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return false;
+  if (/[\\\u0000-\u001f\u007f]/.test(next)) return false;
+  try {
+    return new URL(next, "http://x").origin === "http://x";
+  } catch {
+    return false;
+  }
+}
+
+export function safeNextPath(
+  next: string | null | undefined,
+  slug: string,
+): string {
+  return isSafeNextPath(next) ? next : `/${slug}/menu`;
 }
 
 export const SignInCustomerInput = z.object({

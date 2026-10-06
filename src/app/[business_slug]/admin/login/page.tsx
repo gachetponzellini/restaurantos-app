@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
@@ -29,6 +30,9 @@ export default async function AdminLoginPage({
   // Si la membership está deshabilitada o el usuario llega con
   // ?reason=disabled, mostramos la pantalla y dejamos que vuelva a loguear con
   // otra cuenta — nunca auto-redirect a /admin (loop infinito con el gate).
+  // H-33 — sesión de cliente (sin membership en este negocio): el gate lo
+  // rebotó acá sin explicar por qué. Sólo un aviso; la lógica de auth no cambia.
+  let isCustomerSession = false;
   if (!isDisabledNotice) {
     const supabase = await createSupabaseServerClient();
     const {
@@ -55,6 +59,7 @@ export default async function AdminLoginPage({
               : `/${business_slug}/admin`;
         redirect(target);
       }
+      if (!membership) isCustomerSession = true;
     }
   }
 
@@ -64,6 +69,25 @@ export default async function AdminLoginPage({
         <h1 className="text-2xl font-extrabold">{business.name}</h1>
         <p className="text-muted-foreground text-sm">Panel de pedidos</p>
       </div>
+      {isCustomerSession && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              Esta cuenta es de cliente y no tiene acceso al panel.
+            </p>
+            <Link
+              href={`/${business_slug}/menu`}
+              className="mt-1 inline-block font-medium text-amber-900 underline underline-offset-2"
+            >
+              Ir al menú de {business.name}
+            </Link>
+          </div>
+        </div>
+      )}
       {isDisabledNotice && (
         <div
           role="alert"

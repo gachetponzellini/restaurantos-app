@@ -12,7 +12,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--hairline-2)",
   background: "var(--bg)",
   color: "var(--ink)",
-  fontSize: 15,
+  // H-23: ≥16px para que iOS no haga zoom al enfocar.
+  fontSize: 16,
   padding: "0 16px",
   outline: "none",
   boxSizing: "border-box",
@@ -43,6 +44,8 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
   const [mode, setMode] = useState<Mode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // H-04: con Confirm email activo el alta no abre sesión; avisamos y listo.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const validate = (
     email: string,
@@ -81,12 +84,15 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
     setSubmitting(true);
     try {
       const input = { business_slug, email, password, phone, next };
-      const result =
-        mode === "login"
-          ? await signInCustomer(input)
-          : await signUpCustomer(input);
-
-      if (result && !result.ok) toast.error(result.error);
+      if (mode === "login") {
+        const result = await signInCustomer(input);
+        if (result && !result.ok) toast.error(result.error);
+      } else {
+        const result = await signUpCustomer(input);
+        if (!result.ok) toast.error(result.error);
+        else if (result.data.status === "confirm_email")
+          setPendingEmail(result.data.email);
+      }
     } catch (err) {
       if (
         err instanceof Error &&
@@ -106,7 +112,47 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
   const toggleMode = (newMode: Mode) => {
     setMode(newMode);
     setFieldErrors({});
+    setPendingEmail(null);
   };
+
+  if (pendingEmail) {
+    return (
+      <div
+        role="status"
+        style={{
+          border: "1px solid var(--hairline-2)",
+          borderRadius: 12,
+          padding: 20,
+          color: "var(--ink)",
+          fontSize: 15,
+          lineHeight: 1.5,
+        }}
+      >
+        <p style={{ margin: 0 }}>
+          Te mandamos un mail a <strong>{pendingEmail}</strong> para confirmar
+          la cuenta. Cuando lo confirmes, ingresá con tu email y contraseña.
+        </p>
+        <button
+          type="button"
+          onClick={() => toggleMode("login")}
+          style={{
+            marginTop: 16,
+            minHeight: 44,
+            padding: "0 16px",
+            borderRadius: 10,
+            border: "1px solid var(--hairline-2)",
+            background: "var(--bg)",
+            color: "var(--ink)",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Ir a ingresar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -128,7 +174,7 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
             onClick={() => toggleMode(m)}
             style={{
               flex: 1,
-              height: 36,
+              minHeight: 44,
               borderRadius: 7,
               border: "none",
               background: mode === m ? "var(--bg)" : "transparent",
@@ -156,7 +202,9 @@ export function CustomerAuthForm({ business_slug, next }: Props) {
             name="email"
             type="email"
             autoComplete="email"
-            autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             style={inputStyle}
           />
           {fieldErrors.email && (
