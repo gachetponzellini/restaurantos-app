@@ -10,5 +10,5 @@
 - [x] Correcciones de la revisión: billetes enteros, $0 declarable, red caída sin botón trabado, guarda de secuencia, aria-labels
 - [x] `pnpm typecheck && pnpm test`: verde, 3867 tests, con la integración corriendo contra Supabase local
 - [x] Verificado en vivo con el rol encargado (Sofía, `demo` local): franja con 10 mesas abiertas en la Principal; cierre de la Caja Bar con conteo por billete → Falta → Volver a contar → Cuadra → resumen con banner y recuento
-- [ ] Verificado en vivo en la caja principal con mesas cobradas y un mozo rendido desde la franja (en el demo local, las 10 mesas abiertas lo impiden sin cobrarlas)
+- [x] Verificado en vivo — 2026-10-06, base local, encargada real: ciclo completo de dos cajas con conteo ciego, recuento (507.000 → 507.500) y cierre del turno. Detalle en #379.
 - [x] Revisión fresca (code-reviewer): 10 hallazgos, sin bloqueantes de plata; aplicados los 8 que corresponden
