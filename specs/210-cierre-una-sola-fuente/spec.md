@@ -167,14 +167,25 @@ apertura (fondo que quedó del corte anterior)
 - **`retiro_cents` sale de `cerrar_caja_tx`.**
 - TS conserva estas validaciones para dar feedback inmediato, pero la que decide es la base.
 
-### R8 · Pasaje sin descuadre
+### R8 · Pasaje: todos al modelo nuevo, el mismo día
 
-- **Cada negocio tiene `caja_modelo_v2_desde timestamptz`.** La migración lo deja en `null`.
-- **Se activa sola al cerrarse el próximo turno**, porque en ese momento no hay plata de
-  mozos en el aire: todos rindieron o tienen la deuda reconocida, y las cajas están contadas.
-- **Los cobros anteriores a esa fecha** siguen con la regla vieja y `efectivo_de` queda `null`.
-- **Las deudas reconocidas con el modelo viejo** se migran como saldo inicial del mozo.
-- **Los cierres archivados no se recalculan**, porque guardan su esperado y su resumen.
+Decisión de Juan (2026-10-06): *"tiene que ser para todos igual con este modelo nuevo"*.
+No hay modelo opcional por negocio.
+
+- **Una migración de pasaje** (`0138`) se aplica **junto con el deploy de la app nueva**:
+  - todos los negocios entran al modelo nuevo en ese instante, sin esperar a que cierren
+    su caja (KCC no cierra desde el 24/9);
+  - el efectivo que cada mozo cobró y todavía no rindió **en el período abierto de cada
+    caja** pasa a su nombre (`rinde_mozo_id`). El cajón deja de esperarlo y aparece en su
+    saldo, así nadie pierde ni gana un peso con el cambio;
+  - cada negocio queda con su turno abierto;
+  - `caja_modelo_v2_desde` toma `default now()`: los negocios nuevos nacen en el modelo nuevo.
+- **No se tocan los períodos ya cerrados ni las deudas viejas.** El arqueo que los firmó
+  ya registró el faltante. Pasarlos al saldo los contaría dos veces.
+- **Después del deploy se borra el modelo viejo:** las ramas `v_v2 = false` de las RPC,
+  `registrar_rendicion_tx` v1, `caja_modelo_v2_pedido` y el código TS que calculaba aparte.
+  Queda una sola forma de calcular.
+- Las migraciones 0134–0137 son inertes hasta el pasaje: se pueden aplicar antes.
 
 ## Decisiones
 

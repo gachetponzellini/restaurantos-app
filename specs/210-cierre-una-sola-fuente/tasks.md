@@ -9,8 +9,10 @@ Todo con TDD contra Postgres local (`pnpm test` con `.env.test`). Las migracione
 - [x] Migración B (0135): `saldo_mozo()`, `efectivo_esperado_caja` v2, `caja_movimientos.kind` suma `'rendicion'`, `registrar_rendicion_tx` v2 (entrega / no entregó / anular entrega), techo y nota en la base
 - [x] Migración C (0136): tabla `turnos` (índice único parcial del abierto) + RLS; `cerrar_turno_tx` (barre el salón, papel del turno); `cerrar_caja_tx` sin barrido, exige mesas cobradas y la plata de la caja rendida, con `retiro_cents` en el retorno
 - [x] Migración D (0137): `corregir_pago_tx` con mozo, caja y propina + guardas; `efecto_de_correccion` (sólo lectura)
-- [x] Pasaje: `caja_modelo_v2_pedido` → se activa en el próximo cierre de la principal (modelo viejo: sin mesas abiertas y todos rendidos), con el primer turno abierto. Las deudas viejas no se migran: en el modelo viejo ya quedaron como faltante del arqueo que las firmó
+- [ ] ~~Pasaje por negocio~~ (reemplazado, ver abajo). Hecho en 0136 y queda obsoleto: `caja_modelo_v2_pedido` → se activa en el próximo cierre de la principal (modelo viejo: sin mesas abiertas y todos rendidos), con el primer turno abierto. Las deudas viejas no se migran: en el modelo viejo ya quedaron como faltante del arqueo que las firmó
+- [ ] Migración de pasaje `0138` (R8 v2): todos al modelo nuevo, efectivo no rendido del período abierto a nombre del mozo, turno abierto por negocio, `default now()`; tests del pasaje
 - [ ] TS: `getCierreCajaData` / stats / resumen leen SQL; borrar `expected-cash.ts` y la regla TS de `deben-rendir`; actions traducen los códigos nuevos al glosario (`textos.ts`)
 - [ ] `pnpm db:types` + `pnpm typecheck && pnpm test`
 - [ ] Aplicar al cloud vía MCP (con OK) y verificar con `get_advisors`
 - [ ] Revisión fresca (code-reviewer) con foco en plata y carreras
+- [ ] Deploy conjunto (migraciones + app, con OK de Juan) y, después, migración que borra el modelo viejo
