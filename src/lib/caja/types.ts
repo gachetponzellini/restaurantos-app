@@ -254,6 +254,13 @@ export type CierreResumenSnapshot = {
    */
   fondo_fijo_cents?: number;
   desglose_esperado: CajaLiveStats["desglose_esperado"];
+  /**
+   * Spec 209 · R4 — los conteos descartados con «Volver a contar», en orden. El
+   * conteo es ciego: el encargado ve la diferencia recién después de contar, y
+   * si recuenta queda el rastro de lo que dio la primera vez. Ausente si contó
+   * una sola vez (y en los cortes anteriores a la spec).
+   */
+  recuentos_cents?: number[];
   /** Línea por línea, con su motivo — así lo imprime MaxiRest. */
   movimientos: {
     ingresos: { detalle: string; total_cents: number }[];

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { CierreCajaData } from "@/lib/caja/queries";
 import type { RendicionMozoPendiente } from "@/lib/caja/types";
+import { formatCurrency } from "@/lib/currency";
 
 // Los mocks declaran los parámetros de la action real: sin eso `vi.fn` infiere
 // una firma sin argumentos y `cerrarCaja.mock.calls[0][0]` no typechequea
@@ -15,29 +16,34 @@ const cerrarCaja = vi.fn(
   async (..._args: Parameters<CajaActions["cerrarCaja"]>) => ({
     ok: true as const,
     data: {
-      corte: {},
+      corte: { id: "corte-9" },
       retiro_cents: 312_400,
       mesasLiberadas: 0,
       mozosLimpiados: 0,
     },
   }),
 );
-const registrarRendicionMozo = vi.fn(
-  async (..._args: Parameters<CajaActions["registrarRendicionMozo"]>) => ({
-    ok: true as const,
-    data: {},
-  }),
-);
 
 vi.mock("@/lib/caja/actions", () => ({
   cerrarCaja: (...args: Parameters<typeof cerrarCaja>) => cerrarCaja(...args),
-  registrarRendicionMozo: (...args: Parameters<typeof registrarRendicionMozo>) =>
-    registrarRendicionMozo(...args),
+}));
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, refresh: vi.fn(), replace: vi.fn() }),
 }));
 
 let DATA: CierreCajaData;
+/** Cuántas cargas más funcionan antes de que se corte la red (null = siempre). */
+let CARGAS_OK: number | null = null;
 vi.mock("@/app/[business_slug]/admin/(authed)/operacion/actions", () => ({
-  getCierreCajaTabData: async () => ({ ok: true, data: DATA }),
+  getCierreCajaTabData: async () => {
+    if (CARGAS_OK !== null) {
+      if (CARGAS_OK <= 0) throw new TypeError("Failed to fetch");
+      CARGAS_OK -= 1;
+    }
+    return { ok: true, data: DATA };
+  },
 }));
 
 import { CerrarCajaModal } from "./cerrar-caja-modal";
@@ -115,15 +121,21 @@ function pendiente(
   };
 }
 
-/**
- * El campo es `type="number"` y el Dialog toma el foco al abrirse: tipear
- * carácter por carácter perdía el primero cada tantas corridas y el test se
- * volvía flaky. Un `change` directo dice lo mismo sin la carrera.
- */
-function contar(valor: string) {
+
+function pesos(cents: number) {
+  // formatCurrency separa con espacio duro; Testing Library normaliza el texto
+  // del DOM a espacio común pero no el string con el que se busca.
+  return formatCurrency(cents).replace(/\u00a0/g, " ");
+}
+
+/** Carga el total (no por billete) y aprieta «Listo, conté». */
+async function contarTotal(valor: string) {
+  fireEvent.click(await screen.findByRole("button", { name: "El total" }));
   fireEvent.change(screen.getByLabelText(/Efectivo contado/i), {
     target: { value: valor },
   });
+  fireEvent.click(screen.getByRole("button", { name: "Listo, conté" }));
+  await screen.findByText("Debería haber");
 }
 
 function abrir() {
@@ -139,267 +151,218 @@ function abrir() {
   );
 }
 
+const MESA_12 = {
+  order_id: "o1",
+  order_number: 128,
+  table_id: "t1",
+  table_label: "12",
+  mozo_name: "Nacho",
+  total_cents: 84_000,
+  pendiente_cents: 84_000,
+};
+
 /**
- * Lo que se fija acá es el criterio del cierre, no el pixel: que la mesa
- * abierta frene el botón (D7), que el retiro sea una casilla y no un número
- * tipeado (D2) y que el mozo sin rendir esté a la vista **antes** de contar
- * (D5/D6) — que es lo que hace que la diferencia del arqueo ya venga explicada.
+ * Spec 209 — el modal es sólo para contar, y el conteo es ciego: lo que se fija
+ * es que el número contra el que se compara no se vea hasta terminar de contar,
+ * que un recuento deje rastro y que nunca haya un botón apagado sin decir qué
+ * falta.
  */
-describe("CerrarCajaModal", () => {
+describe("CerrarCajaModal · conteo ciego (spec 209)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it("una mesa con la cuenta abierta bloquea el cierre y se dice cuál", async () => {
-    DATA = data({
-      cuentas_abiertas: [
-        {
-          order_id: "o1",
-          order_number: 128,
-          table_id: "t1",
-          table_label: "12",
-          mozo_name: "Nacho",
-          total_cents: 84_000,
-          pendiente_cents: 84_000,
-        },
-      ],
-    });
-    abrir();
-
-    expect(
-      await screen.findByText(/Hay una mesa con la cuenta abierta/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Mesa 12")).toBeInTheDocument();
-    expect(screen.getByText(/Nacho/)).toBeInTheDocument();
-
-    const cerrar = screen.getByRole("button", { name: /Cerrar caja/i });
-    expect(cerrar).toBeDisabled();
-  });
-
-  it("el delivery abierto avisa pero no frena", async () => {
-    DATA = data({
-      pedidos_abiertos: [
-        {
-          order_id: "o2",
-          order_number: 130,
-          origen: "delivery",
-          customer_name: "Ana",
-          total_cents: 20_000,
-        },
-      ],
-    });
-    const user = userEvent.setup();
-    abrir();
-
-    expect(
-      await screen.findByText(/No frenan el cierre/i),
-    ).toBeInTheDocument();
-
-    contar("3124");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Cerrar caja/i })).toBeEnabled(),
-    );
-  });
-
-  it("el CTA dice cuánto se retira, y cambia si se destilda la casilla", async () => {
     DATA = data();
-    const user = userEvent.setup();
+  });
+
+  it("mientras se cuenta no se ve cuánto debería haber ni la diferencia", async () => {
     abrir();
+    expect(await screen.findByText("Contá la plata del cajón")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "El total" }));
+    fireEvent.change(screen.getByLabelText(/Efectivo contado/i), {
+      target: { value: "300000" },
+    });
+    expect(screen.queryByText(pesos(312_400))).not.toBeInTheDocument();
+    expect(screen.queryByText(/Falta|Sobra|Cuadra/)).not.toBeInTheDocument();
+  });
 
-    await screen.findByLabelText(/Efectivo contado/i);
-    contar("3124");
-    expect(
-      await screen.findByRole("button", { name: /Cerrar caja y retirar/i }),
-    ).toBeInTheDocument();
+  it("arranca contando por billete y suma solo", async () => {
+    abrir();
+    const veintes = await screen.findByLabelText(/Billetes de .*20\.000/);
+    fireEvent.change(veintes, { target: { value: "15" } });
+    expect(screen.getByText(pesos(30_000_000))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Listo, conté" }));
+    expect(await screen.findByText("Debería haber")).toBeInTheDocument();
+    expect(screen.getByText("Sobra")).toBeInTheDocument();
+    expect(screen.getByText(pesos(30_000_000 - 312_400))).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("checkbox"));
-    expect(
-      screen.getByRole("button", { name: /Cerrar caja sin retirar/i }),
-    ).toBeInTheDocument();
+  it("un día sin efectivo se declara en $0 sin buscar el otro modo", async () => {
+    DATA = data({
+      stats: { ...data().stats, expected_cash_cents: 0 },
+    });
+    abrir();
+    fireEvent.click(await screen.findByRole("button", { name: "No hay efectivo en el cajón" }));
+    fireEvent.click(screen.getByRole("button", { name: "Listo, conté" }));
+    expect(await screen.findByText("Cuadra")).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: /sin retirar/i }));
-    await waitFor(() => expect(cerrarCaja).toHaveBeenCalled());
+  it("billetes con coma o negativos no ensucian el total", async () => {
+    abrir();
+    fireEvent.change(await screen.findByLabelText(/Billetes de .*20\.000/), {
+      target: { value: "1.5" },
+    });
+    fireEvent.change(screen.getByLabelText(/Billetes de .*10\.000/), {
+      target: { value: "-2" },
+    });
+    expect(screen.getByText(pesos(2_000_000))).toBeInTheDocument();
+  });
+
+  it("sin nada cargado, el botón dice qué falta en vez de apagarse mudo", async () => {
+    abrir();
+    const b = await screen.findByRole("button", { name: "Cargá lo que contaste" });
+    expect(b).toBeDisabled();
+  });
+
+  it("con diferencia: dice Falta, pide el motivo y el botón lo explica", async () => {
+    abrir();
+    await contarTotal("3000");
+    expect(screen.getByText("Falta")).toBeInTheDocument();
+    expect(screen.getByText(pesos(12_400))).toBeInTheDocument();
+    const b = screen.getByRole("button", { name: "Escribí qué pasó para cerrar" });
+    expect(b).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Qué pasó/), {
+      target: { value: "vuelto mal dado" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar con esta diferencia" }));
+    await waitFor(() => expect(cerrarCaja).toHaveBeenCalledTimes(1));
     expect(cerrarCaja.mock.calls[0][0]).toMatchObject({
-      cajaId: "c1",
+      closing_cash_cents: 300_000,
+      closing_notes: "vuelto mal dado",
+      retirar: true,
+      expected_visto_cents: 312_400,
+      recuentos_cents: [],
+    });
+  });
+
+  it("«Volver a contar» empieza de cero y el conteo descartado viaja al cierre", async () => {
+    abrir();
+    await contarTotal("3000");
+    fireEvent.click(screen.getByRole("button", { name: /Volver a contar/ }));
+
+    expect(await screen.findByText(/Recuento 2/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Efectivo contado/i)).toHaveValue(null);
+
+    await contarTotal("3124");
+    expect(screen.getByText("Cuadra")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar caja y retirar/ }));
+    await waitFor(() => expect(cerrarCaja).toHaveBeenCalledTimes(1));
+    expect(cerrarCaja.mock.calls[0][0]).toMatchObject({
       closing_cash_cents: 312_400,
-      retirar: false,
+      recuentos_cents: [300_000],
     });
   });
 
-  it("con diferencia pide motivo antes de dejar cerrar", async () => {
-    DATA = data();
-    const user = userEvent.setup();
+  it("al cerrar lleva al resumen del cierre, no a un toast", async () => {
     abrir();
-
-    // Cuenta $3.000 contra $3.124 esperados: faltan $124.
-    await screen.findByLabelText(/Efectivo contado/i);
-    contar("3000");
-    expect(await screen.findByText("Te falta")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Cerrar caja/i })).toBeDisabled();
-
-    await user.type(screen.getByLabelText(/Qué pasó/i), "vuelto mal dado");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Cerrar caja/i })).toBeEnabled(),
+    await contarTotal("3124");
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar caja y retirar/ }));
+    await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(push.mock.calls[0][0]).toMatch(
+      /^\/golf-jcr\/admin\/caja\/cierres\/corte-9\?recien=1$/,
     );
   });
 
-  it("el mozo sin rendir aparece con su monto y **frena** el cierre (139 · D1)", async () => {
-    DATA = data({
-      reparto: {
-        en_cajon_cents: 198_000,
-        mozos: [
-          { mozo_id: "m1", mozo_name: "Nacho", efectivo_cents: 71_200 },
-          { mozo_id: "m2", mozo_name: "Caro", efectivo_cents: 43_200 },
-        ],
-        descuadre_cents: 0,
-      },
-      deben_rendir: [
-        pendiente({ mozo_id: "m1", mozo_name: "Nacho", efectivo_cents: 71_200 }),
-        pendiente({ mozo_id: "m2", mozo_name: "Caro", efectivo_cents: 43_200 }),
-      ],
-    });
+  it("si entró plata mientras contaba, recalcula sin pedir que recuente (R6)", async () => {
+    cerrarCaja.mockResolvedValueOnce({
+      ok: false,
+      error: "cambió",
+      esperado_actual_cents: 317_400,
+      delta_cents: 5_000,
+    } as never);
     abrir();
+    await contarTotal("3124");
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar caja y retirar/ }));
 
-    expect(await screen.findByText("Nacho")).toBeInTheDocument();
-    expect(screen.getByText("Caro")).toBeInTheDocument();
-    expect(screen.getAllByText(/sin rendir/i)).toHaveLength(2);
-    expect(
-      screen.getByText(/Faltan 2 rendiciones para poder cerrar/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/mientras contabas/)).toBeInTheDocument();
+    expect(screen.getByText(pesos(317_400))).toBeInTheDocument();
+    expect(screen.getByText("Falta")).toBeInTheDocument();
+    // Los $50 aparecen dos veces: lo que entró (banner) y lo que ahora falta.
+    expect(screen.getAllByText(pesos(5_000))).toHaveLength(2);
+    expect(push).not.toHaveBeenCalled();
 
-    // Aunque el arqueo cuadre perfecto, no se cierra hasta resolverlos.
-    contar("3124");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Cerrar caja/i })).toBeDisabled(),
-    );
+    // Confirmar de nuevo manda el número nuevo, no el que vio al contar.
+    fireEvent.change(screen.getByLabelText(/Qué pasó/), {
+      target: { value: "entró un cobro" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar con esta diferencia" }));
+    await waitFor(() => expect(cerrarCaja).toHaveBeenCalledTimes(2));
+    expect(cerrarCaja.mock.calls[1][0]).toMatchObject({ expected_visto_cents: 317_400 });
   });
 
-  it("la rendición no se autocompleta: el monto se tipea (139 · D2)", async () => {
-    DATA = data({
-      deben_rendir: [
-        pendiente({ mozo_id: "m1", mozo_name: "Nacho", efectivo_cents: 71_200 }),
-      ],
-    });
-    const user = userEvent.setup();
+  it("una mesa abierta: dice qué falta y lleva a cobrarla, sin dejar contar", async () => {
+    DATA = data({ cuentas_abiertas: [MESA_12] });
     abrir();
-
-    await user.click(await screen.findByRole("button", { name: "Rendir" }));
-
-    // Sin número, el botón no se puede apretar: antes esto rendía $71.200 solo.
-    const registrar = screen.getByRole("button", { name: /Registrar rendición/i });
-    expect(registrar).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/Efectivo que entrega/i), {
-      target: { value: "712" },
-    });
-    await waitFor(() => expect(registrar).toBeEnabled());
-    await user.click(registrar);
-
-    await waitFor(() => expect(registrarRendicionMozo).toHaveBeenCalled());
-    expect(registrarRendicionMozo.mock.calls[0]).toEqual([
-      "m1",
-      71_200,
-      null,
-      "golf-jcr",
-      "rendida",
-    ]);
+    expect(await screen.findByText(/Antes de contar falta/)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Cobrar/ });
+    expect(link).toHaveAttribute("href", "/golf-jcr/admin/mesa/t1/cobrar");
+    expect(screen.queryByText("Contá la plata del cajón")).not.toBeInTheDocument();
   });
 
-  it("«No entregó» exige el motivo y deja la deuda declarada (139 · D1)", async () => {
+  it("un mozo sin rendir también frena, y se dice dónde rendirlo", async () => {
     DATA = data({
-      deben_rendir: [
-        pendiente({ mozo_id: "m1", mozo_name: "Nacho", efectivo_cents: 71_200 }),
-      ],
+      deben_rendir: [pendiente({ mozo_id: "m1", mozo_name: "Diego" })],
     });
-    const user = userEvent.setup();
     abrir();
-
-    await user.click(await screen.findByRole("button", { name: "No entregó" }));
-
-    const marcar = screen.getByRole("button", { name: /Marcar como no entregó/i });
-    expect(marcar).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/Por qué/i), {
-      target: { value: "se fue temprano" },
-    });
-    await waitFor(() => expect(marcar).toBeEnabled());
-    await user.click(marcar);
-
-    await waitFor(() => expect(registrarRendicionMozo).toHaveBeenCalled());
-    expect(registrarRendicionMozo.mock.calls[0]).toEqual([
-      "m1",
-      0,
-      "se fue temprano",
-      "golf-jcr",
-      "no_entrego",
-    ]);
+    expect(await screen.findByText("Rendir a Diego")).toBeInTheDocument();
+    expect(screen.getByText(/desde «Cierre del día»/)).toBeInTheDocument();
   });
 
-  it("el que cobró sólo con tarjeta también rinde (139 · D4)", async () => {
-    DATA = data({
-      deben_rendir: [
-        pendiente({
-          mozo_id: "m3",
-          mozo_name: "Lucía",
-          efectivo_cents: 0,
-          tickets_cents: 84_400,
-        }),
-      ],
+  it("si se corta la red al terminar de contar, lo dice y deja reintentar", async () => {
+    CARGAS_OK = 1; // abre bien; la re-lectura de «Listo, conté» falla
+    abrir();
+    fireEvent.click(await screen.findByRole("button", { name: "El total" }));
+    fireEvent.change(screen.getByLabelText(/Efectivo contado/i), {
+      target: { value: "3124" },
     });
-    abrir();
-
-    expect(await screen.findByText("Lucía")).toBeInTheDocument();
-    expect(screen.getByText(/sólo tickets/i)).toBeInTheDocument();
-  });
-
-  it("avisa cuando la caja no tiene operador asignado (139 · D3)", async () => {
-    DATA = data({ sin_operadores: true });
-    abrir();
-
-    expect(
-      await screen.findByText(/Nadie figura como operador de esta caja/i),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Listo, conté" }));
+    expect(await screen.findByText(/No hay conexión/)).toBeInTheDocument();
+    expect(screen.queryByText("Debería haber")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Listo, conté" })).toBeEnabled();
+    CARGAS_OK = null;
   });
 
   it("anuncia lo que el cierre va a barrer antes de apretar", async () => {
     DATA = data({ salon: { mesas_a_liberar: 12, mozos_asignados: 4 } });
     abrir();
-
-    expect(await screen.findByText(/liberan 12 mesas/i)).toBeInTheDocument();
-    expect(screen.getByText(/distribución de 4 mozos/i)).toBeInTheDocument();
+    await contarTotal("3124");
+    expect(
+      screen.getByText(/se liberan 12 mesas y se limpia la distribución de 4 mozos/),
+    ).toBeInTheDocument();
   });
 });
 
-// ── Spec 177 · Parte C — el fondo de caja ────────────────────────────────
-//
-// La spec 130 · D2 había descartado el fondo de cambio por «una decisión menos
-// a la 1 de la mañana». Con el fondo CONFIGURADO no hay decisión que tomar: el
-// cierre lo aplica solo y la casilla dice cuánto queda.
 describe("cerrar caja · el fondo que queda en el cajón (spec 177)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("sin fondo, la casilla dice que se retira todo", async () => {
+  it("sin fondo, se retira todo y la caja arranca en $0", async () => {
     DATA = data();
     abrir();
-    await screen.findByLabelText(/Efectivo contado/i);
-    contar("3124");
-
-    expect(screen.getByText(/Retirar todo el efectivo/i)).toBeInTheDocument();
+    await contarTotal("3124");
+    expect(screen.getByText(/y la caja arranca en \$0/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Cerrar caja y retirar \$\s3\.124$/ }),
+    ).toBeInTheDocument();
   });
 
   it("con fondo, retira lo contado menos el fondo y lo explica", async () => {
-    DATA = data({ fondo_fijo_cents: 100_000 });
+    DATA = data({ fondo_fijo_cents: 50_000 });
     abrir();
-    await screen.findByLabelText(/Efectivo contado/i);
-    contar("3124");
-
-    // Contado $3.124, fondo $1.000 → se retiran $2.124 y quedan $1.000.
-    expect(screen.getAllByText(/\$ 2\.124/).length).toBeGreaterThan(0);
+    await contarTotal("3124");
     expect(
-      screen.getByText(/quedan .* de fondo para el próximo turno/i),
+      screen.getByRole("button", { name: /Cerrar caja y retirar \$\s2\.624$/ }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Retirar todo el efectivo/i)).toBeNull();
+    expect(screen.getByText(/quedan \$ 500 de fondo/)).toBeInTheDocument();
   });
 });

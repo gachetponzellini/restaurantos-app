@@ -1,19 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
-import Link from "next/link";
-import {
-  AlertTriangle,
-  Banknote,
-  ChevronDown,
-  Lock,
-  User,
-  Wallet,
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, ArrowLeft, Lock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { VentasPorMetodo } from "@/components/admin/local/caja-metricas";
-import { CobrosPorOrigen } from "@/components/admin/local/cobros-por-origen";
+import { IntentLink } from "@/components/ui/intent-link";
 import { Button } from "@/components/ui/button";
 import {
   Modal,
@@ -22,27 +14,29 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@/components/ui/modal";
-import { SectionLabel } from "@/components/ui/section-label";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getCierreCajaTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
-import { cerrarCaja, registrarRendicionMozo } from "@/lib/caja/actions";
+import { cerrarCaja } from "@/lib/caja/actions";
 import type { CierreCajaData } from "@/lib/caja/queries";
+import { TXT, veredictoDiferencia } from "@/lib/caja/textos";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 /**
- * Cerrar la caja: un botón (spec 130).
+ * Cerrar la caja: sólo contar (spec 209).
  *
- * Reemplaza al modal de «Hacer corte», que mostraba sólo el efectivo esperado
- * — y por eso el cierre se decidía mirando una pantalla y se entendía mirando
- * otra: lo cobrado por método, el delivery, las propinas y quién no rindió
- * estaban afuera, en el board.
+ * Antes (spec 130) el modal tenía tres bloques —la plata del período, quién
+ * tiene el efectivo con un formulario de rendición propio, y contar— y el
+ * botón final se apagaba sin decir por qué cuando faltaba cobrar una mesa o
+ * rendir a un mozo. Ahora esos pasos viven en la franja «Cierre del día» del
+ * board, que siempre dice cuál es el próximo; acá se llega con todo resuelto.
  *
- * Tres bloques, en el orden en que se cierra el día: **la plata** que entró ·
- * **quién la tiene** (y se rinde desde acá) · **contar y cerrar**, con el
- * retiro como una casilla en vez de una sangría tipeada a mano.
+ * **Conteo ciego** (spec 209 · R4): primero se cuenta sin ver cuánto debería
+ * haber ni la diferencia —la franja en vivo empujaba a contar hacia el
+ * número—; recién con «Listo, conté» aparece la comparación. Si no cuadra se
+ * puede volver a contar desde cero, y el conteo descartado queda en el resumen.
  */
 export function CerrarCajaModal({
   open,
@@ -59,379 +53,348 @@ export function CerrarCajaModal({
   cajaName: string;
   onCerrada: () => void;
 }) {
+  const router = useRouter();
   const [data, setData] = useState<CierreCajaData | null>(null);
   const [cargando, setCargando] = useState(false);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
 
-  const [closing, setClosing] = useState("");
-  const [notes, setNotes] = useState("");
-  const [retirar, setRetirar] = useState(true);
-  const [conteoAbierto, setConteoAbierto] = useState(false);
+  const [fase, setFase] = useState<"contar" | "resultado">("contar");
+  // D3 · el conteo por billete va primero: es el que deja rastro.
+  const [forma, setForma] = useState<"billete" | "total">("billete");
+  const [total, setTotal] = useState("");
   const [conteo, setConteo] = useState<Record<string, string>>({});
+  const [recuentos, setRecuentos] = useState<number[]>([]);
+  const [notes, setNotes] = useState("");
+  // R6 · el «debería haber» cambió mientras se contaba.
+  const [cambio, setCambio] = useState<{ esperado: number; delta: number } | null>(
+    null,
+  );
 
+  const seq = useRef(0);
   const cargar = useCallback(async () => {
+    const mio = ++seq.current;
     setCargando(true);
     setErrorCarga(null);
-    const res = await getCierreCajaTabData(slug, cajaId);
-    if (res.ok) setData(res.data);
-    else setErrorCarga(res.error);
-    setCargando(false);
+    try {
+      const res = await getCierreCajaTabData(slug, cajaId, { sinReparto: true });
+      // Una respuesta vieja (o que llega con el modal cerrado) no pisa nada.
+      if (mio !== seq.current) return null;
+      if (res.ok) {
+        setData(res.data);
+        // El número recién leído reemplaza al del aviso de «cambió».
+        setCambio(null);
+      }
+      else setErrorCarga(res.error);
+      return res.ok ? res.data : null;
+    } catch {
+      if (mio !== seq.current) return null;
+      // Sin red (o el server reiniciando): que se diga y se pueda reintentar,
+      // no un botón que queda «cargando» para siempre.
+      setErrorCarga("No hay conexión con el sistema. Probá de nuevo en un momento.");
+      return null;
+    } finally {
+      setCargando(false);
+    }
   }, [slug, cajaId]);
+
+  const reiniciarConteo = () => {
+    setTotal("");
+    setConteo({});
+    setNotes("");
+  };
 
   useEffect(() => {
     if (!open) {
-      setClosing("");
-      setNotes("");
-      setRetirar(true);
-      setConteo({});
-      setConteoAbierto(false);
+      seq.current++;
+      reiniciarConteo();
+      setFase("contar");
+      setForma("billete");
+      setRecuentos([]);
+      setCambio(null);
       setData(null);
       return;
     }
     void cargar();
   }, [open, cargar]);
 
-  // El conteo por billete manda sobre el campo libre mientras esté abierto:
-  // `denomination_count` existe desde el día 1 y la UI nunca la escribió (D10).
-  const totalConteo = DENOMINACIONES.reduce(
-    (acc, d) => acc + d * (Number(conteo[String(d)]) || 0),
+  const totalBilletes = DENOMINACIONES.reduce(
+    (acc, d) => acc + d * cantidadBilletes(conteo[String(d)]),
     0,
   );
-  const usandoConteo = conteoAbierto && totalConteo > 0;
-  const cents = usandoConteo
-    ? totalConteo * 100
-    : closing === ""
-      ? null
-      : Math.max(0, Math.round(Number(closing) * 100));
+  // Un campo tocado cuenta, aunque sea «0»: un día sin efectivo se declara en
+  // $0, no se queda sin poder seguir.
+  const tocoBilletes = DENOMINACIONES.some((d) => (conteo[String(d)] ?? "") !== "");
+  const cents =
+    forma === "billete"
+      ? tocoBilletes
+        ? totalBilletes * 100
+        : null
+      : total === "" || !Number.isFinite(Number(total))
+        ? null
+        : Math.max(0, Math.round(Number(total) * 100));
 
-  const stats = data?.stats;
-  // Spec 177 · Parte C — el cierre retira lo CONTADO menos el fondo, y nunca
-  // menos de $0: una noche floja puede cerrar por debajo del fondo, y ahí no se
-  // retira nada en vez de inventar una sangría negativa. Es la misma cuenta que
-  // hace `cerrar_caja_tx`; acá es para que el encargado vea lo que va a sacar.
   const fondo = data?.fondo_fijo_cents ?? 0;
   const aRetirar = Math.max(0, (cents ?? 0) - fondo);
-  const expected = stats?.expected_cash_cents ?? 0;
-  const diff = cents === null ? 0 : cents - expected;
-  const requiresNotes = cents !== null && diff !== 0;
-  const faltanRendir = data?.deben_rendir ?? [];
-  // Spec 139 · D1 — cerrar el día dejando a un mozo sin resolver deja plata
-  // flotando en una columna que mañana ya no se mira. Resolver puede ser
-  // «rindió» o «no entregó», pero no «lo salteo».
-  const bloqueado =
-    (data?.cuentas_abiertas.length ?? 0) > 0 || faltanRendir.length > 0;
-  const puedeCerrar =
-    !!data &&
-    !bloqueado &&
-    cents !== null &&
-    !(requiresNotes && notes.trim() === "") &&
-    !enviando;
+  const deberiaHaber = cambio?.esperado ?? data?.stats.expected_cash_cents ?? 0;
+  const diff = cents === null ? 0 : cents - deberiaHaber;
+  const veredicto = veredictoDiferencia(diff);
+
+  // Lo mismo que bloquea en la action y en `cerrar_caja_tx`. Normalmente la
+  // franja ya lo resolvió; esto cubre la carrera (alguien abrió una mesa o
+  // cobró mientras el modal estaba abierto).
+  const bloqueantes = data
+    ? {
+        mesas: data.cuentas_abiertas,
+        mozos: data.deben_rendir,
+      }
+    : { mesas: [], mozos: [] };
+  const bloqueado = bloqueantes.mesas.length > 0 || bloqueantes.mozos.length > 0;
 
   const denomCount = (): Record<string, number> | null => {
+    if (forma !== "billete") return null;
     const entries = DENOMINACIONES.map((d) => [
       String(d),
-      Number(conteo[String(d)]) || 0,
+      cantidadBilletes(conteo[String(d)]),
     ] as const).filter(([, n]) => n > 0);
     return entries.length > 0 ? Object.fromEntries(entries) : null;
   };
 
-  const submit = () => {
+  const listoConte = async () => {
     if (cents === null) return;
+    // Se re-lee al terminar de contar: el «debería haber» que se muestra es el
+    // de ahora, no el de cuando se abrió el modal.
+    setCambio(null);
+    if (await cargar()) setFase("resultado");
+  };
+
+  const volverAContar = () => {
+    // La action acepta hasta 20: se guardan los últimos, que son los que
+    // explican el cierre.
+    if (cents !== null) setRecuentos((r) => [...r, cents].slice(-20));
+    reiniciarConteo();
+    setCambio(null);
+    setFase("contar");
+  };
+
+  const cerrar = () => {
+    if (cents === null || !data) return;
     startTransition(async () => {
-      const r = await cerrarCaja({
+      let r: Awaited<ReturnType<typeof cerrarCaja>>;
+      try {
+        r = await cerrarCaja({
         cajaId,
         closing_cash_cents: cents,
         closing_notes: notes.trim() || null,
         denomination_count: denomCount(),
-        retirar,
+        retirar: true,
         businessSlug: slug,
-      });
+        expected_visto_cents: deberiaHaber,
+        recuentos_cents: recuentos,
+        });
+      } catch {
+        toast.error("No hay conexión con el sistema: la caja no se cerró. Probá de nuevo.");
+        return;
+      }
       if (!r.ok) {
+        if ("esperado_actual_cents" in r) {
+          setCambio({ esperado: r.esperado_actual_cents, delta: r.delta_cents });
+          return;
+        }
         toast.error(r.error);
-        // Puede haber cambiado el salón mientras el modal estaba abierto: se
-        // recarga para que la lista de mesas diga la verdad de ahora.
         void cargar();
         return;
       }
-      const partes = [
-        r.data.retiro_cents > 0
-          ? `retiraste ${formatCurrency(r.data.retiro_cents)}`
-          : "sin retiro",
-      ];
-      if (r.data.mesasLiberadas > 0) {
-        partes.push(`${r.data.mesasLiberadas} mesas liberadas`);
-      }
-      toast.success(`Caja cerrada — ${partes.join(" · ")}.`);
       onOpenChange(false);
       onCerrada();
+      router.push(`/${slug}/admin/caja/cierres/${r.data.corte.id}?recien=1`);
     });
   };
 
+  const faltaMotivo = diff !== 0 && notes.trim() === "";
+
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent size="xl">
-        <ModalHeader title="Cerrar caja" eyebrow={cajaName} icon={<Lock />} />
+      <ModalContent size="lg">
+        <ModalHeader title={TXT.cerrarCaja} eyebrow={cajaName} icon={<Lock />} />
         <ModalBody>
-        {cargando && !data && (
-          <div className="space-y-3 py-6">
-            <div className="h-24 animate-pulse rounded-2xl bg-muted" />
-            <div className="h-32 animate-pulse rounded-2xl bg-muted" />
-          </div>
-        )}
+          {cargando && !data && (
+            <div className="space-y-3 py-6">
+              <div className="bg-muted h-24 animate-pulse rounded-2xl" />
+            </div>
+          )}
 
-        {errorCarga && (
-          <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900 ring-1 ring-rose-200">
-            {errorCarga}
-          </p>
-        )}
+          {errorCarga && (
+            <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-900 ring-1 ring-rose-200">
+              {errorCarga}
+            </p>
+          )}
 
-        {data && stats && (
-          <div className="space-y-5">
-            {/* ── 1 · La plata del período ───────────────────────── */}
-            <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-              <SectionLabel>La plata del período</SectionLabel>
-              <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-foreground">
-                {formatCurrency(stats.total_ventas_cents)}
-              </p>
-              <p className="mt-1 text-xs text-foreground/70">
-                {stats.cobros_count}{" "}
-                {stats.cobros_count === 1 ? "cobro" : "cobros"}
-                {/* La propina no está adentro de ese número: es plata del mozo
-                    que pasó por la caja, no una venta del local (spec 098). */}
-                {stats.total_propinas_cents > 0 &&
-                  ` · más ${formatCurrency(stats.total_propinas_cents)} de propina`}
-              </p>
+          {data && bloqueado && (
+            <Bloqueantes
+              slug={slug}
+              mesas={bloqueantes.mesas}
+              mozos={bloqueantes.mozos}
+              onVolver={() => onOpenChange(false)}
+            />
+          )}
 
-              {stats.cobros_count > 0 && (
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <VentasPorMetodo porMetodo={stats.ventas_por_metodo} />
-                  <div>
-                    <SectionLabel>Por origen</SectionLabel>
-                    <CobrosPorOrigen
-                      porOrigen={stats.ventas_por_origen}
-                      porOrigenYMetodo={stats.ventas_por_origen_y_metodo}
-                    />
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* ── 2 · Quién la tiene ─────────────────────────────── */}
-            <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-              <div className="flex items-baseline justify-between gap-3">
-                <SectionLabel>Quién tiene el efectivo</SectionLabel>
-                <p className="text-sm font-semibold tabular-nums text-foreground">
-                  {formatCurrency(expected)}
+          {data && !bloqueado && fase === "contar" && (
+            <form
+              id="cierre-contar"
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void listoConte();
+              }}
+            >
+              <div>
+                <p className="text-foreground text-base font-semibold">
+                  Contá la plata del cajón
                 </p>
-              </div>
-
-              <ul className="mt-3 divide-y divide-border/60 rounded-lg ring-1 ring-border/70">
-                <li className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <span className="inline-flex items-center gap-2 text-sm text-foreground/80">
-                    <Wallet className="size-3.5 text-muted-foreground/70" />
-                    <span className="font-medium">En el cajón</span>
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
-                    {formatCurrency(data.reparto.en_cajon_cents)}
-                  </span>
-                </li>
-                {/* Spec 139 · D4 — la lista sale de `deben_rendir` y no del
-                    reparto: el que cobró toda la noche con tarjeta tiene $0 de
-                    efectivo y también tiene que cerrar su período. */}
-                {faltanRendir.map((m) => (
-                  <MozoPendienteRow
-                    key={m.mozo_id}
-                    mozoId={m.mozo_id}
-                    nombre={m.mozo_name}
-                    efectivoCents={m.efectivo_cents}
-                    ticketsCents={m.tickets_cents}
-                    slug={slug}
-                    onRendido={cargar}
-                  />
-                ))}
-              </ul>
-
-              {data.reparto.descuadre_cents > 0 && (
-                <p className="mt-2 text-xs text-amber-700">
-                  Hay {formatCurrency(data.reparto.descuadre_cents)} sin rendir
-                  que ya no están esperados en la caja — probablemente se
-                  sangraron antes de que el mozo entregara.
+                <p className="text-muted-foreground mt-0.5 text-sm">
+                  Contá sin mirar el sistema: cuánto debería haber te lo
+                  mostramos cuando termines.
                 </p>
-              )}
-
-              <p className="mt-2 text-xs text-muted-foreground">
-                Rendir no cambia el total: pasa la plata de la columna del mozo
-                a la del cajón.
-              </p>
-
-              {faltanRendir.length > 0 && (
-                <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
-                  <span className="font-semibold">
-                    {faltanRendir.length === 1
-                      ? "Falta 1 rendición para poder cerrar."
-                      : `Faltan ${faltanRendir.length} rendiciones para poder cerrar.`}
-                  </span>{" "}
-                  Si alguien ya se fue, marcá «No entregó» con el motivo: queda
-                  como deuda a la vista, no como un número inventado.
-                </p>
-              )}
-
-              {data.sin_operadores && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Nadie figura como operador de esta caja, así que todos los que
-                  cobraron tienen que rendir —{" "}
-                  <Link
-                    href={`/${slug}/admin/operacion?tab=cajas`}
-                    className="font-semibold underline underline-offset-2"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    asigná la caja
-                  </Link>{" "}
-                  a quien la atiende y deja de aparecer en esta lista.
-                </p>
-              )}
-
-              {bloqueado && (
-                <div className="mt-4 rounded-xl bg-rose-50 p-4 ring-1 ring-rose-200">
-                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-rose-900">
-                    <AlertTriangle className="size-4" />
-                    {data.cuentas_abiertas.length === 1
-                      ? "Hay una mesa con la cuenta abierta"
-                      : `Hay ${data.cuentas_abiertas.length} mesas con la cuenta abierta`}
+                {recuentos.length > 0 && (
+                  <p className="mt-2 text-xs font-medium text-amber-800">
+                    Recuento {recuentos.length + 1}: empezá de cero.
                   </p>
-                  <ul className="mt-2 space-y-1">
-                    {data.cuentas_abiertas.map((c) => (
-                      <li
-                        key={c.order_id}
-                        className="flex items-baseline justify-between gap-3 text-sm text-rose-900"
-                      >
-                        <span>
-                          Mesa {c.table_label}
-                          {c.mozo_name && (
-                            <span className="text-rose-700"> · {c.mozo_name}</span>
-                          )}
-                        </span>
-                        <span className="font-semibold tabular-nums">
-                          {formatCurrency(c.pendiente_cents)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href={`/${slug}/admin/operacion?tab=salon`}
-                    className="mt-3 inline-flex text-xs font-semibold text-rose-900 underline underline-offset-2"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Ir al salón a cobrarlas
-                  </Link>
-                </div>
-              )}
-
-              {data.pedidos_abiertos.length > 0 && (
-                <p className="mt-3 text-xs text-foreground/70">
-                  {data.pedidos_abiertos.length === 1
-                    ? "Queda 1 pedido de delivery / take away abierto"
-                    : `Quedan ${data.pedidos_abiertos.length} pedidos de delivery / take away abiertos`}
-                  . No frenan el cierre: si se cobran después, entran en el
-                  período nuevo.
-                </p>
-              )}
-            </section>
-
-            {/* ── 3 · Contar y cerrar ────────────────────────────── */}
-            <section className="rounded-2xl bg-muted/50 p-5 ring-1 ring-border/70">
-              <SectionLabel>Contar y cerrar</SectionLabel>
-
-              <div className="mt-3 grid gap-1.5">
-                <Label htmlFor="cierre-contado" className="text-sm font-medium">
-                  Efectivo contado en el cajón
-                </Label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground/70">
-                    $
-                  </span>
-                  <Input
-                    id="cierre-contado"
-                    type="number"
-                    value={usandoConteo ? String(totalConteo) : closing}
-                    onChange={(e) => setClosing(e.target.value)}
-                    disabled={usandoConteo}
-                    placeholder="0"
-                    autoFocus
-                    inputMode="decimal"
-                    className="pl-7 text-base tabular-nums"
-                  />
-                </div>
+                )}
               </div>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-3"
-                onClick={() => setConteoAbierto((v) => !v)}
+              <div
+                role="group"
+                aria-label="Cómo contás"
+                className="bg-muted inline-flex rounded-full p-1 text-sm"
               >
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 transition",
-                    conteoAbierto && "rotate-180",
-                  )}
-                />
-                Contar por billete (opcional)
-              </Button>
+                {(
+                  [
+                    ["billete", "Por billete"],
+                    ["total", "El total"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={forma === k}
+                    onClick={() => setForma(k)}
+                    className={cn(
+                      "rounded-full px-4 py-1.5 font-medium transition",
+                      forma === k
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-              {conteoAbierto && (
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  {DENOMINACIONES.map((d) => (
+              {forma === "billete" ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {DENOMINACIONES.map((d, i) => (
                     <label key={d} className="grid gap-1">
-                      <span className="text-[0.7rem] font-semibold text-muted-foreground">
-                        {formatCurrency(d * 100)}
+                      <span className="text-muted-foreground text-[0.7rem] font-semibold">
+                        Billetes de {formatCurrency(d * 100)}
                       </span>
                       <Input
                         type="number"
                         min={0}
+                        step={1}
                         value={conteo[String(d)] ?? ""}
                         onChange={(e) =>
                           setConteo((c) => ({ ...c, [String(d)]: e.target.value }))
                         }
                         placeholder="0"
                         inputMode="numeric"
+                        autoFocus={i === 0}
                         className="tabular-nums"
                       />
                     </label>
                   ))}
+                  <p className="text-foreground col-span-full mt-1 flex items-center justify-between gap-3 text-sm">
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                      onClick={() => {
+                        setForma("total");
+                        setTotal("0");
+                      }}
+                    >
+                      No hay efectivo en el cajón
+                    </button>
+                    <span>
+                    Total contado:{" "}
+                    <span className="font-semibold tabular-nums">
+                      {formatCurrency(totalBilletes * 100)}
+                    </span>
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="cierre-contado" className="text-sm font-medium">
+                    Efectivo contado
+                  </Label>
+                  <div className="relative">
+                    <span className="text-muted-foreground/70 pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base font-semibold">
+                      $
+                    </span>
+                    <Input
+                      id="cierre-contado"
+                      type="number"
+                      value={total}
+                      onChange={(e) => setTotal(e.target.value)}
+                      placeholder="0"
+                      autoFocus
+                      inputMode="decimal"
+                      className="pl-7 text-base tabular-nums"
+                    />
+                  </div>
                 </div>
               )}
+            </form>
+          )}
 
-              {cents !== null && diff !== 0 && (
+          {data && !bloqueado && fase === "resultado" && cents !== null && (
+            <div className="space-y-4">
+              {cambio && (
+                <p
+                  role="status"
+                  className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200"
+                >
+                  {cambio.delta >= 0 ? "Entraron" : "Salieron"}{" "}
+                  <span className="font-semibold tabular-nums">
+                    {formatCurrency(Math.abs(cambio.delta))}
+                  </span>{" "}
+                  en efectivo mientras contabas. No hace falta recontar: la
+                  diferencia ya está recalculada.
+                </p>
+              )}
+
+              <dl className="ring-border/70 divide-border/60 divide-y rounded-xl ring-1">
+                <Fila label={TXT.contado} cents={cents} />
+                <Fila label={TXT.deberiaHaber} cents={deberiaHaber} />
                 <div
                   className={cn(
-                    "mt-4 flex items-center justify-between rounded-lg p-3 ring-1",
-                    diff < 0
-                      ? "bg-rose-50 text-rose-900 ring-rose-200"
-                      : "bg-amber-50 text-amber-900 ring-amber-200",
+                    "flex items-center justify-between rounded-b-xl px-4 py-3",
+                    veredicto.tono === "falta" && "bg-rose-50 text-rose-900",
+                    veredicto.tono === "sobra" && "bg-amber-50 text-amber-900",
+                    veredicto.tono === "cuadra" && "bg-emerald-50 text-emerald-900",
                   )}
                 >
-                  <span className="text-sm font-semibold">
-                    {diff < 0 ? "Te falta" : "Te sobra"}
-                  </span>
-                  <span className="text-lg font-bold tabular-nums">
-                    {diff > 0 ? "+" : "−"}
-                    {formatCurrency(Math.abs(diff))}
-                  </span>
+                  <dt className="text-base font-semibold">{veredicto.label}</dt>
+                  <dd className="text-xl font-bold tabular-nums">
+                    {veredicto.tono === "cuadra"
+                      ? "✓"
+                      : formatCurrency(veredicto.montoCents)}
+                  </dd>
                 </div>
-              )}
+              </dl>
 
-              {cents !== null && diff === 0 && (
-                <div className="mt-4 flex items-center justify-between rounded-lg bg-emerald-50 p-3 text-emerald-900 ring-1 ring-emerald-200">
-                  <span className="text-sm font-semibold">Cuadra perfecto</span>
-                  <Banknote className="size-4" />
-                </div>
-              )}
-
-              {requiresNotes && (
-                <div className="mt-3 grid gap-1.5">
+              {diff !== 0 && (
+                <div className="grid gap-1.5">
                   <Label htmlFor="cierre-motivo" className="text-sm font-medium">
                     ¿Qué pasó?<span className="ml-1 text-rose-600">*</span>
                   </Label>
@@ -442,83 +405,89 @@ export function CerrarCajaModal({
                     rows={2}
                     placeholder="Vuelto mal dado, billete falso, propina mal cargada…"
                   />
+                  <p className="text-muted-foreground text-xs">
+                    ¿Te parece que contaste mal? Volvé a contar: el primer
+                    conteo queda registrado en el resumen.
+                  </p>
                 </div>
               )}
 
-              {/* D2 de la spec 130 decía «se retira todo o nada, sin fondo de
-                  cambio configurable: es una decisión menos a la 1 de la
-                  mañana». La spec 177 · Parte C lo revierte sin perder ese
-                  argumento: el fondo está CONFIGURADO, así que acá no hay nada
-                  que decidir — el cierre lo aplica solo y el cartel lo dice. */}
-              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-card p-3 ring-1 ring-border">
-                <input
-                  type="checkbox"
-                  checked={retirar}
-                  onChange={(e) => setRetirar(e.target.checked)}
-                  className="mt-0.5 size-4 accent-primary"
-                />
-                <span>
-                  <span className="block text-sm font-semibold text-foreground">
-                    {fondo > 0 ? "Retirar el efectivo" : "Retirar todo el efectivo"}
-                    {cents !== null && cents > 0 && (
-                      <span className="tabular-nums">
-                        {" "}
-                        — {formatCurrency(aRetirar)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-foreground/70">
-                    {!retirar
-                      ? "La caja queda con lo contado — es el arqueo de mitad de turno."
-                      : fondo > 0
-                        ? `Se registra como sangría del cierre y quedan ${formatCurrency(Math.min(fondo, cents ?? 0))} de fondo para el próximo turno.`
-                        : "Se registra como sangría del cierre y la caja arranca en $0."}
-                  </span>
+              <p className="text-foreground/70 text-xs">
+                Al cerrar se retiran{" "}
+                <span className="font-semibold tabular-nums">
+                  {formatCurrency(aRetirar)}
                 </span>
-              </label>
-
-              {data.barre_salon &&
-                (data.salon.mesas_a_liberar > 0 ||
-                  data.salon.mozos_asignados > 0) && (
-                  <p className="mt-3 text-xs text-foreground/70">
-                    Al cerrar:{" "}
-                    {data.salon.mesas_a_liberar > 0 && (
-                      <>
-                        se{" "}
-                        {data.salon.mesas_a_liberar === 1
-                          ? "libera 1 mesa"
-                          : `liberan ${data.salon.mesas_a_liberar} mesas`}
-                      </>
-                    )}
-                    {data.salon.mesas_a_liberar > 0 &&
-                      data.salon.mozos_asignados > 0 &&
-                      " y "}
-                    {data.salon.mozos_asignados > 0 && (
-                      <>
-                        se limpia la distribución de{" "}
-                        {data.salon.mozos_asignados === 1
-                          ? "1 mozo"
-                          : `${data.salon.mozos_asignados} mozos`}
-                      </>
-                    )}
-                    .
-                  </p>
-                )}
-            </section>
-          </div>
-        )}
+                {fondo > 0
+                  ? ` y quedan ${formatCurrency(Math.min(fondo, cents))} de fondo en el cajón`
+                  : " y la caja arranca en $0"}
+                {data.barre_salon && <AnuncioSalon salon={data.salon} />}. Sale
+                el papel del cierre por la comandera.
+              </p>
+            </div>
+          )}
         </ModalBody>
 
         <ModalFooter>
-          <Button variant="outline" size="xl" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button size="xl" disabled={!puedeCerrar} onClick={submit}>
-            <Lock className="mr-2 size-4" />
-            {retirar && cents !== null && cents > 0
-              ? `Cerrar caja y retirar ${formatCurrency(cents)}`
-              : "Cerrar caja sin retirar"}
-          </Button>
+          {data && !bloqueado && fase === "contar" && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="xl"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                form="cierre-contar"
+                size="xl"
+                disabled={cents === null || cargando}
+              >
+                {cents === null ? "Cargá lo que contaste" : "Listo, conté"}
+              </Button>
+            </>
+          )}
+
+          {data && !bloqueado && fase === "resultado" && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="xl"
+                onClick={volverAContar}
+                disabled={enviando}
+              >
+                <RotateCcw className="mr-2 size-4" />
+                Volver a contar
+              </Button>
+              <Button
+                type="button"
+                size="xl"
+                disabled={enviando || faltaMotivo}
+                onClick={cerrar}
+              >
+                <Lock className="mr-2 size-4" />
+                {faltaMotivo
+                  ? "Escribí qué pasó para cerrar"
+                  : diff !== 0
+                    ? "Cerrar con esta diferencia"
+                    : `Cerrar caja y retirar ${formatCurrency(aRetirar)}`}
+              </Button>
+            </>
+          )}
+
+          {(!data || bloqueado) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="xl"
+              onClick={() => onOpenChange(false)}
+            >
+              <ArrowLeft className="mr-2 size-4" />
+              Volver
+            </Button>
+          )}
         </ModalFooter>
       </ModalContent>
     </Modal>
@@ -528,198 +497,101 @@ export function CerrarCajaModal({
 /** Billetes en circulación, del más grande al más chico. En pesos, no centavos. */
 const DENOMINACIONES = [20_000, 10_000, 2_000, 1_000, 500, 200, 100, 50];
 
-/**
- * Un mozo que todavía no rindió, con su monto a la vista y dos salidas (spec
- * 139 · D1, D2).
- *
- * Se rinde desde acá para que el cierre sea un solo flujo —rendís, contás,
- * retirás— en vez de mandar al encargado a otra tab y volver. Y ahora **frena**
- * el cierre: hasta que cada uno esté resuelto, el botón de cerrar está apagado.
- *
- * Las dos salidas son «rindió» (con el monto tipeado, D2) y «no entregó» (con
- * el motivo, D1). La segunda existe para que la obligación no termine
- * inventando una rendición que cuadre cuando el mozo ya se fue.
- */
-function MozoPendienteRow({
-  mozoId,
-  nombre,
-  efectivoCents,
-  ticketsCents,
-  slug,
-  onRendido,
-}: {
-  mozoId: string;
-  nombre: string;
-  efectivoCents: number;
-  ticketsCents: number;
-  slug: string;
-  onRendido: () => void;
-}) {
-  const [modo, setModo] = useState<null | "rendir" | "no_entrego">(null);
-  const [entregado, setEntregado] = useState("");
-  const [notas, setNotas] = useState("");
-  const [enviando, startTransition] = useTransition();
+/** Cantidad de billetes: entera y no negativa («1.5» o «-2» no son billetes). */
+function cantidadBilletes(v: string | undefined): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+}
 
-  // D2 · sin precarga. Antes, el campo vacío rendía el esperado exacto: apretar
-  // el botón sin tocar nada daba siempre diferencia $0, y una conciliación que
-  // se autocompleta no concilia.
-  const cents =
-    entregado === "" ? null : Math.max(0, Math.round(Number(entregado) * 100));
-  const diff = cents === null ? 0 : cents - efectivoCents;
-  const faltaMotivo = notas.trim() === "";
-
-  const abrir = (m: "rendir" | "no_entrego") => {
-    setModo((actual) => (actual === m ? null : m));
-    setEntregado("");
-    setNotas("");
-  };
-
-  const registrar = (estado: "rendida" | "no_entrego") => {
-    const monto = estado === "no_entrego" ? 0 : (cents ?? 0);
-    startTransition(async () => {
-      const r = await registrarRendicionMozo(
-        mozoId,
-        monto,
-        notas.trim() || null,
-        slug,
-        estado,
-      );
-      if (!r.ok) {
-        toast.error(r.error);
-        return;
-      }
-      toast.success(
-        estado === "no_entrego"
-          ? `${nombre} quedó como «no entregó»`
-          : `${nombre} rindió ${formatCurrency(monto)}`,
-      );
-      setModo(null);
-      onRendido();
-    });
-  };
-
+function Fila({ label, cents }: { label: string; cents: number }) {
   return (
-    <li className="px-3 py-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-foreground/80">
-          <User className="size-3.5 shrink-0 text-muted-foreground/70" />
-          <span className="truncate font-medium">{nombre}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">· sin rendir</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-3">
-          <span className="text-right">
-            <span className="block text-sm font-semibold tabular-nums text-foreground">
-              {formatCurrency(efectivoCents)}
-            </span>
-            {/* El que cobró todo con tarjeta rinde $0 de efectivo, pero rinde:
-                cierra su período y entrega los tickets (D4). */}
-            {efectivoCents === 0 && ticketsCents > 0 && (
-              <span className="block text-[0.7rem] text-muted-foreground">
-                sólo tickets
-              </span>
-            )}
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => abrir("rendir")}
-          >
-            {modo === "rendir" ? "Cancelar" : "Rendir"}
-          </Button>
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="text-muted-foreground hover:text-rose-700"
-            onClick={() => abrir("no_entrego")}
-          >
-            {modo === "no_entrego" ? "Cancelar" : "No entregó"}
-          </Button>
-        </span>
-      </div>
+    <div className="flex items-center justify-between px-4 py-3">
+      <dt className="text-foreground/80 text-sm">{label}</dt>
+      <dd className="text-foreground text-lg font-semibold tabular-nums">
+        {formatCurrency(cents)}
+      </dd>
+    </div>
+  );
+}
 
-      {modo === "rendir" && (
-        <div className="mt-2 grid gap-2 rounded-lg bg-muted/50 p-3 ring-1 ring-border/70">
-          <Label htmlFor={`rendir-${mozoId}`} className="text-xs font-medium">
-            Efectivo que entrega
-          </Label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground/70">
-              $
-            </span>
-            <Input
-              id={`rendir-${mozoId}`}
-              type="number"
-              value={entregado}
-              onChange={(e) => setEntregado(e.target.value)}
-              placeholder="0"
-              autoFocus
-              inputMode="decimal"
-              className="pl-7 tabular-nums"
-            />
-          </div>
-          {cents !== null && diff !== 0 && (
-            <>
-              <p
-                className={cn(
-                  "text-xs font-semibold",
-                  diff < 0 ? "text-rose-700" : "text-amber-700",
-                )}
-              >
-                {diff < 0 ? "Entrega de menos" : "Entrega de más"}{" "}
-                {formatCurrency(Math.abs(diff))} — registrá el motivo.
-              </p>
-              <Textarea
-                value={notas}
-                onChange={(e) => setNotas(e.target.value)}
-                rows={2}
-                placeholder="Se quedó con la propina, adelanto, vuelto…"
-              />
-            </>
-          )}
-          <Button
-            size="sm"
-            disabled={
-              enviando || cents === null || (diff !== 0 && faltaMotivo)
-            }
-            onClick={() => registrar("rendida")}
-          >
-            Registrar rendición
-          </Button>
-        </div>
-      )}
+function AnuncioSalon({
+  salon,
+}: {
+  salon: CierreCajaData["salon"];
+}) {
+  const partes: string[] = [];
+  if (salon.mesas_a_liberar > 0) {
+    partes.push(
+      salon.mesas_a_liberar === 1
+        ? "se libera 1 mesa"
+        : `se liberan ${salon.mesas_a_liberar} mesas`,
+    );
+  }
+  if (salon.mozos_asignados > 0) {
+    partes.push(
+      `se limpia la distribución de ${salon.mozos_asignados === 1 ? "1 mozo" : `${salon.mozos_asignados} mozos`}`,
+    );
+  }
+  return partes.length > 0 ? <>; {partes.join(" y ")}</> : null;
+}
 
-      {modo === "no_entrego" && (
-        <div className="mt-2 grid gap-2 rounded-lg bg-rose-50 p-3 ring-1 ring-rose-200">
-          <p className="text-xs text-rose-900">
-            Queda como deuda de {nombre} por{" "}
-            <span className="font-semibold tabular-nums">
-              {formatCurrency(efectivoCents)}
+/**
+ * Lo que falta antes de contar. La franja «Cierre del día» ya lo muestra, así
+ * que esto sólo aparece si cambió algo con el modal abierto: dice qué falta y
+ * lleva a resolverlo, en vez de dejar un botón apagado.
+ */
+function Bloqueantes({
+  slug,
+  mesas,
+  mozos,
+  onVolver,
+}: {
+  slug: string;
+  mesas: CierreCajaData["cuentas_abiertas"];
+  mozos: CierreCajaData["deben_rendir"];
+  onVolver: () => void;
+}) {
+  return (
+    <div className="rounded-xl bg-rose-50 p-4 text-rose-950 ring-1 ring-rose-200">
+      <p className="inline-flex items-center gap-2 text-sm font-semibold">
+        <AlertTriangle className="size-4" />
+        Antes de contar falta:
+      </p>
+      <ul className="mt-2 space-y-1.5 text-sm">
+        {mesas.map((m) => (
+          <li key={m.order_id} className="flex items-center justify-between gap-3">
+            <span>
+              Cobrar la mesa {m.table_label}
+              {m.mozo_name && <span className="text-rose-800"> · {m.mozo_name}</span>}
             </span>
-            , a la vista en el cierre y avisada al dueño.
-          </p>
-          <Label htmlFor={`no-entrego-${mozoId}`} className="text-xs font-medium">
-            ¿Por qué?<span className="ml-1 text-rose-600">*</span>
-          </Label>
-          <Textarea
-            id={`no-entrego-${mozoId}`}
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            rows={2}
-            autoFocus
-            placeholder="Se fue temprano, rinde mañana…"
-          />
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={enviando || faltaMotivo}
-            onClick={() => registrar("no_entrego")}
-          >
-            Marcar como no entregó
-          </Button>
-        </div>
+            <IntentLink
+              href={`/${slug}/admin/mesa/${m.table_id}/cobrar`}
+              className="shrink-0 font-semibold underline underline-offset-2"
+              onClick={onVolver}
+              aria-label={`Cobrar mesa ${m.table_label}, ${formatCurrency(m.pendiente_cents)}`}
+            >
+              Cobrar {formatCurrency(m.pendiente_cents)}
+            </IntentLink>
+          </li>
+        ))}
+        {mozos.map((m) => (
+          <li key={m.mozo_id} className="flex items-center justify-between gap-3">
+            <span>Rendir a {m.mozo_name}</span>
+            <button
+              type="button"
+              className="shrink-0 font-semibold underline underline-offset-2"
+              onClick={onVolver}
+            >
+              Ir a rendir
+            </button>
+          </li>
+        ))}
+      </ul>
+      {mozos.length > 0 && (
+        <p className="mt-3 text-xs text-rose-900">
+          Las rendiciones se hacen desde «Cierre del día», arriba de la caja.
+        </p>
       )}
-    </li>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ScrollText, TriangleAlert } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ScrollText, TriangleAlert } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale";
 
@@ -12,6 +12,7 @@ import { duracionDelTurno } from "@/lib/caja/formato-cierre";
 import { diaOperativoDe } from "@/lib/caja/rango-fechas";
 import type { ResumenDeCorte } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
+import { TXT } from "@/lib/caja/textos";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,10 +26,16 @@ export function ResumenDeCierre({
   slug,
   timezone,
   resumen,
+  recien,
 }: {
   slug: string;
   timezone: string;
   resumen: ResumenDeCorte;
+  /**
+   * Spec 209 · R7 — se llega acá recién cerrada la caja. Antes el cierre
+   * terminaba en un toast y este resumen había que ir a buscarlo.
+   */
+  recien?: { retiro_cents: number; hayComandera: boolean } | null;
 }) {
   const { corte, stats } = resumen;
   const d = stats.desglose_esperado;
@@ -58,8 +65,34 @@ export function ResumenDeCierre({
         .sort((a, b) => b.valor - a.valor)
     : [];
 
+  const recuentos = corte.resumen?.recuentos_cents ?? [];
+
   return (
     <div className="space-y-7">
+      {recien && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-5 py-4 text-emerald-950 ring-1 ring-emerald-200"
+        >
+          <p className="inline-flex items-center gap-2 text-sm font-semibold">
+            <CheckCircle2 className="size-5 text-emerald-600" />
+            Caja cerrada
+            {recien.retiro_cents > 0 &&
+              ` · retiraste ${formatCurrency(recien.retiro_cents)}`}
+          </p>
+          <p className="text-xs text-emerald-900">
+            {recien.hayComandera
+              ? "El papel del cierre sale por la comandera."
+              : "No hay comandera configurada para el cierre: imprimilo desde «Reimprimir» cuando la haya."}{" "}
+            <Link
+              href={`/${slug}/admin/operacion?tab=caja`}
+              className="font-semibold underline underline-offset-2"
+            >
+              Volver a la caja
+            </Link>
+          </p>
+        </div>
+      )}
       <header className="space-y-3">
         <Link
           href={`/${slug}/admin/caja/cierres`}
@@ -133,17 +166,17 @@ export function ResumenDeCierre({
       {/* ── El veredicto ─────────────────────────────────────── */}
       <section className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl bg-zinc-800 ring-1 ring-zinc-900 sm:grid-cols-3">
         <Veredicto
-          label="Efectivo que debía haber"
+          label={TXT.deberiaHaber}
           value={formatCurrency(corte.expected_cash_cents)}
           hint="Calculado por el sistema"
         />
         <Veredicto
-          label="Efectivo contado"
+          label={TXT.contado}
           value={formatCurrency(corte.closing_cash_cents)}
           hint={conteo ? "Conteo por billete" : "Monto declarado"}
         />
         <Veredicto
-          label="Diferencia"
+          label={TXT.diferencia}
           value={`${corte.difference_cents > 0 ? "+" : ""}${formatCurrency(corte.difference_cents)}`}
           hint={
             corte.difference_cents === 0
@@ -221,7 +254,7 @@ export function ResumenDeCierre({
             =
           </span>
           <Sumando
-            label="Esperado"
+            label={TXT.deberiaHaber}
             cents={corte.expected_cash_cents}
             hint="Lo que debía estar en el cajón"
             destacado
@@ -318,6 +351,23 @@ export function ResumenDeCierre({
               Este cierre se registró con el monto total, sin desglosar por
               billete.
             </p>
+          )}
+          {/* Spec 209 · R4 — el conteo es ciego: un recuento dice qué dio la
+              primera vez, antes de saber cuánto debería haber. */}
+          {recuentos.length > 0 && (
+            <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
+              <p className="text-sm font-semibold text-amber-950">
+                Se volvió a contar {recuentos.length === 1 ? "1 vez" : `${recuentos.length} veces`}
+              </p>
+              <ul className="mt-1 space-y-0.5 text-sm text-amber-900">
+                {recuentos.map((c, i) => (
+                  <li key={i} className="flex justify-between gap-3 tabular-nums">
+                    <span>Conteo {i + 1} (descartado)</span>
+                    <span>{formatCurrency(c)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
@@ -439,7 +489,7 @@ export function ResumenDeCierre({
                   <p className="truncate text-sm font-medium text-zinc-900">
                     {r.mozo_name}
                   </p>
-                  <Celda label="Efectivo esperado" cents={r.expected_cash_cents} tenue />
+                  <Celda label="Tenía que entregar" cents={r.expected_cash_cents} tenue />
                   <Celda label="Entregó" cents={r.delivered_cash_cents} />
                   <div className="hidden justify-end sm:flex">
                     <Diferencia cents={r.difference_cents} />

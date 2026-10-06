@@ -161,13 +161,16 @@ export async function getCajaTabData(
 export async function getCierreCajaTabData(
   slug: string,
   cajaId: string,
+  opts: { sinReparto?: boolean } = {},
 ): Promise<ActionResult<CierreCajaData>> {
   const ctx = await requireOperacionContext(slug, {
     soloSupervision: true,
   });
   if (!ctx.ok) return ctx;
 
-  const data = await getCierreCajaData(cajaId, ctx.data.businessId);
+  const data = await getCierreCajaData(cajaId, ctx.data.businessId, {
+    sinReparto: opts.sinReparto === true,
+  });
   if (!data) return actionError("Caja no encontrada.");
   return actionOk(data);
 }

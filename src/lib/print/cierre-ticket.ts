@@ -55,6 +55,11 @@ export type CierreTicketData = {
     propinas_cents: number;
   };
   notas?: string | null;
+  /**
+   * Spec 209 · R4 — los conteos descartados con «Volver a contar». El conteo es
+   * ciego, así que un recuento es información: dice qué dio la primera vez.
+   */
+  recuentos_cents?: number[];
   /** Sale marcado, igual que la cuenta (080) y la factura (084). */
   reimpresion?: boolean;
 };
@@ -233,6 +238,9 @@ export function buildCierreLines(d: CierreTicketData): Line[] {
   push(fila("EFECTIVO ESPERADO", monto(r.esperado_cents)), { bold: true });
   push(fila("CONTADO", monto(r.contado_cents)), { bold: true });
   push(fila("DIFERENCIA", monto(r.diferencia_cents)), { bold: true });
+  (d.recuentos_cents ?? []).forEach((c, i) => {
+    push(fila(`Recontado ${i + 1} (descartado)`, monto(c)));
+  });
   push(RULE_COND);
   // Lo devengado del período, para contrastarlo con lo que se pagó arriba: si
   // no coinciden, quedó propina sin liquidar (spec 177).

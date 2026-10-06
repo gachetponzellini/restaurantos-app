@@ -127,6 +127,18 @@ describe("el papel del cierre", () => {
     expect(t).toContain("Apertura: 10:20 - Usuario: Sofía Ramírez");
   });
 
+  it("spec 209 · los recuentos van al papel, debajo de la diferencia", () => {
+    const t = texto(data({ recuentos_cents: [48_000_000, 48_500_000] }));
+    const i = t.findIndex((l) => l.startsWith("DIFERENCIA"));
+    expect(t[i + 1]).toMatch(/^Recontado 1.*480\.000,00$/);
+    expect(t[i + 2]).toMatch(/^Recontado 2.*485\.000,00$/);
+  });
+
+  it("contado una sola vez, no hay línea de recuento", () => {
+    const t = texto(data());
+    expect(t.some((l) => l.startsWith("Recontado"))).toBe(false);
+  });
+
   it("separa ingresos de egresos, con el motivo de cada uno", () => {
     const t = texto(data()).join("\n");
     expect(t).toContain("INGRESOS");

@@ -2,7 +2,8 @@
 
 **Issue:** [#379](https://github.com/gachetponzellini/RestaurantOS-app/issues/379) ·
 **Milestone:** Post-demo · Growth & hardening ·
-**Estado:** 📋 propuesto. Juan aprobó la dirección y el conteo ciego el 2026-10-06
+**Estado:** ✅ implementado (2026-10-06), falta el verify en la caja principal con
+mesas reales. Juan aprobó la dirección y el conteo ciego el 2026-10-06
 ([análisis](../../../../wiki/analyses/2026-10-06-cierre-y-rendicion-ux.md)).
 
 **Input:** Juan: *"hay que hacer que el proceso de cierre de caja y rendición sea
@@ -41,7 +42,9 @@ La plata cierra bien desde el epic #361. Lo que falla es el **camino** para lleg
   Las cajas no principales muestran sólo ③.
 
   `getCierreCajaData` hoy se pide recién al abrir el modal (`operacion/actions.ts:170`).
-  Pasa a cargarse con el board y a refrescarse con el mismo poll de 30 s de los stats.
+  Pasa a cargarse con el board: al activar la tab, después de cada cambio y cada
+  **60 s**, no en el tick de 30 s de los stats. Además va **sin reparto**
+  (`{ sinReparto: true }`), porque la franja no lo muestra y es la lectura cara.
 - **R2 · Un solo botón primario, que es el próximo paso.** Su texto cambia según el estado:
   - "Cobrar mesa 7";
   - "Rendir a Ana" (o "Faltan 3 rendiciones" si hay varias);
@@ -64,31 +67,44 @@ La plata cierra bien desde el epic #361. Lo que falla es el **camino** para lleg
      - **"Cerrar con esta diferencia"**: exige el motivo y aplica el techo del
        encargado, como hoy.
 
-  Cada conteo descartado se guarda en `resumen.recuentos` como `[{cents, at}]`. Se
-  muestra en el resumen archivado y en el papel como "Recontado: 1.º $X". No hace
-  falta migración: `resumen` ya es jsonb y lo arma `cerrarCaja` (`actions.ts:513`).
-- **R5 · "Contar sin cerrar" es una acción aparte.** Se saca el checkbox "Retirar
-  todo el efectivo" del cierre: cerrar **siempre** retira, respetando
-  `fondo_fijo_cents`. El arqueo de mitad de turno (`retirar: false`) pasa a ser
-  una acción secundaria del board, con el mismo flujo ciego y el CTA "Guardar arqueo".
+  Cada conteo descartado se guarda en `resumen.recuentos_cents` (en centavos y en
+  orden, hasta 20). Se muestra en el resumen archivado ("Se volvió a contar N
+  veces") y en el papel ("Recontado 1 (descartado)"). No hace falta migración:
+  `resumen` ya es jsonb y lo arma `cerrarCaja`.
+
+  Los billetes se cuentan como enteros no negativos. "No hay efectivo en el cajón"
+  declara $0 sin tener que buscar el otro modo.
+- **R5 · Cerrar siempre retira.** Se saca el checkbox "Retirar todo el efectivo":
+  cerrar retira lo contado menos `fondo_fijo_cents`.
+  ~~"Contar sin cerrar" como acción aparte~~ **descartado en la implementación**
+  (2026-10-06):
+  - En los últimos 60 días hubo 4 cierres sin retiro entre KCC y Golf, y no se
+    distingue si fueron arqueos a propósito o cierres por debajo del fondo.
+  - En la caja principal ese arqueo queda bloqueado por las mesas abiertas en
+    pleno servicio (`p_barrer_salon` depende de `is_default`, no de `retirar`).
+
+  `cerrarCaja` conserva el parámetro `retirar` por si vuelve.
 - **R6 · Si entró un cobro mientras contabas, no se recuenta.** Ante
   `EXPECTED_CHANGED:<n>`, `cerrarCaja` devuelve `{ code, esperado_cents,
   delta_cents }` en lugar de sólo texto (`actions.ts:586-591`). La pantalla de
   resultado se actualiza con "Entró $X en efectivo mientras contabas", recalcula
   la diferencia sobre lo ya contado y pide confirmar de nuevo.
 - **R7 · Después de cerrar va el resumen, no un toast.** Se navega a
-  `/{slug}/admin/caja/cierres/{corte.id}` con el banner "✓ Caja cerrada · retiraste $X".
-  - El banner suma "· el papel salió por la comandera" o "· no hay comandera
-    configurada", con la misma regla que `ReimprimirCierreBoton`.
-  - Si se liberaron mesas, lo dice.
+  `/{slug}/admin/caja/cierres/{corte.id}?recien=1` con el banner "✓ Caja cerrada ·
+  retiraste $X".
+  - El retiro sale del corte (el movimiento atado por `corte_id`), no de la URL.
+  - El banner sólo aparece hasta 10 minutos después del cierre.
+  - El aviso del papel usa `resolveCierrePrinter`: "sale por la comandera" o "no
+    hay comandera configurada".
+  - Las mesas liberadas se anuncian antes de cerrar, en la pantalla de resultado.
 - **R8 · Glosario único**, en board, modal, resumen y cierres:
 
   | Concepto | Término único |
   |---|---|
   | Lo que debería haber | **Debería haber** |
-  | Lo que hay | **Contaste** |
+  | Lo que hay | **Contado** |
   | La diferencia | **Falta / Sobra / Cuadra** |
-  | Las operaciones | **Cerrar caja** · **Contar sin cerrar** |
+  | Las operaciones | **Cerrar caja** · **Contar y cerrar** |
 
   "Corte" y "arqueo" salen de la UI, aunque siguen en el código. Los rótulos viven
   en `src/lib/caja/textos.ts` para que no vuelvan a divergir.

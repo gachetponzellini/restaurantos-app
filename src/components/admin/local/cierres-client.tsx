@@ -9,6 +9,7 @@ import { es } from "date-fns/locale";
 
 import type { CorteDelHistorial } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
+import { TXT } from "@/lib/caja/textos";
 import { duracionDelTurno } from "@/lib/caja/formato-cierre";
 import { cn } from "@/lib/utils";
 
@@ -136,7 +137,7 @@ export function CierresClient({
                     </div>
                   </div>
 
-                  <Monto label="Esperado" cents={corte.expected_cash_cents} tenue />
+                  <Monto label={TXT.deberiaHaber} cents={corte.expected_cash_cents} tenue />
                   <Monto label="Contado" cents={corte.closing_cash_cents} />
 
                   <div className="flex items-center justify-end sm:justify-end">

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
-  Lock,
   ReceiptText,
   RefreshCw,
   Settings,
@@ -15,6 +14,7 @@ import { toast } from "sonner";
 import { IntentLink } from "@/components/ui/intent-link";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { CerrarCajaModal } from "@/components/admin/local/cerrar-caja-modal";
+import { CierreDelDia } from "@/components/admin/local/cierre-del-dia";
 import {
   METHOD_COLOR,
   METHOD_LABEL,
@@ -55,8 +55,9 @@ import {
 import { useOnActivate } from "@/lib/ui/use-tab-param";
 import { getCajaTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { formatCurrency } from "@/lib/currency";
+import { TXT } from "@/lib/caja/textos";
 import { cn } from "@/lib/utils";
-import type { CuentaConSaldo } from "@/lib/caja/types";
+import type { CuentaConSaldo, RendicionMozoPendiente } from "@/lib/caja/types";
 import { TZ_AR } from "@/lib/timezone";
 
 type Props = {
@@ -292,6 +293,9 @@ export function CajaAdminBoard({
         payments={paymentsByCaja[activeCaja.id] ?? []}
         slug={slug}
         onChanged={resincronizar}
+        active={active}
+        refreshKey={refreshKey}
+        pendientesConMesas={rendicion?.rendicionPendientes ?? []}
         porEmpleado={
           rendicion ? (
             <RendicionEnCaja
@@ -331,6 +335,9 @@ function CajaCard({
   payments,
   slug,
   onChanged,
+  active,
+  refreshKey,
+  pendientesConMesas,
   porEmpleado,
 }: {
   caja: CajaConEstado;
@@ -340,6 +347,9 @@ function CajaCard({
   slug: string;
   /** Re-sincroniza la tab después de mover plata (spec 103). */
   onChanged: () => void;
+  active: boolean;
+  refreshKey: number;
+  pendientesConMesas: RendicionMozoPendiente[];
   /** #351 — cobrado por empleado + rendición, al pie de la caja. */
   porEmpleado?: React.ReactNode;
 }) {
@@ -426,28 +436,37 @@ function CajaCard({
             )}
           </p>
         </div>
+        {/* Spec 209 · R2 — sangría e ingreso son acciones del turno, no el
+            paso principal: el primario vive en «Cierre del día». */}
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            variant="secondary"
-            size="lg"
+            variant="outline"
+            size="sm"
             onClick={() => setSangriaOpen(true)}
           >
             <ArrowDownToLine className="size-3.5" /> Sangría
           </Button>
           <Button
             type="button"
-            variant="secondary"
-            size="lg"
+            variant="outline"
+            size="sm"
             onClick={() => setIngresoOpen(true)}
           >
             <ArrowUpFromLine className="size-3.5" /> Ingreso
           </Button>
-          <Button type="button" size="lg" onClick={() => setCorteOpen(true)}>
-            <Lock className="size-3.5" /> Cerrar caja
-          </Button>
         </div>
       </header>
+
+      <CierreDelDia
+        slug={slug}
+        cajaId={caja.id}
+        active={active}
+        refreshKey={refreshKey}
+        pendientesConMesas={pendientesConMesas}
+        onContar={() => setCorteOpen(true)}
+        onChanged={onChanged}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div
@@ -455,7 +474,7 @@ function CajaCard({
           style={{ background: "var(--brand-soft, #F4F4F5)" }}
         >
           <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-foreground/70">
-            En la caja deberías tener
+            {TXT.deberiaHaber} en la caja
           </p>
           <p className="mt-1 text-3xl font-bold tracking-tight text-foreground tabular-nums">
             {cargandoStats ? (
@@ -501,6 +520,10 @@ function CajaCard({
           </p>
         </div>
       </div>
+
+      {/* Spec 209 · R9 — la rendición es el paso 2 del cierre: va arriba de
+          los detalles del período, no al pie de la tab. */}
+      {porEmpleado}
 
       {porMetodo && cobros > 0 && <VentasPorMetodo porMetodo={porMetodo} />}
 
@@ -557,8 +580,6 @@ function CajaCard({
           )}
         </section>
       </div>
-
-      {porEmpleado}
 
       <MovimientoModal
         open={sangriaOpen}

@@ -395,6 +395,55 @@ describe.skipIf(!dbAvailable)("caja continua (integration)", () => {
     expect(r.data.corte.denomination_count).toEqual({ "1000": 20, "500": 4 });
   });
 
+  it("spec 209 · si el esperado cambió mientras se contaba, no cierra y devuelve el nuevo", async () => {
+    CURRENT_USER_ID = encargadoId;
+    const ing = await registrarIngreso(cajaA, 500_000, "cambio", businessSlug);
+    expect(ing.ok).toBe(true);
+    const actual = (await getCajaLiveStats(cajaA, businessId))!.expected_cash_cents;
+    const { count: cortesAntes } = await supabase
+      .from("caja_cortes")
+      .select("id", { count: "exact", head: true })
+      .eq("caja_id", cajaA);
+
+    const r = await cerrarCaja({
+      cajaId: cajaA,
+      closing_cash_cents: actual,
+      closing_notes: null,
+      denomination_count: null,
+      retirar: true,
+      businessSlug,
+      expected_visto_cents: actual - 5_000,
+    });
+    expect(r.ok).toBe(false);
+    expect(r).toMatchObject({ esperado_actual_cents: actual, delta_cents: 5_000 });
+    const { count: cortesDespues } = await supabase
+      .from("caja_cortes")
+      .select("id", { count: "exact", head: true })
+      .eq("caja_id", cajaA);
+    expect(cortesDespues).toBe(cortesAntes);
+
+    // Con el número de ahora cierra, y el recuento queda en el resumen.
+    const ok = await cerrarCaja({
+      cajaId: cajaA,
+      closing_cash_cents: actual,
+      closing_notes: null,
+      denomination_count: null,
+      retirar: true,
+      businessSlug,
+      expected_visto_cents: actual,
+      recuentos_cents: [actual - 10_000],
+    });
+    expect(ok.ok).toBe(true);
+    const { data: guardado } = await supabase
+      .from("caja_cortes")
+      .select("resumen")
+      .eq("id", ok.ok ? ok.data.corte.id : "")
+      .single();
+    expect(
+      (guardado!.resumen as { recuentos_cents?: number[] }).recuentos_cents,
+    ).toEqual([actual - 10_000]);
+  });
+
   it("cerrar sin retirar deja el esperado en lo contado (arqueo de mitad de turno)", async () => {
     CURRENT_USER_ID = encargadoId;
     await registrarIngreso(cajaA, 30_000, "fondo", businessSlug);

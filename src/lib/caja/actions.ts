@@ -375,6 +375,29 @@ export async function setCajaDefault(
 // ── Corte ─────────────────────────────────────────────────────
 
 /**
+ * Spec 209 · R6 — el cierre no se hizo porque el «debería haber» cambió
+ * mientras el encargado contaba. No es un error para mostrar y recontar: la
+ * pantalla toma el número nuevo, recalcula la diferencia sobre lo ya contado y
+ * pide confirmar otra vez.
+ */
+export type EsperadoCambio = {
+  ok: false;
+  error: string;
+  esperado_actual_cents: number;
+  delta_cents: number;
+};
+
+function esperadoCambio(actual: number, visto: number): EsperadoCambio {
+  const delta = actual - visto;
+  return {
+    ok: false,
+    error: `${delta >= 0 ? "Entraron" : "Salieron"} ${formatCurrency(Math.abs(delta))} en efectivo mientras contabas: ahora debería haber ${formatCurrency(actual)}.`,
+    esperado_actual_cents: actual,
+    delta_cents: delta,
+  };
+}
+
+/**
  * Cierra la caja: registra el corte, retira el efectivo y —si es la caja
  * principal— deja el salón en cero. Un botón (spec 130).
  *
@@ -395,16 +418,26 @@ export async function cerrarCaja(input: {
   closing_cash_cents: number;
   closing_notes: string | null;
   denomination_count: Record<string, number> | null;
-  /** Sacar del cajón lo contado. Destildado = arqueo sin vaciar (D2). */
+  /** Sacar del cajón lo contado. `false` = «Contar sin cerrar» (spec 209 · R5). */
   retirar: boolean;
   businessSlug: string;
+  /**
+   * Spec 209 · R6 — el «debería haber» que el encargado tenía en pantalla al
+   * contar. Si no es el de ahora, entró (o salió) plata en el medio: no se
+   * cierra y se devuelve el nuevo, para que la pantalla recalcule la diferencia
+   * sobre lo ya contado en vez de mandar a recontar.
+   */
+  expected_visto_cents?: number;
+  /** Spec 209 · R4 — conteos descartados con «Volver a contar», en orden. */
+  recuentos_cents?: number[];
 }): Promise<
-  ActionResult<{
-    corte: CajaCorte;
-    retiro_cents: number;
-    mesasLiberadas: number;
-    mozosLimpiados: number;
-  }>
+  | ActionResult<{
+      corte: CajaCorte;
+      retiro_cents: number;
+      mesasLiberadas: number;
+      mozosLimpiados: number;
+    }>
+  | EsperadoCambio
 > {
   const business = await getBusiness(input.businessSlug);
   if (!business) return actionError("Negocio no encontrado.");
@@ -418,6 +451,13 @@ export async function cerrarCaja(input: {
   }
   if (input.closing_cash_cents < 0) {
     return actionError("El monto de cierre no puede ser negativo.");
+  }
+  const recuentos = input.recuentos_cents ?? [];
+  if (
+    recuentos.length > 20 ||
+    recuentos.some((c) => !Number.isSafeInteger(c) || c < 0)
+  ) {
+    return actionError("Los recuentos no son válidos.");
   }
 
   const service = createSupabaseServiceClient() as unknown as GenericClient;
@@ -433,6 +473,12 @@ export async function cerrarCaja(input: {
   const stats = await getCajaLiveStats(input.cajaId, business.id);
   if (!stats) return actionError("No se pudieron calcular los stats de la caja.");
   const expected_cash_cents = stats.expected_cash_cents;
+  if (
+    input.expected_visto_cents !== undefined &&
+    input.expected_visto_cents !== expected_cash_cents
+  ) {
+    return esperadoCambio(expected_cash_cents, input.expected_visto_cents);
+  }
   const difference_cents = input.closing_cash_cents - expected_cash_cents;
 
   if (difference_cents !== 0) {
@@ -527,6 +573,7 @@ export async function cerrarCaja(input: {
     // se retiró otra cosa.
     fondo_fijo_cents: caja.fondo_fijo_cents,
     desglose_esperado: stats.desglose_esperado,
+    ...(recuentos.length > 0 ? { recuentos_cents: recuentos } : {}),
     // Los anulados no van al papel: no movieron la caja (spec 070) y en un
     // documento que se firma sumarían confusión, no información.
     movimientos: {
@@ -585,9 +632,7 @@ export async function cerrarCaja(input: {
     // que el encargado vio, entró algo mientras contaba: que lo vea.
     const cambio = error.message.match(/EXPECTED_CHANGED:(-?\d+)/);
     if (cambio) {
-      return actionError(
-        `Entró un movimiento mientras contabas: ahora el efectivo esperado es ${formatCurrency(Number(cambio[1]))}. Revisá el conteo y volvé a confirmar.`,
-      );
+      return esperadoCambio(Number(cambio[1]), expected_cash_cents);
     }
     if (error.message.includes("UNRENDERED_MOZOS")) {
       return actionError(

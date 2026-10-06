@@ -1700,6 +1700,7 @@ async function buildPrintableCierreTickets(
         propinas_cents: r.total_propinas_cents,
       },
       notas: sanitizeTicketText(corte.closing_notes),
+      recuentos_cents: r.recuentos_cents ?? [],
       reimpresion: Boolean(j.reprint_requested_at),
     };
 

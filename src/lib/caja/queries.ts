@@ -1925,6 +1925,13 @@ export type CierreCajaData = {
 export async function getCierreCajaData(
   cajaId: string,
   businessId: string,
+  /**
+   * Spec 209 · la franja «Cierre del día» y el modal de conteo no muestran el
+   * reparto cajón/mozos: sin él se ahorra la segunda lectura de pendientes (la
+   * scopeada a la caja), que es la parte cara, y el reparto vuelve con los
+   * mozos vacíos.
+   */
+  opts: { sinReparto?: boolean } = {},
 ): Promise<CierreCajaData | null> {
   const service = db();
   const { data: cajaRow } = await service
@@ -1979,7 +1986,9 @@ export async function getCierreCajaData(
   const [pendientes, pendientesDeEstaCaja, operadores, cuentas, pedidos, salon] =
     await Promise.all([
       getRendicionesPendientesTodosLosMozos(businessId),
-      getRendicionesPendientesTodosLosMozos(businessId, cajaId),
+      opts.sinReparto
+        ? Promise.resolve([] as Awaited<ReturnType<typeof getRendicionesPendientesTodosLosMozos>>)
+        : getRendicionesPendientesTodosLosMozos(businessId, cajaId),
       getOperadoresDeCaja(cajaId, businessId),
       getCuentasAbiertas(businessId),
       getPedidosAbiertosSinMesa(businessId),
