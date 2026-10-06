@@ -6,11 +6,17 @@ import { es } from "date-fns/locale";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { I } from "@/components/delivery/primitives";
-import { CancelReservationButton } from "@/components/reservations/cancel-reservation-button";
+import {
+  CancelOutOfWindowNote,
+  CancelReservationButton,
+} from "@/components/reservations/cancel-reservation-button";
 import { GuestPolicyNotice } from "@/components/reservations/guest-policy-notice";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { getBusiness } from "@/lib/tenant";
+import { canCancelReservation } from "@/lib/reservations/cancel-window";
+import { formatReservationWhen } from "@/lib/reservations/format-when";
+import { getReservationSettings } from "@/lib/reservations/queries";
 import type { Reservation } from "@/lib/reservations/types";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +64,22 @@ export default async function ReservarConfirmacionPage({
     { locale: es },
   );
   const timeLabel = formatInTimeZone(new Date(reservation.starts_at), tz, "HH:mm");
-  // Spec 131 — la solicitud es cancelable: todavía puede pasar.
+  const whenLabel = formatReservationWhen(reservation.starts_at, tz);
+  // H-14 — «Cancelar» sólo dentro de la ventana online (misma regla que el
+  // server: `starts_at - lead_time_min`). Fuera de la ventana, aviso al local.
+  const settings = await getReservationSettings(business.id, {
+    useService: true,
+  });
+  const canCancel = canCancelReservation({
+    status: reservation.status,
+    startsAt: reservation.starts_at,
+    leadTimeMin: settings.lead_time_min,
+  });
+  const cancelOutOfWindow =
+    (reservation.status === "pending" || reservation.status === "confirmed") &&
+    !canCancel &&
+    new Date(reservation.starts_at).getTime() > Date.now();
+  // Spec 131 — la solicitud sigue viva (para invitados, etc.): todavía puede pasar.
   const isCancellable =
     reservation.status === "pending" ||
     reservation.status === "confirmed" ||
@@ -92,7 +113,7 @@ export default async function ReservarConfirmacionPage({
     subLine = "El local no llegó a responderlo, así que no tenés mesa reservada.";
   } else if (pendingApproval) {
     eyebrow = "Solicitud enviada";
-    bigLine = `${dayLabel} · ${timeLabel} hs`;
+    bigLine = whenLabel;
     subLine = `Falta que ${business.name} la confirme. Te avisamos apenas la respondan.`;
   } else if (completed) {
     eyebrow = "¡Gracias por la visita!";
@@ -104,7 +125,7 @@ export default async function ReservarConfirmacionPage({
     subLine = "Si fue un error, contactá al local.";
   } else {
     eyebrow = "Reserva confirmada";
-    bigLine = `${dayLabel} · ${timeLabel} hs`;
+    bigLine = whenLabel;
     subLine = `Te esperamos en ${business.name}.`;
   }
 
@@ -176,7 +197,6 @@ export default async function ReservarConfirmacionPage({
             whiteSpace: "nowrap",
             color: "var(--ink)",
             marginTop: 4,
-            textTransform: "capitalize",
           }}
         >
           {bigLine}
@@ -313,7 +333,9 @@ export default async function ReservarConfirmacionPage({
         </div>
         <DetailRow label="A nombre de" value={reservation.customer_name} />
         <DetailRow label="Teléfono" value={reservation.customer_phone} />
-        {reservation.tables ? (
+        {/* H-31 — pendiente: la mesa es un código interno que puede cambiar al
+            confirmar, no se muestra hasta entonces. */}
+        {reservation.tables && !pendingApproval ? (
           <DetailRow label="Mesa" value={reservation.tables.label} />
         ) : null}
         {reservation.notes ? (
@@ -368,7 +390,11 @@ export default async function ReservarConfirmacionPage({
         >
           Ver mis reservas
         </Link>
-        {isCancellable ? <CancelReservationButton id={reservation.id} /> : null}
+        {canCancel ? (
+          <CancelReservationButton id={reservation.id} />
+        ) : cancelOutOfWindow ? (
+          <CancelOutOfWindowNote />
+        ) : null}
       </div>
     </div>
   );
@@ -401,7 +427,6 @@ function Stat({ label, value }: { label: string; value: string }) {
           color: "var(--ink)",
           marginTop: 4,
           lineHeight: 1.1,
-          textTransform: "capitalize",
         }}
       >
         {value}
