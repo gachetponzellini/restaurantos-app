@@ -292,4 +292,15 @@ describe("EfectivoDeLaCaja", () => {
     expect(tile("Lo cobró la caja")).toHaveTextContent(pesos(200_000));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
+
+  it("aclara la propina en efectivo que cobró la caja (por qué no coincide con «Cobrado por método»)", async () => {
+    const pago = {
+      id: "p1", method: "cash", amount_cents: 110_000, tip_cents: 10_000, created_at: "2026-10-06T20:00:00Z",
+      order_id: "o1", order_number: 1, delivery_type: "takeaway", table_label: null, customer_name: null,
+      attributed_mozo_name: null, attributed_mozo_id: null, rinde_mozo_id: null, comprobante_fallido: false,
+    } as CajaPayment;
+    abrir({ payments: [pago] });
+    await screen.findByText("Ana Gómez");
+    expect(screen.getByText(/propinas en efectivo que cobró la caja/)).toHaveTextContent(pesos(10_000));
+  });
 });

@@ -87,6 +87,12 @@ export function EfectivoDeLaCaja({
     Math.max(0, m.anterior_cents + m.efectivo_cents - m.entregado_cents - Math.max(0, m.saldo_cents)),
   );
   const anterior = suma((m) => m.anterior_cents);
+  // La propina en efectivo que cobró la caja directo está en el cajón, pero
+  // «Cobrado por método» la muestra aparte: se aclara para que los dos
+  // números de efectivo no parezcan una cuenta que no cierra.
+  const propinaDirecta = payments
+    .filter((p) => p.method === "cash" && !p.rinde_mozo_id)
+    .reduce((a, p) => a + p.tip_cents, 0);
   const total = directo + rendido + aRendir + propinas + deuda;
   const conAnterior = lista.some((m) => m.anterior_cents !== 0);
 
@@ -112,6 +118,9 @@ export function EfectivoDeLaCaja({
         <p className="text-sm text-muted-foreground">
           Efectivo del período{" "}
           <span className="font-semibold tabular-nums text-foreground">{formatCurrency(total)}</span>
+          {propinaDirecta > 0 && (
+            <span className="block text-xs">Incluye {formatCurrency(propinaDirecta)} de propinas en efectivo que cobró la caja</span>
+          )}
           {anterior > 0 && <span className="block text-xs">Incluye {formatCurrency(anterior)} que los mozos traían de antes</span>}
         </p>
       </div>
