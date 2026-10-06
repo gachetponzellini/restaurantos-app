@@ -58,6 +58,17 @@ export type CartItem = {
   modifiers: CartModifier[];
 };
 
+/**
+ * Tope de unidades por línea (H-12 · QA #382). Es el mismo máximo que valida el
+ * schema del server (`quantity.max(99)`): sin tope acá el cliente llegaba a 101
+ * y recién en el checkout se enteraba.
+ */
+export const MAX_QTY_PER_LINE = 99;
+
+function clampQty(qty: number): number {
+  return Math.min(qty, MAX_QTY_PER_LINE);
+}
+
 export type CartState = {
   items: CartItem[];
   addItem: (item: CartItem) => void;
@@ -75,11 +86,16 @@ function createCartStore(slug: string) {
     persist(
       (set) => ({
         items: [],
-        addItem: (item) => set((s) => ({ items: [...s.items, item] })),
+        addItem: (item) =>
+          set((s) => ({
+            items: [...s.items, { ...item, quantity: clampQty(item.quantity) }],
+          })),
         updateQuantity: (id, qty) =>
           set((s) => ({
             items: s.items
-              .map((i) => (i.id === id ? { ...i, quantity: qty } : i))
+              .map((i) =>
+                i.id === id ? { ...i, quantity: clampQty(qty) } : i,
+              )
               .filter((i) => i.quantity > 0),
           })),
         removeItem: (id) =>

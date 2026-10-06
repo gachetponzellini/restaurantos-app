@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { CreateOrderInput, StaffOrderInput } from "./schema";
+import {
+  CreateOrderInput,
+  StaffOrderInput,
+  primerErrorDeValidacion,
+} from "./schema";
 
 const UUID = "00000000-0000-4000-8000-000000000000";
 
@@ -351,5 +355,74 @@ describe("spec 174 · renglón libre", () => {
       items: [{ ...libre, price_override_cents: 1 }],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// QA #382 · H-12 — el server decía «Datos inválidos. Revisá los campos del
+// formulario.» sin nombrar el campo. Ahora el primer error de validación sale
+// con un mensaje concreto, en español.
+describe("primerErrorDeValidacion (H-12)", () => {
+  it("cantidad por encima de 99 → «La cantidad máxima por producto es 99.»", () => {
+    const r = CreateOrderInput.safeParse({
+      ...base,
+      items: [{ ...base.items[0], quantity: 100 }],
+    });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(primerErrorDeValidacion(r.error)).toBe(
+      "La cantidad máxima por producto es 99.",
+    );
+  });
+
+  it("cantidad 0 → mínimo 1", () => {
+    const r = CreateOrderInput.safeParse({
+      ...base,
+      items: [{ ...base.items[0], quantity: 0 }],
+    });
+    if (r.success) throw new Error("debía fallar");
+    expect(primerErrorDeValidacion(r.error)).toBe(
+      "La cantidad mínima por producto es 1.",
+    );
+  });
+
+  it("nombre vacío y teléfono corto → el primero en orden de campos", () => {
+    const r = CreateOrderInput.safeParse({
+      ...base,
+      customer_name: "",
+      customer_phone: "12",
+    });
+    if (r.success) throw new Error("debía fallar");
+    expect(primerErrorDeValidacion(r.error)).toBe("Ingresá tu nombre.");
+  });
+
+  it("teléfono corto", () => {
+    const r = CreateOrderInput.safeParse({ ...base, customer_phone: "12" });
+    if (r.success) throw new Error("debía fallar");
+    expect(primerErrorDeValidacion(r.error)).toBe(
+      "Ingresá un teléfono válido (al menos 6 dígitos).",
+    );
+  });
+
+  it("sin ítems", () => {
+    const r = CreateOrderInput.safeParse({ ...base, items: [] });
+    if (r.success) throw new Error("debía fallar");
+    expect(primerErrorDeValidacion(r.error)).toBe(
+      "Agregá al menos un producto al pedido.",
+    );
+  });
+
+  it("delivery sin dirección conserva su mensaje", () => {
+    const r = CreateOrderInput.safeParse({ ...base, delivery_type: "delivery" });
+    if (r.success) throw new Error("debía fallar");
+    expect(primerErrorDeValidacion(r.error)).toBe(
+      "Ingresá una dirección de entrega.",
+    );
+  });
+
+  it("nunca devuelve un mensaje en inglés de Zod: cae al genérico", () => {
+    const r = CreateOrderInput.safeParse({ ...base, customer_name: undefined });
+    if (r.success) throw new Error("debía fallar");
+    const msg = primerErrorDeValidacion(r.error);
+    expect(msg).not.toMatch(/Invalid|Too |expected/i);
   });
 });

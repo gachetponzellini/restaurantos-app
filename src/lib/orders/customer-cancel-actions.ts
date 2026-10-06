@@ -49,6 +49,16 @@ export async function cancelOrderByCustomer(
 
   const service = createSupabaseServiceClient();
 
+  // H-09 (QA #382) — el slug que manda el cliente se resuelve a un negocio y el
+  // pedido tiene que ser de ESE negocio. Antes el slug sólo servía para
+  // revalidar rutas: con otro slug la cancelación pasaba igual.
+  const { data: business } = await service
+    .from("businesses")
+    .select("id")
+    .eq("slug", business_slug)
+    .maybeSingle();
+  if (!business) return actionError("Pedido no encontrado.");
+
   const { data: order } = await service
     .from("orders")
     .select(
@@ -56,7 +66,9 @@ export async function cancelOrderByCustomer(
     )
     .eq("id", order_id)
     .maybeSingle();
-  if (!order) return actionError("Pedido no encontrado.");
+  if (!order || order.business_id !== business.id) {
+    return actionError("Pedido no encontrado.");
+  }
 
   const customerUserId = (order.customers as { user_id: string | null } | null)
     ?.user_id;

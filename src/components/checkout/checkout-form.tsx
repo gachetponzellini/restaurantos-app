@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { fromZonedTime } from "date-fns-tz";
@@ -14,13 +14,14 @@ import {
 import { formatCurrency } from "@/lib/currency";
 import { copyDeEntrega } from "@/lib/orders/entrega-por-lote";
 import { createOrder } from "@/lib/orders/create-order";
+import { faltanteParaMinimoEnvio } from "@/lib/orders/minimo-envio";
 import {
   filterSlotsByLead,
   localYmd,
   SCHEDULED_MIN_LEAD_MIN,
 } from "@/lib/orders/scheduled";
 import { previewPromoCode } from "@/lib/promos/preview-action";
-import { cartTotal, useCart } from "@/stores/cart";
+import { cartCount, cartTotal, useCart } from "@/stores/cart";
 
 type PaymentId = "mp" | "cash" | "pickup-cash";
 type When = "now" | "scheduled";
@@ -32,6 +33,7 @@ export function CheckoutForm({
   businessTimezone,
   todaySlots = [],
   deliveryFeeCents,
+  minOrderCents = 0,
   estimatedMinutes,
   estimatedPickupMinutes = null,
   savedAddresses = [],
@@ -51,6 +53,11 @@ export function CheckoutForm({
    */
   todaySlots?: string[];
   deliveryFeeCents: number;
+  /**
+   * Pedido mínimo del envío a domicilio (H-13). 0 = sin mínimo. El retiro no
+   * tiene mínimo: el server (`persistOrder`) sólo lo exige en `delivery`.
+   */
+  minOrderCents?: number;
   /** Piso del estimado de envío (spec 133). Null = default del producto. */
   estimatedMinutes: number | null;
   /** Piso del estimado de retiro. Null = default del producto. */
@@ -70,6 +77,10 @@ export function CheckoutForm({
   const items = useCart(slug, (s) => s.items);
   const clearCart = useCart(slug, (s) => s.clear);
   const [submitting, setSubmitting] = useState(false);
+  // H-03 (QA #382): guard SÍNCRONO. `submitting` es state y no se actualiza
+  // hasta el próximo render, así que dos clicks en el mismo tick pasaban los dos
+  // y creaban dos pedidos. El ref cambia en el acto.
+  const submittingRef = useRef(false);
 
   // Spec 194 — dónde entregar depende del negocio: kcc reparte sólo adentro
   // del barrio y pide el número de lote, no una calle.
@@ -135,6 +146,14 @@ export function CheckoutForm({
       ? appliedPromo.discount_cents
       : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
+  // H-13: el mínimo se exige acá, y sólo en envío (el server compara el
+  // subtotal de los productos, antes de cupón y envío).
+  const faltaParaMinimo = faltanteParaMinimoEnvio({
+    deliveryType: mode,
+    subtotalCents: subtotal,
+    minOrderCents,
+  });
+  const unidades = cartCount(items);
 
   const checkPromo = async () => {
     const code = promoInput.trim();
@@ -235,6 +254,7 @@ export function CheckoutForm({
   const phoneOk = /^\+?[\d\s-]{8,}$/.test(phone);
 
   const submit = async () => {
+    if (submittingRef.current) return;
     const next: typeof errors = {};
     if (!name.trim()) next.name = "Ingresá tu nombre.";
     if (!phoneOk) next.phone = "Teléfono inválido.";
@@ -245,6 +265,12 @@ export function CheckoutForm({
     if (Object.keys(next).length) return;
     if (items.length === 0) {
       toast.error("Tu carrito está vacío.");
+      return;
+    }
+    if (faltaParaMinimo > 0) {
+      toast.error(
+        `El envío a domicilio tiene un mínimo de ${formatCurrency(minOrderCents)}.`,
+      );
       return;
     }
 
@@ -274,49 +300,65 @@ export function CheckoutForm({
       scheduledAtIso = dt.toISOString();
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
-    const result = await createOrder({
-      business_slug: slug,
-      delivery_type: mode,
-      customer_name: name.trim(),
-      customer_phone: phone.trim(),
-      customer_email: email.trim() || undefined,
-      delivery_address: isPickup
-        ? undefined
-        : `${address.trim()}${apt.trim() ? ` · ${apt.trim()}` : ""}`,
-      delivery_notes: notes.trim() || undefined,
-      payment_method: payment === "mp" ? "mp" : "cash",
-      scheduled_at: scheduledAtIso,
-      promo_code: appliedPromo?.code,
-      items: items.map((i) =>
-        i.kind === "daily_menu" && i.daily_menu_id
-          ? {
-              kind: "daily_menu" as const,
-              daily_menu_id: i.daily_menu_id,
-              quantity: i.quantity,
-              notes: i.notes,
-              // Opciones elegidas del combo. El server deriva el adicional
-              // (spec 29) desde la DB; acá sólo informamos QUÉ se eligió.
-              selected_choices: (i.selected_choices ?? []).map((sc) => ({
-                choice_group_id: sc.choice_group_id,
-                choice_group_label: sc.choice_group_label,
-                product_id: sc.product_id,
-                product_name: sc.product_name,
-                modifier_ids: sc.modifiers.map((m) => m.modifier_id),
-              })),
-            }
-          : {
-              // Back-compat: ítems sin kind se tratan como producto normal.
-              product_id: i.product_id as string,
-              quantity: i.quantity,
-              notes: i.notes,
-              modifier_ids: i.modifiers.map((m) => m.modifier_id),
-            },
-      ),
-    });
+    // H-11 (QA #382): si la action rechaza (sin red, timeout) antes quedaba en
+    // «Procesando…» para siempre. Ahora se avisa y el botón vuelve a servir.
+    // El éxito conserva `submitting` (ver más abajo): sólo se libera si no hubo
+    // un pedido creado.
+    let result: Awaited<ReturnType<typeof createOrder>> | null = null;
+    try {
+      result = await createOrder({
+        business_slug: slug,
+        delivery_type: mode,
+        customer_name: name.trim(),
+        customer_phone: phone.trim(),
+        customer_email: email.trim() || undefined,
+        delivery_address: isPickup
+          ? undefined
+          : `${address.trim()}${apt.trim() ? ` · ${apt.trim()}` : ""}`,
+        delivery_notes: notes.trim() || undefined,
+        payment_method: payment === "mp" ? "mp" : "cash",
+        scheduled_at: scheduledAtIso,
+        promo_code: appliedPromo?.code,
+        items: items.map((i) =>
+          i.kind === "daily_menu" && i.daily_menu_id
+            ? {
+                kind: "daily_menu" as const,
+                daily_menu_id: i.daily_menu_id,
+                quantity: i.quantity,
+                notes: i.notes,
+                // Opciones elegidas del combo. El server deriva el adicional
+                // (spec 29) desde la DB; acá sólo informamos QUÉ se eligió.
+                selected_choices: (i.selected_choices ?? []).map((sc) => ({
+                  choice_group_id: sc.choice_group_id,
+                  choice_group_label: sc.choice_group_label,
+                  product_id: sc.product_id,
+                  product_name: sc.product_name,
+                  modifier_ids: sc.modifiers.map((m) => m.modifier_id),
+                })),
+              }
+            : {
+                // Back-compat: ítems sin kind se tratan como producto normal.
+                product_id: i.product_id as string,
+                quantity: i.quantity,
+                notes: i.notes,
+                modifier_ids: i.modifiers.map((m) => m.modifier_id),
+              },
+        ),
+      });
+    } catch (err) {
+      console.error("createOrder rechazó", err);
+      toast.error("No pudimos conectar. Revisá tu conexión y probá de nuevo.");
+    } finally {
+      if (!result?.ok) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
+    }
+    if (!result) return;
     if (!result.ok) {
       toast.error(result.error);
-      setSubmitting(false);
       return;
     }
     // Success: keep `submitting` true so the transitional UI (spinner) stays
@@ -511,7 +553,8 @@ export function CheckoutForm({
             {I.bag("var(--ink-2)", 14)}
           </span>
           <span style={{ fontSize: 14, fontWeight: 500 }}>
-            {items.length} ítems · {formatCurrency(total)}
+            {unidades} {unidades === 1 ? "producto" : "productos"} ·{" "}
+            {formatCurrency(total)}
           </span>
         </span>
         <span
@@ -701,8 +744,33 @@ export function CheckoutForm({
               <span>{entrega.aviso}</span>
             </div>
           )}
-          <Field label={entrega.label} error={errors.address}>
+          {faltaParaMinimo > 0 && (
+            <div
+              role="status"
+              style={{
+                padding: "10px 12px",
+                marginBottom: 14,
+                borderRadius: 10,
+                background: "#F6EEE4",
+                border: "1px solid #EADFCB",
+                fontSize: 13,
+                lineHeight: 1.4,
+                color: "#6D5838",
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>
+                El envío a domicilio tiene un mínimo de{" "}
+                {formatCurrency(minOrderCents)}
+              </div>
+              <div style={{ fontSize: 12, marginTop: 2 }}>
+                Te faltan {formatCurrency(faltaParaMinimo)}. Sumá productos o
+                elegí retiro en el local, que no tiene mínimo.
+              </div>
+            </div>
+          )}
+          <Field label={entrega.label} htmlFor="co-address" error={errors.address}>
             <input
+              id="co-address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder={entrega.placeholder}
@@ -712,17 +780,21 @@ export function CheckoutForm({
             />
           </Field>
           {entrega.pidePisoDepto && (
-            <Field label="Piso / depto (opcional)">
+            <Field label="Piso / depto (opcional)" htmlFor="co-apt">
               <input
+                id="co-apt"
                 value={apt}
                 onChange={(e) => setApt(e.target.value)}
+                autoComplete="address-line2"
                 placeholder="3° B"
                 style={inputStyle()}
               />
             </Field>
           )}
-          <Field label="Notas para el repartidor">
+          <Field label="Notas para el repartidor" htmlFor="co-notes-delivery">
             <input
+              id="co-notes-delivery"
+              autoComplete="off"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ej: timbre no funciona, llamar al celu"
@@ -772,8 +844,10 @@ export function CheckoutForm({
               </div>
             </div>
           </div>
-          <Field label="Notas (opcional)">
+          <Field label="Notas (opcional)" htmlFor="co-notes-pickup">
             <input
+              id="co-notes-pickup"
+              autoComplete="off"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ej: pasame la cuenta cuando llegue"
@@ -899,16 +973,19 @@ export function CheckoutForm({
       </Section>
 
       <Section title="Contacto">
-        <Field label="Nombre" error={errors.name}>
+        <Field label="Nombre" htmlFor="co-name" error={errors.name}>
           <input
+            id="co-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
             style={inputStyle(!!errors.name)}
           />
         </Field>
-        <Field label="Teléfono" error={errors.phone}>
+        <Field label="Teléfono" htmlFor="co-phone" error={errors.phone}>
           <input
+            id="co-phone"
+            type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="11 5555 5555"
@@ -989,6 +1066,9 @@ export function CheckoutForm({
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 type="text"
+                aria-label="Código de cupón"
+                autoComplete="off"
+                autoCapitalize="characters"
                 value={promoInput}
                 onChange={(e) =>
                   setPromoInput(e.target.value.toUpperCase().slice(0, 30))
@@ -1006,7 +1086,7 @@ export function CheckoutForm({
                   padding: "0 14px",
                   border: "1px solid var(--hairline-2)",
                   borderRadius: 12,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontFamily: "ui-monospace, monospace",
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
@@ -1134,16 +1214,21 @@ export function CheckoutForm({
         }}
       >
         <button
-          disabled={submitting}
+          disabled={submitting || faltaParaMinimo > 0}
           onClick={submit}
           style={{
             width: "100%",
             height: 56,
             borderRadius: 14,
-            background: submitting ? "#C7BBA6" : "var(--accent)",
+            background:
+              submitting || faltaParaMinimo > 0 ? "#C7BBA6" : "var(--accent)",
             color: "#fff",
             border: "none",
-            cursor: submitting ? "wait" : "pointer",
+            cursor: submitting
+              ? "wait"
+              : faltaParaMinimo > 0
+                ? "not-allowed"
+                : "pointer",
             fontSize: 15,
             fontWeight: 600,
             letterSpacing: -0.1,
@@ -1194,18 +1279,29 @@ function Section({
 
 function Field({
   label,
+  htmlFor,
   error,
   children,
 }: {
   label: string;
+  /** `id` del input que va adentro: asocia el label (H-25). */
+  htmlFor: string;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 6 }}>
+      <label
+        htmlFor={htmlFor}
+        style={{
+          display: "block",
+          fontSize: 12,
+          color: "var(--ink-2)",
+          marginBottom: 6,
+        }}
+      >
         {label}
-      </div>
+      </label>
       {children}
       {error && (
         <div style={{ fontSize: 12, color: "#B94A2A", marginTop: 4 }}>
@@ -1249,7 +1345,8 @@ function inputStyle(err?: boolean): React.CSSProperties {
     borderRadius: 10,
     border: `1px solid ${err ? "#E0A898" : "var(--hairline-2)"}`,
     background: "#fff",
-    fontSize: 15,
+    // H-23: ≥16px, si no iOS hace zoom al enfocar el campo.
+    fontSize: 16,
     color: "var(--ink)",
     outline: "none",
     boxSizing: "border-box",
