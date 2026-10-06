@@ -402,6 +402,9 @@ export function MenuClient({
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
+              // H-28: área táctil ≥44px de alto sin cambiar el look (el texto
+              // sigue alineado igual, sólo crece el alto del link).
+              minHeight: 44,
               fontSize: 15,
               fontWeight: 600,
               color: "var(--primary)",

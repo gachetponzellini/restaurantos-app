@@ -125,6 +125,20 @@ export function ProductSheet({
 
   return (
     <BottomSheet open={open} onClose={() => onOpenChange(false)}>
+      {/* H-27 (QA #382): el sheet es un modal. `BottomSheet` es una primitiva
+          compartida y no recibe aria-label, así que el diálogo accesible vive
+          acá, envolviendo el contenido sin alterar el layout (columna flex). */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={product.name}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
       <div
         style={{
           flex: 1,
@@ -424,6 +438,7 @@ export function ProductSheet({
             {formatCurrency(lineTotal)}
           </AnimatedValue>
         </button>
+      </div>
       </div>
     </BottomSheet>
   );
