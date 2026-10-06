@@ -126,6 +126,25 @@ export async function limitLogin(ip: string): Promise<LimitResult> {
   return { success: a.success && b.success };
 }
 
+// Login y alta del cliente (H-05). Mismos umbrales que `limitLogin`, pero con
+// prefijos propios: en el salón clientes y personal comparten el WiFi (misma
+// IP), y los intentos de unos no deben bloquear el login del panel.
+export async function limitCustomerAuth(ip: string): Promise<LimitResult> {
+  const burst = getLimiter(
+    "rl:customer-auth:min",
+    Ratelimit.slidingWindow(LOGIN_PER_IP_PER_MIN, "1 m"),
+  );
+  const hourly = getLimiter(
+    "rl:customer-auth:hour",
+    Ratelimit.slidingWindow(LOGIN_PER_IP_PER_HOUR, "1 h"),
+  );
+  // Sin Upstash configurado → degradación elegante, igual que el resto.
+  if (!burst || !hourly) return { success: true };
+
+  const [a, b] = await Promise.all([burst.limit(ip), hourly.limit(ip)]);
+  return { success: a.success && b.success };
+}
+
 // Fichaje por PIN (`clockPunch`). `/{slug}/fichar` es un kiosco público: no
 // pide sesión y el PIN de 4 dígitos ES la credencial. Sin techo, los 10.000
 // PINs se barren desde internet, y acá cada acierto no es una lectura sino un

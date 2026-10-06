@@ -9,7 +9,7 @@ import {
   SignInCustomerInput,
   SignUpCustomerInput,
 } from "@/lib/auth/customer-auth-shared";
-import { limitLogin } from "@/lib/rate-limit";
+import { limitCustomerAuth } from "@/lib/rate-limit";
 import { clientIpFromForwarded } from "@/lib/rrhh/ip-allowlist";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -39,12 +39,13 @@ const SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   over_request_rate_limit: "Demasiados intentos, probá en unos minutos.",
 };
 
-// H-05: mismo techo por IP que el login del staff (`sign-in.ts`). Va antes de
+// H-05: mismos umbrales que el login del staff (`sign-in.ts`) pero con limiter
+// propio (`limitCustomerAuth`). Va antes de
 // tocar Supabase Auth.
 async function checkAuthRateLimit(): Promise<boolean> {
   const h = await headers();
   const ip = clientIpFromForwarded(h.get("x-forwarded-for"));
-  const { success } = await limitLogin(ip ?? "unknown");
+  const { success } = await limitCustomerAuth(ip ?? "unknown");
   return success;
 }
 

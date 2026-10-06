@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const signInWithPassword = vi.fn();
 const signUp = vi.fn();
-const limitLogin = vi.fn();
+const limitCustomerAuth = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({
@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 vi.mock("@/lib/rate-limit", () => ({
-  limitLogin: (...a: unknown[]) => limitLogin(...a),
+  limitCustomerAuth: (...a: unknown[]) => limitCustomerAuth(...a),
 }));
 vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "x-forwarded-for": "1.2.3.4, 10.0.0.1" }),
@@ -35,13 +35,13 @@ const signUpInput = { ...signInInput, phone: "11 1234-5678" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  limitLogin.mockResolvedValue({ success: true });
+  limitCustomerAuth.mockResolvedValue({ success: true });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 describe("signInCustomer — H-05 rate limit", () => {
   it("bloquea con mensaje en español y no llega a Supabase", async () => {
-    limitLogin.mockResolvedValue({ success: false });
+    limitCustomerAuth.mockResolvedValue({ success: false });
     const r = await signInCustomer(signInInput);
     expect(r).toEqual({
       ok: false,
@@ -53,7 +53,7 @@ describe("signInCustomer — H-05 rate limit", () => {
   it("limita por la IP del primer hop de x-forwarded-for", async () => {
     signInWithPassword.mockResolvedValue({ error: { message: "bad" } });
     await signInCustomer(signInInput);
-    expect(limitLogin).toHaveBeenCalledWith("1.2.3.4");
+    expect(limitCustomerAuth).toHaveBeenCalledWith("1.2.3.4");
   });
 
   it("si el limiter deja pasar, sigue el flujo normal", async () => {
@@ -65,7 +65,7 @@ describe("signInCustomer — H-05 rate limit", () => {
 
 describe("signUpCustomer — H-05 rate limit", () => {
   it("bloquea con mensaje en español y no crea la cuenta", async () => {
-    limitLogin.mockResolvedValue({ success: false });
+    limitCustomerAuth.mockResolvedValue({ success: false });
     const r = await signUpCustomer(signUpInput);
     expect(r).toEqual({
       ok: false,
