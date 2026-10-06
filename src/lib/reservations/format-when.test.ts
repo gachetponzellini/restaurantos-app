@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { formatReservationWhen } from "@/lib/reservations/format-when";
+import {
+  formatReservationDay,
+  formatReservationSlotWhen,
+  formatReservationWhen,
+} from "@/lib/reservations/format-when";
 
 const TZ = "America/Argentina/Buenos_Aires"; // UTC-3
 
@@ -26,5 +30,25 @@ describe("formatReservationWhen — H-30", () => {
     expect(
       formatReservationWhen(new Date("2026-10-08T00:00:00.000Z"), "UTC"),
     ).toBe("jue 8 de oct · 00:00 hs");
+  });
+});
+
+describe("formatReservationDay / formatReservationSlotWhen", () => {
+  it("día solo: «mié 7 de oct»", () => {
+    expect(formatReservationDay("2026-10-08T00:00:00.000Z", TZ)).toBe(
+      "mié 7 de oct",
+    );
+  });
+
+  it("fecha + slot locales (intent del bot) → mismo formato, en la TZ del negocio", () => {
+    expect(formatReservationSlotWhen("2026-10-07", "21:00", TZ)).toBe(
+      "mié 7 de oct · 21:00 hs",
+    );
+  });
+
+  it("el slot de madrugada sigue en el día local del intent", () => {
+    expect(formatReservationSlotWhen("2026-10-07", "00:30", TZ)).toBe(
+      "mié 7 de oct · 00:30 hs",
+    );
   });
 });

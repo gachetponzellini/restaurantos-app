@@ -41,7 +41,12 @@ export default async function ReservarPage({
       (user.user_metadata?.full_name as string | undefined) ??
       (user.user_metadata?.name as string | undefined) ??
       null;
-    phone = (user.phone as string | undefined) ?? null;
+    // H-19: el alta por email guarda el teléfono en `user_metadata.phone`;
+    // `user.phone` sólo existe con auth por SMS.
+    phone =
+      (user.phone as string | undefined) ||
+      (user.user_metadata?.phone as string | undefined) ||
+      null;
     email = user.email ?? null;
   }
 

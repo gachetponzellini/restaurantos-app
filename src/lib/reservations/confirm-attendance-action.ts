@@ -1,8 +1,8 @@
 "use server";
 
-import { formatInTimeZone } from "date-fns-tz";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { formatReservationWhen } from "@/lib/reservations/format-when";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 type GenericClient = SupabaseClient;
@@ -45,10 +45,9 @@ export async function getReservationByConfirmToken(
 
   return {
     businessName: business.name,
-    whenLabel: formatInTimeZone(
-      new Date(reservation.starts_at),
+    whenLabel: formatReservationWhen(
+      reservation.starts_at,
       business.timezone ?? DEFAULT_TZ,
-      "dd/MM 'a las' HH:mm 'hs'",
     ),
     partySize: reservation.party_size,
     status: reservation.status,
