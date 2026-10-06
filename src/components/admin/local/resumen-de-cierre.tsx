@@ -55,7 +55,12 @@ export function ResumenDeCierre({
 
   // Lo que entró por medios que no tocan el cajón. Es la explicación de por qué
   // el arqueo es mucho más chico que la venta del turno.
-  const noEfectivo = stats.total_ventas_cents - d.efectivo_cents;
+  // Lo cobrado en efectivo, lo haya cobrado la caja o un mozo (en la caja v2
+  // el del mozo entra al cajón recién cuando lo entrega).
+  const efectivoCobrado = stats.ventas_por_metodo.cash ?? 0;
+  const noEfectivo = stats.total_ventas_cents - efectivoCobrado;
+  const rendiciones = d.rendiciones_cents ?? 0;
+  const sumandos = 4 + (rendiciones > 0 ? 1 : 0) + (d.propinas_pagadas_cents > 0 ? 1 : 0);
 
   const conteo = corte.denomination_count ?? null;
   const denominaciones = conteo
@@ -206,11 +211,11 @@ export function ResumenDeCierre({
           <span className="font-semibold tabular-nums text-zinc-900">
             {formatCurrency(stats.total_ventas_cents)}
           </span>
-          , pero al cajón sólo entraron los{" "}
+          , pero en efectivo se cobraron{" "}
           <span className="font-semibold tabular-nums text-zinc-900">
-            {formatCurrency(d.efectivo_cents)}
-          </span>{" "}
-          cobrados en efectivo: los otros{" "}
+            {formatCurrency(efectivoCobrado)}
+          </span>
+          : los otros{" "}
           <span className="tabular-nums">{formatCurrency(noEfectivo)}</span> se
           cobraron con tarjeta, QR o transferencia.
         </p>
@@ -224,7 +229,10 @@ export function ResumenDeCierre({
         <h2 className="mt-1 text-xl font-semibold tracking-tight text-zinc-900">
           La cuenta del efectivo esperado
         </h2>
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto_minmax(0,1fr)]">
+        <div
+          className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-[repeat(var(--sumandos),minmax(0,1fr))_auto_minmax(0,1fr)]"
+          style={{ "--sumandos": sumandos } as React.CSSProperties}
+        >
           <Sumando
             label="Apertura"
             cents={d.apertura_cents}
@@ -237,8 +245,16 @@ export function ResumenDeCierre({
           <Sumando
             label="+ Efectivo cobrado"
             cents={d.efectivo_cents}
-            hint="Con propinas"
+            hint={rendiciones > 0 ? "Lo que cobró la caja, con propinas" : "Con propinas"}
           />
+          {/* Spec 210 v2 — lo que entregaron los mozos entra al cajón. */}
+          {rendiciones > 0 && (
+            <Sumando
+              label="+ Rendiciones"
+              cents={rendiciones}
+              hint="Lo que entregaron los mozos"
+            />
+          )}
           <Sumando label="+ Ingresos" cents={d.ingresos_cents} />
           <Sumando label="− Sangrías" cents={d.sangrias_cents} />
           {/* Spec 177 — sólo aparece si hubo: en un local que todavía no paga

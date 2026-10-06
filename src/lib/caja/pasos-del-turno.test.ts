@@ -49,4 +49,43 @@ describe("pasosDelTurno (spec 211 · R6)", () => {
     expect(r.proximo).toEqual({ kind: "turno", label: "Cerrar el turno" });
     expect(r.cajas.estado).toBe("listo");
   });
+
+  it("la caja que se mira, limpia, se cuenta aunque otra tenga mozos pendientes (cada caja cierra cuando lo suyo está rendido)", () => {
+    const r = pasosDelTurno(
+      {
+        cuentas_abiertas: [],
+        saldos: [saldo({ mozo: "Ana", caja: "c1", saldo: 100 }), saldo({ mozo: "Leo", caja: "c2", saldo: 0 })],
+        cajas: [caja("c1", true), caja("c2", true)],
+      },
+      "c2",
+    );
+    expect(r.proximo).toEqual({ kind: "contar", label: "Contar la caja Bar", cajaId: "c2" });
+    // El paso ② sigue mostrando lo que falta en la otra.
+    expect(r.rendiciones).toEqual({ estado: "pendiente", pendientes: 1 });
+  });
+
+  it("los pendientes de la caja que se mira van primero", () => {
+    const r = pasosDelTurno(
+      {
+        cuentas_abiertas: [],
+        saldos: [saldo({ mozo: "Ana", caja: "c1", saldo: 100 }), saldo({ mozo: "Leo", caja: "c2", saldo: 50 })],
+        cajas: [caja("c1", true), caja("c2", true)],
+      },
+      "c2",
+    );
+    expect(r.proximo).toMatchObject({ kind: "rendir", mozoId: "Leo", cajaId: "c2" });
+  });
+
+  it("la caja que se mira ya contada: sigue con lo pendiente de las otras", () => {
+    const r = pasosDelTurno(
+      {
+        cuentas_abiertas: [],
+        saldos: [saldo({ mozo: "Ana", caja: "c1", saldo: 100 })],
+        cajas: [caja("c1", true), caja("c2", false)],
+      },
+      "c2",
+    );
+    expect(r.proximo).toMatchObject({ kind: "rendir", mozoId: "Ana", cajaId: "c1" });
+  });
 });
+

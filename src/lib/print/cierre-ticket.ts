@@ -47,6 +47,8 @@ export type CierreTicketData = {
     efectivo_cents: number;
     ingresos_cents: number;
     sangrias_cents: number;
+    /** Lo que entregaron los mozos (spec 210 v2). Ausente en cierres viejos. */
+    rendiciones_cents?: number;
     /** Lo que salió del cajón para pagarle la propina a los mozos (spec 177). */
     propinas_pagadas_cents: number;
     esperado_cents: number;
@@ -227,6 +229,9 @@ export function buildCierreLines(d: CierreTicketData): Line[] {
   push(RULE_COND);
   push(fila("Apertura", monto(r.apertura_cents)));
   push(fila("+ Efectivo cobrado", monto(r.efectivo_cents)));
+  if ((r.rendiciones_cents ?? 0) > 0) {
+    push(fila("+ Rendiciones", monto(r.rendiciones_cents ?? 0)));
+  }
   push(fila("+ Ingresos", monto(r.ingresos_cents)));
   push(fila("- Sangrias", monto(r.sangrias_cents)));
   // Spec 177 — la propina sale del cajón, así que entra en la cuenta del

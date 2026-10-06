@@ -193,6 +193,16 @@ describe("el papel del cierre", () => {
     expect(t).toContain("- Propinas pagadas");
   });
 
+  // Spec 210 v2 — lo que entregan los mozos entra al cajón: sin el renglón, el
+  // papel decía 0 + 0 + 0 − 0 = $507.500.
+  it("las rendiciones de los mozos son un renglón del arqueo", () => {
+    const t = texto(
+      data({ resumen: { ...data().resumen, rendiciones_cents: 50_750_000 } }),
+    ).join("\n");
+    expect(t).toContain("+ Rendiciones");
+    expect(texto(data()).join("\n")).not.toContain("Rendiciones");
+  });
+
   it("sin propina pagada, el renglón no aparece", () => {
     expect(texto(data()).join("\n")).not.toContain("Propinas pagadas");
   });

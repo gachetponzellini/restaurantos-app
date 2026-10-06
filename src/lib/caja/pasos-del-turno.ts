@@ -50,16 +50,16 @@ export function pasosDelTurno(
     ? { estado: "pendiente", faltan: sinContar.map((c) => c.name) }
     : { estado: "listo" };
 
-  let proximo: ProximoPasoTurno;
-  if (mesas.length) {
-    proximo = {
-      kind: "cobrar",
-      label: mesas.length === 1 ? `Cobrar mesa ${mesas[0].table_label}` : `Cobrar ${mesas.length} mesas abiertas`,
-      tableId: mesas[0].table_id,
-    };
-  } else if (pendientes.length) {
-    const p = pendientes[0];
-    proximo = {
+  // Primero lo de la caja que se está mirando: cada caja cierra cuando lo
+  // suyo está rendido (cerrar_caja_tx mira los mozos de ESA caja), aunque otra
+  // caja todavía tenga mozos pendientes.
+  const deEsta = (x: { caja_id?: string; id?: string }) => (x.caja_id ?? x.id) === cajaActivaId;
+  const pendientesAca = pendientes.filter(deEsta);
+  const estaSinContar = sinContar.find((c) => c.id === cajaActivaId);
+
+  const rendir = (lista: typeof pendientes): ProximoPasoTurno => {
+    const p = lista[0];
+    return {
       kind: "rendir",
       label:
         pendientes.length > 1
@@ -70,9 +70,28 @@ export function pasosDelTurno(
       mozoId: p.mozo_id,
       cajaId: p.caja_id,
     };
+  };
+  const contar = (c: { id: string; name: string }): ProximoPasoTurno => ({
+    kind: "contar",
+    label: `Contar ${nombreDeCaja(c.name)}`,
+    cajaId: c.id,
+  });
+
+  let proximo: ProximoPasoTurno;
+  if (mesas.length) {
+    proximo = {
+      kind: "cobrar",
+      label: mesas.length === 1 ? `Cobrar mesa ${mesas[0].table_label}` : `Cobrar ${mesas.length} mesas abiertas`,
+      tableId: mesas[0].table_id,
+    };
+  } else if (pendientesAca.length) {
+    proximo = rendir(pendientesAca);
+  } else if (estaSinContar) {
+    proximo = contar(estaSinContar);
+  } else if (pendientes.length) {
+    proximo = rendir(pendientes);
   } else if (sinContar.length) {
-    const c = sinContar.find((x) => x.id === cajaActivaId) ?? sinContar[0];
-    proximo = { kind: "contar", label: `Contar ${nombreDeCaja(c.name)}`, cajaId: c.id };
+    proximo = contar(sinContar[0]);
   } else {
     proximo = { kind: "turno", label: "Cerrar el turno" };
   }
