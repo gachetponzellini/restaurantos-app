@@ -60,6 +60,9 @@ significado. El modelo de la 210 es el que garantiza que esos números siempre c
     - **No entregó:** motivo obligatorio, queda como deuda.
   - **Si la caja le debe** (saldo negativo, 210 · R4): un solo botón, "Darle $X de propina
     del cajón".
+  - **Mozo con plata de dos cajas (el caso raro, ~5%):** recién ahí el panel muestra una
+    línea por caja, cada una con su "Entregó justo". En la tabla de efectivo aparece la
+    marca "plata de dos cajas". **Con una sola caja, no se nombra ninguna caja.**
   - Al confirmar, los números de arriba se actualizan y se muestra "Pedro rindió $371.600.
     Ya se quedó con su propina de $8.400".
   - Se borra la tarjeta "Cobrado por empleado · rendición" y su `<details>`.

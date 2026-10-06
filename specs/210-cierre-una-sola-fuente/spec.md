@@ -12,6 +12,7 @@
 - Cobro de una mesa que registra la encargada: la plata es del mozo de la mesa (se mantiene la spec 140 · D5).
 - La propina de tarjeta/QR el mozo **se la queda de lo que trae**: entrega el neto.
 - *"Habría que copiar de MaxiRest, tendría que ser la misma lógica"*: un turno para todo el local, y cada caja se cuenta igual.
+- *"Hay dos cajas y son independientes: a la hora de cobrar ponen a qué caja va la plata, y si se confunden después lo corrigen"*. Y además: *"en el 95% de los casos los mozos van a tener sólo una caja"*.
 
 Relevamiento de MaxiRest con datos de KCC:
 [`maxirest/cajas-y-turnos.md`](../../../../wiki/negocio/competencia/maxirest/cajas-y-turnos.md#verificación-con-datos-reales-de-kcc-2026-10-06).
@@ -45,9 +46,10 @@ Tres reglas. Cada una cierra un hueco de los de arriba.
 
 1. **El cajón espera sólo la plata que físicamente tiene.** El efectivo que cobró un mozo
    queda **a su nombre** y no suma al "debería haber" de ninguna caja.
-2. **La plata del mozo entra al cajón cuando la entrega**, como una línea de la caja que
-   la recibe ("Rendición de Pedro +$371.600"). Puede entregar en partes. Lo que no
-   entregó sigue en su **saldo**, que no se pierde con ningún cierre.
+2. **La plata del mozo entra al cajón cuando la entrega, en la caja que se eligió en el
+   cobro.** Queda como una línea de esa caja ("Rendición de Pedro +$371.600"). Puede
+   entregar en partes. Lo que no entregó sigue en su **saldo por caja**, que no se pierde
+   con ningún cierre. Las cajas son independientes: la plata de una nunca termina en la otra.
 3. **El turno es uno para todo el local, como en MaxiRest:**
    - cada caja se cuenta y se cierra igual;
    - **cerrar el turno** exige mesas cobradas, rendiciones resueltas y cajas contadas;
@@ -83,15 +85,21 @@ apertura (fondo que quedó del corte anterior)
 ### R3 · La rendición es una entrega
 
 - `registrar_rendicion_tx` deja de calcular un "esperado del período". Ahora registra
-  una **entrega**: `mozo_id`, `caja_id` (donde entra la plata) y `entregado_cents`.
+  una **entrega**: `mozo_id`, `caja_id` y `entregado_cents`. **La caja de la entrega es
+  la de los cobros:** el mozo entrega a cada caja lo que cobró para ella.
   Inserta, en la misma transacción, la línea `caja_movimientos(kind='rendicion', mozo_id, corte_id null)`.
-- **Saldo del mozo** = su cuenta corriente. Lo calcula la función SQL `saldo_mozo(mozo_id)`:
+- **Saldo del mozo, por caja** = su cuenta corriente con esa caja. Lo calcula la función
+  SQL `saldo_mozo(mozo_id, caja_id)`:
 
   ```
-  Σ cobros en efectivo con efectivo_de = mozo   (monto − propina: lo de la cuenta)
-  − Σ propinas de sus cobros con tarjeta/QR/transferencia   (se las queda: R4)
-  − Σ entregas registradas
+  Σ cobros en efectivo de esa caja con efectivo_de = mozo   (monto − propina: lo de la cuenta)
+  − Σ propinas de sus cobros con tarjeta/QR/transferencia de esa caja   (se las queda: R4)
+  − Σ entregas en esa caja
   ```
+
+  **En el 95% de los casos el mozo tiene saldo en una sola caja.** Para la pantalla,
+  entonces, es un solo número. El desglose por caja sólo se muestra cuando tiene en dos
+  (spec 211 · R2).
 
   La propina en efectivo ya la tiene, así que no entra.
 - **Entregó justo:** `entregado = saldo`. **De menos:** queda saldo, sin motivo
@@ -104,7 +112,7 @@ apertura (fondo que quedó del corte anterior)
 
 ### R4 · Propina de tarjeta/QR: neta
 
-- El mozo **se queda su propina de lo que trae**, que es lo que hace MaxiRest: línea de
+- El mozo **se queda su propina de lo que trae para la misma caja del cobro**, que es lo que hace MaxiRest: línea de
   efectivo negativa en el mismo comprobante, 722 casos en KCC. "Tiene que entregar" ya
   viene neto.
 - **Si no le alcanza el efectivo** (cobró todo con tarjeta), el saldo da negativo: **la
@@ -118,7 +126,7 @@ apertura (fondo que quedó del corte anterior)
   hay **uno abierto** por negocio, garantizado con un índice único parcial.
 - **`cerrar_turno_tx`** bloquea y valida lo mismo que muestra la franja (209 · R1):
   - no quedan **cuentas de mesa abiertas** (`OPEN_TABLE_ORDERS`);
-  - **todo mozo** tiene saldo 0 o deuda reconocida en este turno (`UNRESOLVED_MOZOS`);
+  - **todo mozo**, en **cada** caja, tiene saldo 0 o deuda reconocida en este turno (`UNRESOLVED_MOZOS`);
   - **toda caja de turno** con movimientos en el turno tiene un corte posterior a su
     último movimiento (`CAJA_SIN_CONTAR`).
 
@@ -126,7 +134,9 @@ apertura (fondo que quedó del corte anterior)
   - barre el salón (libera mesas y limpia la distribución, con audit);
   - cierra el turno y abre el siguiente;
   - encola el papel del turno: cajas, rendiciones y deudas.
-- **`cerrar_caja_tx`** deja de barrer el salón y de exigir rendiciones. **Todas las cajas
+- **`cerrar_caja_tx`** deja de barrer el salón y de exigir rendiciones. **Cada caja cierra
+  cuando quiere, independiente de la otra.** Si un mozo todavía tiene saldo de esa caja,
+  lo entrega después y entra en el período siguiente de esa misma caja. **Todas las cajas
   cierran igual:** conteo ciego, diferencia y retiro (209). `p_barrer_salon` desaparece.
   Que la Principal ya no sea especial en el cierre no cambia que sea `is_default` para
   la comandera fiscal.
@@ -134,7 +144,8 @@ apertura (fondo que quedó del corte anterior)
 ### R6 · Correcciones en la base, con vista previa
 
 - **`corregir_pago_tx` acepta además** `attributed_mozo_id`, `caja_id` y `tip_cents`, y
-  recalcula `efectivo_de` con la regla de R1.
+  recalcula `efectivo_de` con la regla de R1. Es el camino para **"se confundieron de
+  caja"**: el cobro pasa a la otra caja y, con él, el saldo del mozo.
 - **Guarda nueva (`MOZO_YA_RINDIO`):** si el cobro **sale de** un mozo, o **pasa a** un
   mozo, que ya entregó en este turno, se rechaza. Para corregirlo primero se anula su
   entrega (R3).
@@ -177,11 +188,20 @@ apertura (fondo que quedó del corte anterior)
 
 ## Escenarios
 
-- **Cobro de Pedro en la Caja Bar, rendido en la Principal.**
-  - **Dado:** Pedro cobra $91.000 en efectivo de una mesa, y el cobro queda en la Caja Bar.
-  - **Entonces:** el "debería haber" de la Bar no cambia, y el saldo de Pedro sube $91.000.
-  - **Cuando** Pedro entrega en la Principal, **entonces** sube la Principal, y ninguna
-    de las dos queda descuadrada.
+- **Mozo con plata de las dos cajas.**
+  - **Dado:** Pedro cobra $91.000 en efectivo de una mesa con la caja «Bar» elegida, y
+    $280.600 netos para la Principal.
+  - **Entonces:** el "debería haber" de ninguna de las dos cambia, y su saldo es $91.000
+    en la Bar y $280.600 en la Principal.
+  - **Cuando** entrega, **entonces** cada monto sube su caja, y ninguna queda descuadrada.
+- **Se confundieron de caja.**
+  - **Dado:** el cobro de $91.000 debía ir a la Principal.
+  - **Cuando** se corrige la caja (con motivo), **entonces** el saldo de Pedro pasa de la
+    Bar a la Principal. La vista previa lo dice antes de guardar.
+- **La Bar cierra antes de que el mozo rinda.**
+  - **Dado:** Pedro tiene $91.000 de la Bar sin entregar.
+  - **Cuando** la Bar cierra a las 00:40, **entonces** cierra con lo que hay en su cajón.
+  - **Cuando** Pedro entrega después, **entonces** entra al período siguiente de la Bar.
 - **Propina de tarjeta neta.**
   - **Dado:** Pedro cobró $380.000 en efectivo (cuentas) y tiene $8.400 de propina con tarjeta.
   - **Entonces:** tiene que entregar $371.600.
