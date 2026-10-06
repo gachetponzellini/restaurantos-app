@@ -137,10 +137,14 @@ function MesasSinCobrar({ mesas }: { mesas: string[] }) {
       className={cn("rounded-3xl p-5 ring-1", mesas.length ? "bg-amber-50 text-amber-950 ring-amber-200" : "bg-white text-zinc-700 ring-zinc-200")}
     >
       <h2 id="mesas-sin-cobrar" className="text-sm font-semibold">
-        {mesas.length ? `Tenés ${mesas.map((m) => `la mesa ${m}`).join(", ")} sin cobrar` : "Mesas sin cobrar"}
+        {mesas.length === 0
+          ? "Mesas sin cobrar"
+          : mesas.length === 1
+            ? `Tenés la mesa ${mesas[0]} sin cobrar`
+            : `Tenés las mesas ${mesas.slice(0, -1).join(", ")} y ${mesas[mesas.length - 1]} sin cobrar`}
       </h2>
       <p className="mt-1 text-sm">
-        {mesas.length ? "Cobrala antes de ir a rendir: si no, vas a tener que rendir dos veces." : "Ninguna. Podés ir a rendir."}
+        {mesas.length ? `${mesas.length > 1 ? "Cobralas" : "Cobrala"} antes de ir a rendir: si no, vas a tener que rendir dos veces.` : "Ninguna. Podés ir a rendir."}
       </p>
     </section>
   );

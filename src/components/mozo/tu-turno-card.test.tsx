@@ -163,8 +163,9 @@ describe("TuTurnoCard", () => {
     conTurno([caja({ efectivo_cents: 10_000, saldo_cents: 10_000 })], ["4", "7"]);
     render(<TuTurnoCard slug="golf-jcr" />);
     expect(
-      await screen.findByRole("heading", { name: "Tenés la mesa 4, la mesa 7 sin cobrar" }),
+      await screen.findByRole("heading", { name: "Tenés las mesas 4 y 7 sin cobrar" }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Cobralas antes de ir a rendir/)).toBeInTheDocument();
   });
 
   it("si getMiTurno devuelve error lo dice, en vez de desaparecer", async () => {
