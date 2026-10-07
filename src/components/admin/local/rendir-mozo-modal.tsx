@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Lock, UserRound } from "lucide-react";
+import { Lock, Printer, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { METHOD_LABEL } from "@/components/admin/local/caja-metricas";
 import type { CajaPayment } from "@/lib/caja/queries";
 import type { SaldoMozo } from "@/lib/caja/turno-queries";
-import { reconocerDeuda, rendirMozo } from "@/lib/caja/turno-actions";
+import { imprimirLiquidacion, reconocerDeuda, rendirMozo } from "@/lib/caja/turno-actions";
 import { formatCurrency } from "@/lib/currency";
 import { TXT } from "@/lib/caja/textos";
 import { TZ_AR } from "@/lib/timezone";
@@ -61,6 +61,39 @@ export function RendirMozoModal({
       setNota("");
     }
   }, [open]);
+
+  // Spec 213 · D1/D2 — al tocar «Rendir» sale el papel con lo que tiene que
+  // entregar. Sólo la primera vez con estos números: abrirlo para mirar no
+  // gasta papel (la base lo sabe por la huella del saldo).
+  const [conCobros, setConCobros] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let vivo = true;
+    imprimirLiquidacion({ slug, mozoId: saldo.mozo_id, cajaId: saldo.caja_id })
+      .then((r) => {
+        if (!vivo) return;
+        if (r.ok && r.data.impreso) toast.success(`Se imprimió la rendición de ${saldo.mozo_name}.`);
+        else if (!r.ok) toast.error(r.error);
+      })
+      .catch(() => vivo && toast.error("No se pudo imprimir la rendición."));
+    return () => {
+      vivo = false;
+    };
+    // Una vez por apertura: los números del momento en que se tocó «Rendir».
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, saldo.mozo_id, saldo.caja_id, slug]);
+
+  const reimprimir = async () => {
+    setImprimiendo(true);
+    try {
+      const r = await imprimirLiquidacion({ slug, mozoId: saldo.mozo_id, cajaId: saldo.caja_id, conCobros, forzar: true });
+      if (r.ok) toast.success(conCobros ? "Se reimprimió con el detalle de cobros." : "Se reimprimió la rendición.");
+      else toast.error(r.error);
+    } finally {
+      setImprimiendo(false);
+    }
+  };
 
   const debe = saldo.saldo_cents;
   const leDebeLaCaja = debe < 0;
@@ -247,6 +280,16 @@ export function RendirMozoModal({
                 <Textarea id="rendir-motivo" value={nota} onChange={(e) => setNota(e.target.value)} rows={2} autoFocus placeholder="Se fue temprano, rinde mañana…" />
               </div>
             )}
+            {/* Spec 213 · D2/D3 — el papel salió al abrir; acá se reimprime, con o sin el detalle. */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-sm">
+              <label className="flex items-center gap-2 text-muted-foreground">
+                <input type="checkbox" checked={conCobros} onChange={(e) => setConCobros(e.target.checked)} className="size-4" />
+                Con el detalle de cobros
+              </label>
+              <Button type="button" variant="outline" size="sm" onClick={reimprimir} disabled={imprimiendo}>
+                <Printer className="size-4" /> {imprimiendo ? "Imprimiendo…" : "Reimprimir"}
+              </Button>
+            </div>
           </div>
         </ModalBody>
 

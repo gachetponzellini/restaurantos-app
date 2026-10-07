@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { CobrarDesktopClient } from "./cobrar-desktop-client";
 import type { IniciarCobroResult } from "@/lib/billing/cobro-actions";
@@ -13,8 +13,9 @@ import { formatCurrency } from "@/lib/currency";
 // Estos tests fijan que la sección aparezca con la mesa cobrada y AFIP
 // configurado — y que sin AFIP la pantalla quede como estaba.
 
+const routerPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), push: routerPush, replace: vi.fn() }),
 }));
 vi.mock("@/lib/billing/cobro-actions", () => ({
   anularCobro: vi.fn(),
@@ -118,6 +119,7 @@ function init(
 function setup(
   afipConfigured: boolean,
   over: Partial<CuentaState["order"]> = {},
+  volverA?: string,
 ) {
   const cuenta = cuentaCobrada(over);
   return render(
@@ -129,6 +131,7 @@ function setup(
       cuenta={cuenta}
       init={init(cuenta)}
       afipConfigured={afipConfigured}
+      volverA={volverA}
     />,
   );
 }
@@ -231,5 +234,13 @@ describe("CobrarDesktopClient · pago parcial sin dividir la cuenta", () => {
     expect(screen.getByText("Falta cobrar").parentElement!).not.toHaveTextContent(
       /ya cobrado/,
     );
+  });
+
+  it("si se entró desde el cierre del turno, «Volver al cierre» vuelve ahí y no al salón", async () => {
+    routerPush.mockClear();
+    setup(true, {}, "/golf-jcr/admin/operacion?tab=caja&caja=caja-1");
+    const boton = await screen.findByRole("button", { name: /Volver al cierre/ });
+    fireEvent.click(boton);
+    expect(routerPush).toHaveBeenCalledWith("/golf-jcr/admin/operacion?tab=caja&caja=caja-1");
   });
 });

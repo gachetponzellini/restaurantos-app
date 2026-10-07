@@ -95,16 +95,21 @@ export function buildRendicionLines(d: RendicionTicketData): Line[] {
   // ── Lo cobrado, por método ─────────────────────────────────────────────
   // Sólo los que tienen plata: un renglón en 0,00 por cada método que el
   // negocio ofrece es ruido en un papel de 42 columnas.
-  push("COBRADO EN EL TURNO", { bold: true });
-  let total = 0;
-  for (const [key, label] of METODOS) {
-    const cents = d.por_metodo[key] ?? 0;
-    if (cents <= 0) continue;
-    total += cents;
-    push(fila(label, monto(cents)));
+  // Spec 213 · R5: las entregas de la caja nueva no guardan el detalle por
+  // método (la cuenta del mozo la tiene la liquidación); sin detalle, la
+  // sección no sale en vez de imprimir «TOTAL 0,00».
+  const conCobrado = METODOS.filter(([key]) => (d.por_metodo[key] ?? 0) > 0);
+  if (conCobrado.length > 0) {
+    push("COBRADO EN EL TURNO", { bold: true });
+    let total = 0;
+    for (const [key, label] of conCobrado) {
+      const cents = d.por_metodo[key] ?? 0;
+      total += cents;
+      push(fila(label, monto(cents)));
+    }
+    push(fila("TOTAL", monto(total)), { bold: true });
+    push(RULE_COND);
   }
-  push(fila("TOTAL", monto(total)), { bold: true });
-  push(RULE_COND);
 
   // ── El efectivo, que es lo único que se rinde (spec 151) ───────────────
   if (d.estado === "no_entrego") {

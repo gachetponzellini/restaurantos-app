@@ -76,6 +76,8 @@ type Props = {
   onClose?: () => void;
   /** El cobro terminó (orden cerrada / anulada): el parent cierra y refresca. */
   onClosed?: () => void;
+  /** Adónde volver al terminar (página): p. ej. el cierre del turno. */
+  volverA?: string;
   /** Recargar los datos del cobro sin cerrar el panel (solo embebido). El
    *  parent re-corre `loadCobroForTable`. Necesario tras dividir/limpiar o un
    *  pago parcial, porque embebido el `init` viene de estado del cliente y
@@ -120,13 +122,14 @@ export function CobrarDesktopClient({
   existingInvoice = null,
   afipConfigured = false,
   clientesParaFiar = [],
+  volverA,
 }: Props) {
   void _tableId;
   const router = useRouter();
   // Volver al salón: embebido cierra el panel via callback; página navega.
   const goHome = () => {
     if (embedded) onClosed?.();
-    else router.push(`/${slug}/admin/operacion`);
+    else router.push(volverA ?? `/${slug}/admin/operacion`);
   };
   // Refrescar los datos del cobro: embebido re-fetchea via parent; página
   // re-renderiza el server component.
@@ -294,12 +297,12 @@ export function CobrarDesktopClient({
               </p>
               <p className="text-xs text-emerald-700">
                 {afipConfigured
-                  ? "Emití el comprobante o volvé al salón."
+                  ? `Emití el comprobante o volvé ${volverA ? "al cierre" : "al salón"}.`
                   : "La mesa se va a marcar para limpiar."}
               </p>
             </div>
             <Button type="button" size="sm" onClick={goHome}>
-              Volver al salón
+              {volverA ? "Volver al cierre" : "Volver al salón"}
               <ArrowRight className="size-3.5" />
             </Button>
           </section>

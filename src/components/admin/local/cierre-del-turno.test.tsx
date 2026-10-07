@@ -31,6 +31,7 @@ vi.mock("@/lib/caja/turno-actions", () => ({
   cerrarTurno: (...args: Parameters<typeof cerrarTurno>) => cerrarTurno(...args),
   rendirMozo: vi.fn(),
   reconocerDeuda: vi.fn(),
+  imprimirLiquidacion: async () => ({ ok: true, data: { impreso: false } }),
 }));
 
 const toastSuccess = vi.fn();
@@ -158,14 +159,15 @@ describe("CierreDelTurno", () => {
   });
 
   describe("con cuentas abiertas", () => {
-    it("el primario es un link a cobrar la mesa", async () => {
+    it("no hay botón arriba: cada mesa tiene su «Cobrar», que vuelve al cierre", async () => {
       conEstado(estado({ cuentas_abiertas: [cuenta()], saldos: [mozo()], cajas: [caja({ sin_contar: true })] }));
       abrir();
 
       await screen.findByRole("heading", { name: "Cierre del turno" });
-      const link = primario("Cobrar mesa 4");
-      expect(link.tagName).toBe("A");
-      expect(link).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar");
+      expect(screen.queryByText(/mesas? abiertas?$/)).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /^Cobrar mesa 4$/ })).not.toBeInTheDocument();
+      const fila = screen.getByRole("link", { name: `Cobrar Mesa 4, falta ${formatCurrency(60_000)}` });
+      expect(fila).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar?volver=%2Fgolf-jcr%2Fadmin%2Foperacion%3Ftab%3Dcaja%26caja%3Dcaja-1");
       expect(screen.getByText("Falta 1 mesa")).toBeInTheDocument();
       // Mientras haya mesas no se ofrece rendir ni cerrar.
       expect(screen.queryByRole("button", { name: /Rendir a/ })).not.toBeInTheDocument();
@@ -180,14 +182,13 @@ describe("CierreDelTurno", () => {
       );
       abrir();
 
-      await screen.findByText("Cobrar 2 mesas abiertas");
-      expect(screen.getByText("Faltan 2 mesas")).toBeInTheDocument();
+      await screen.findByText("Faltan 2 mesas");
       const fila4 = screen.getByRole("link", { name: `Cobrar Mesa 4, falta ${formatCurrency(60_000)}` });
       expect(fila4).toHaveTextContent(`Cobrar ${pesos(60_000)}`);
-      expect(fila4).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar");
+      expect(fila4).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar?volver=%2Fgolf-jcr%2Fadmin%2Foperacion%3Ftab%3Dcaja%26caja%3Dcaja-1");
       expect(screen.getByRole("link", { name: `Cobrar Mesa 7, falta ${formatCurrency(25_000)}` })).toHaveAttribute(
         "href",
-        "/golf-jcr/admin/mesa/t-7/cobrar",
+        "/golf-jcr/admin/mesa/t-7/cobrar?volver=%2Fgolf-jcr%2Fadmin%2Foperacion%3Ftab%3Dcaja%26caja%3Dcaja-1",
       );
     });
     it("en el mismo listado van las cuentas cerradas con saldo, después y sin frenar el cierre", async () => {
@@ -203,9 +204,10 @@ describe("CierreDelTurno", () => {
         }),
       );
       abrir();
-      await screen.findByText("Cobrar mesa 4");
-      const lista = screen.getByRole("region", { name: /Por cobrar/ });
-      const filas = within(lista).getAllByRole("listitem");
+      const lista = await screen.findByRole("region", { name: /Por cobrar/ });
+      void lista;
+      const listaPorCobrar = screen.getByRole("region", { name: /Por cobrar/ });
+      const filas = within(listaPorCobrar).getAllByRole("listitem");
       expect(filas).toHaveLength(2);
       expect(filas[0]).toHaveTextContent("Mesa 4");
       expect(filas[1]).toHaveTextContent("Pedido #208");
@@ -217,29 +219,22 @@ describe("CierreDelTurno", () => {
   });
 
   describe("con mozos sin rendir", () => {
-    it("el primario abre la rendición de ese mozo", async () => {
+    it("no hay botón arriba: cada mozo tiene su «Rendir», que abre su rendición", async () => {
       conEstado(estado({ saldos: [mozo()], cajas: [caja({ sin_contar: true })] }));
       abrir();
 
       await screen.findByRole("heading", { name: "Cierre del turno" });
       expect(screen.getByText("Falta 1")).toBeInTheDocument();
       expect(screen.getByText(`tiene que entregar ${pesos(100_000)}`)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Rendir a Lucía Pérez$/ })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /Rendir a/ })).toHaveLength(1);
 
-      await userEvent.click(primario("Rendir a Lucía Pérez"));
+      await userEvent.click(screen.getByRole("button", { name: "Rendir a Lucía Pérez" }));
       expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: `Entregó ${formatCurrency(100_000)} justo` })).toBeInTheDocument();
     });
 
-    it("el botón de la lista también abre la rendición", async () => {
-      conEstado(estado({ saldos: [mozo()], cajas: [caja({ sin_contar: true })] }));
-      abrir();
-
-      await screen.findByText("Falta 1");
-      await userEvent.click(primario("Rendir"));
-      expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
-    });
-
-    it("con varios pendientes el primario dice cuántos faltan y abre el primero", async () => {
+    it("con varios pendientes, cada uno con su botón y sin primario arriba", async () => {
       conEstado(
         estado({
           saldos: [mozo(), mozo({ mozo_id: "mozo-2", mozo_name: "Beto Ruiz", saldo_cents: 40_000 })],
@@ -249,11 +244,12 @@ describe("CierreDelTurno", () => {
       abrir();
 
       await screen.findByText("Faltan 2");
-      await userEvent.click(primario("Faltan 2 rendiciones"));
-      expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
+      expect(screen.queryByText("Faltan 2 rendiciones")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Rendir a Beto Ruiz" }));
+      expect(await screen.findByText("Rendición de Beto Ruiz")).toBeInTheDocument();
     });
 
-    it("si la caja le debe al mozo, el primario es darle la propina", async () => {
+    it("si la caja le debe al mozo, su fila lo dice y su rendición ofrece darle la propina", async () => {
       conEstado(
         estado({
           saldos: [mozo({ saldo_cents: -6_000, efectivo_cents: 0, propina_tarjeta_cents: 6_000 })],
@@ -263,7 +259,7 @@ describe("CierreDelTurno", () => {
       abrir();
 
       await screen.findByText(`la caja le debe ${pesos(6_000)}`);
-      await userEvent.click(primario("Darle la propina a Lucía Pérez"));
+      await userEvent.click(screen.getByRole("button", { name: "Rendir a Lucía Pérez" }));
       expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: `Darle ${formatCurrency(6_000)} de propina del cajón` })).toBeInTheDocument();
     });

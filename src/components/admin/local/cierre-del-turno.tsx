@@ -90,6 +90,8 @@ export function CierreDelTurno({
 
   const pasos = pasosDelTurno(estado, cajaActivaId);
   const porCobrarFilas = porCobrar(estado.cuentas_abiertas, estado.cuentas_con_saldo ?? []);
+  // Al terminar de cobrar una mesa desde acá, se vuelve acá (no al salón).
+  const volverAlCierre = `/${slug}/admin/operacion?tab=caja&caja=${cajaActivaId}`;
   const p = pasos.proximo;
   const pendientes = estado.saldos.filter((s) => !s.resuelto);
   const variasCajas = estado.cajas.length > 1;
@@ -109,11 +111,6 @@ export function CierreDelTurno({
       void cargar();
       onChanged();
     });
-
-  const abrirRendicion = (mozoId: string, cajaId: string) => {
-    const s = estado.saldos.find((x) => x.mozo_id === mozoId && x.caja_id === cajaId);
-    if (s) setRindiendo(s);
-  };
 
   const paso = (n: number, titulo: string, detalle: string, listo: boolean, actual: boolean) => (
     <li
@@ -150,16 +147,8 @@ export function CierreDelTurno({
           {error && <p role="status" className="mt-1 text-xs font-medium text-amber-700">Sin conexión: esto puede estar desactualizado.</p>}
         </div>
 
-        {p.kind === "cobrar" && (
-          <IntentLink href={`/${slug}/admin/mesa/${p.tableId}/cobrar`} className={buttonVariants({ size: "lg" })}>
-            <Receipt className="size-4" /> {p.label}
-          </IntentLink>
-        )}
-        {p.kind === "rendir" && (
-          <Button size="lg" onClick={() => abrirRendicion(p.mozoId, p.cajaId)}>
-            <UserRound className="size-4" /> {p.label}
-          </Button>
-        )}
+        {/* Cobrar y rendir no tienen botón arriba: cada mesa y cada mozo tiene el
+            suyo en la lista de abajo (Juan, 2026-10-07). */}
         {p.kind === "contar" && (
           <Button size="lg" onClick={() => onContar(p.cajaId)}>
             <Lock className="size-4" /> {p.label}
@@ -246,13 +235,13 @@ export function CierreDelTurno({
                 <IntentLink
                   href={
                     f.destino.kind === "mesa"
-                      ? `/${slug}/admin/mesa/${f.destino.tableId}/cobrar`
+                      ? `/${slug}/admin/mesa/${f.destino.tableId}/cobrar?volver=${encodeURIComponent(volverAlCierre)}`
                       : `/${slug}/admin/pedidos/historial?q=${f.destino.orderNumber}`
                   }
-                  className={buttonVariants({ size: "sm", variant: f.frena ? "secondary" : "outline" })}
+                  className={buttonVariants({ size: "sm" })}
                   aria-label={`Cobrar ${f.nombre}, falta ${formatCurrency(f.faltaCents)}`}
                 >
-                  Cobrar {formatCurrency(f.faltaCents)}
+                  <Receipt className="size-4" /> Cobrar {formatCurrency(f.faltaCents)}
                 </IntentLink>
               </li>
             ))}
@@ -272,8 +261,8 @@ export function CierreDelTurno({
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {m.saldo_cents < 0 ? `la caja le debe ${formatCurrency(-m.saldo_cents)}` : `tiene que entregar ${formatCurrency(m.saldo_cents)}`}
                 </span>
-                <Button size="sm" variant="secondary" aria-label={`Rendir a ${m.mozo_name}`} onClick={() => setRindiendo(m)}>
-                  Rendir
+                <Button size="sm" aria-label={`Rendir a ${m.mozo_name}`} onClick={() => setRindiendo(m)}>
+                  <UserRound className="size-4" /> Rendir
                 </Button>
               </span>
             </li>

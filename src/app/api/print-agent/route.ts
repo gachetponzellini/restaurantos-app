@@ -10,6 +10,10 @@ import {
   type RendicionTicketData,
 } from "@/lib/print/rendicion-ticket";
 import {
+  buildLiquidacionContent,
+  type LiquidacionTicketData,
+} from "@/lib/print/liquidacion-ticket";
+import {
   resolveCierrePrinter,
   resolveCuentaPrinter,
 } from "@/lib/print/cuenta-printer";
@@ -659,7 +663,7 @@ async function buildTrabajos(
   // Cada familia de papel va aislada: un bug armando el control, la cuenta o la
   // factura NO puede dejar a cocina sin comandas. Es la parte crítica de este
   // endpoint y la única que, si falla, para el local.
-  const [controls, cuentas, facturas, cierres, pruebas, rendiciones] =
+  const [controls, cuentas, facturas, cierres, pruebas, rendiciones, liquidaciones] =
     await Promise.all([
       safePrintables("control", () =>
         buildPrintableControlTickets(service, businessId),
@@ -678,6 +682,9 @@ async function buildTrabajos(
       ),
       safePrintables("rendicion", () =>
         buildPrintableRendicionTickets(service, businessId),
+      ),
+      safePrintables("liquidacion", () =>
+        buildPrintableLiquidacionTickets(service, businessId),
       ),
     ]);
 
@@ -700,6 +707,7 @@ async function buildTrabajos(
     ...cierres,
     ...pruebas,
     ...rendiciones,
+    ...liquidaciones,
   ].filter((t) => alcanzaLaImpresora(agente.printerScope, t.printer_ip));
 
   return trabajos;
@@ -1734,6 +1742,68 @@ async function buildPrintableCierreTickets(
  * criterio — se arma del snapshot de `mozo_rendiciones`, no de la base viva. Lo
  * único que se resuelve en vivo son los dos nombres, que no están en la fila.
  */
+/**
+ * La liquidación del mozo (spec 213, #386): sale al tocar «Rendir», por la
+ * misma impresora que el cierre. Se arma de la foto guardada en `payload`.
+ */
+async function buildPrintableLiquidacionTickets(
+  service: ReturnType<typeof createSupabaseServiceClient>,
+  businessId: string,
+) {
+  const { data: bizRow } = await service
+    .from("businesses")
+    .select(
+      "name, cuenta_printer_ip, cuenta_printer_port, cuenta_printer_enabled, control_printer_ip, control_printer_port, control_printer_enabled",
+    )
+    .eq("id", businessId)
+    .maybeSingle();
+  if (!bizRow) return [];
+  const printer = resolveCierrePrinter(bizRow as Parameters<typeof resolveCierrePrinter>[0]);
+  if (!printer) return [];
+
+  const { data: jobs, error } = await service
+    .from("print_jobs")
+    .select("id, emitted_at, reprint_requested_at, payload")
+    .eq("business_id", businessId)
+    .eq("kind", "liquidacion")
+    .eq("status", "pendiente")
+    .order("emitted_at", { ascending: true });
+  if (error) {
+    console.error("print-agent GET · print_jobs liquidacion", error);
+    return [];
+  }
+  return ((jobs ?? []) as { id: string; emitted_at: string; reprint_requested_at: string | null; payload: LiquidacionTicketData }[]).map(
+    (j) => {
+      const data: LiquidacionTicketData = {
+        ...j.payload,
+        negocio_name: sanitizeTicketText(j.payload.negocio_name) ?? "—",
+        mozo_name: sanitizeTicketText(j.payload.mozo_name) ?? "Mozo",
+        caja_name: sanitizeTicketText(j.payload.caja_name) ?? "Caja",
+        impreso_por: sanitizeTicketText(j.payload.impreso_por ?? null),
+        reimpresion: Boolean(j.payload.reimpresion || j.reprint_requested_at),
+      };
+      const content = buildLiquidacionContent(data);
+      return {
+        comanda_id: j.id,
+        station_id: null,
+        station_name: "RENDICION",
+        printer_ip: printer.ip,
+        printer_port: printer.port,
+        printer_enabled: true,
+        batch: 1,
+        emitted_at: j.emitted_at,
+        cancelled: false,
+        cancelled_reason: null,
+        reprint: Boolean(data.reimpresion),
+        table_label: data.mozo_name,
+        items: [],
+        content_escpos_b64: content.escpos_b64,
+        content_plain: content.plain,
+      };
+    },
+  );
+}
+
 async function buildPrintableRendicionTickets(
   service: ReturnType<typeof createSupabaseServiceClient>,
   businessId: string,

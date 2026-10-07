@@ -23,6 +23,7 @@ vi.mock("@/app/[business_slug]/admin/(authed)/operacion/actions", () => ({
 vi.mock("@/lib/caja/turno-actions", () => ({
   rendirMozo: vi.fn(),
   reconocerDeuda: vi.fn(),
+  imprimirLiquidacion: async () => ({ ok: true, data: { impreso: false } }),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

@@ -3407,13 +3407,17 @@ export type Database = {
       print_jobs: {
         Row: {
           business_id: string;
+          caja_id: string | null;
           corte_id: string | null;
           emitted_at: string;
+          huella: string | null;
           id: string;
           invoice_id: string | null;
           kind: string;
           last_error: string | null;
+          mozo_id: string | null;
           order_id: string | null;
+          payload: Json | null;
           print_failed_at: string | null;
           printed_at: string | null;
           rendicion_id: string | null;
@@ -3426,13 +3430,17 @@ export type Database = {
         };
         Insert: {
           business_id: string;
+          caja_id?: string | null;
           corte_id?: string | null;
           emitted_at?: string;
+          huella?: string | null;
           id?: string;
           invoice_id?: string | null;
           kind: string;
           last_error?: string | null;
+          mozo_id?: string | null;
           order_id?: string | null;
+          payload?: Json | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
           rendicion_id?: string | null;
@@ -3445,13 +3453,17 @@ export type Database = {
         };
         Update: {
           business_id?: string;
+          caja_id?: string | null;
           corte_id?: string | null;
           emitted_at?: string;
+          huella?: string | null;
           id?: string;
           invoice_id?: string | null;
           kind?: string;
           last_error?: string | null;
+          mozo_id?: string | null;
           order_id?: string | null;
+          payload?: Json | null;
           print_failed_at?: string | null;
           printed_at?: string | null;
           rendicion_id?: string | null;

@@ -159,5 +159,11 @@ describe("rendición · efectivo por canal (spec 203)", () => {
     expect(lines).toContain("TAKEAWAY");
     expect(lines).toContain("DELIVERY");
   });
-});
 
+  it("spec 213 · una entrega de la caja nueva (sin detalle por método) no imprime «TOTAL 0,00»", () => {
+    const t = texto(data({ por_metodo: {} })).join("\n");
+    expect(t).not.toContain("COBRADO EN EL TURNO");
+    expect(t).not.toMatch(/TOTAL\s+0,00/);
+    expect(t).toContain("Debia entregar");
+  });
+});

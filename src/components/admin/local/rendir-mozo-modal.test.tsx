@@ -23,9 +23,18 @@ const reconocerDeuda = vi.fn(
   }),
 );
 
+const imprimirLiquidacion = vi.fn(
+  async (..._args: Parameters<TurnoActions["imprimirLiquidacion"]>): ReturnType<TurnoActions["imprimirLiquidacion"]> => ({
+    ok: true,
+    // Por defecto «ya estaba impreso»: así no suma un toast a los tests de la rendición.
+    data: { impreso: false },
+  }),
+);
+
 vi.mock("@/lib/caja/turno-actions", () => ({
   rendirMozo: (...args: Parameters<typeof rendirMozo>) => rendirMozo(...args),
   reconocerDeuda: (...args: Parameters<typeof reconocerDeuda>) => reconocerDeuda(...args),
+  imprimirLiquidacion: (...args: Parameters<typeof imprimirLiquidacion>) => imprimirLiquidacion(...args),
 }));
 
 const toastSuccess = vi.fn();
@@ -309,5 +318,26 @@ describe("RendirMozoModal", () => {
     expect(screen.getByText(pesos(60_000))).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`propina ${pesos(4_000).replace("$", "\\$")}`))).toBeInTheDocument();
     expect(screen.getByText("Tarjeta y QR ya entraron por el posnet: no se rinden.")).toBeInTheDocument();
+  });
+
+  describe("el papel de la rendición (spec 213)", () => {
+    it("al abrir la rendición pide imprimir la liquidación de ese mozo en esa caja, sin forzar", async () => {
+      imprimirLiquidacion.mockClear();
+      abrir(saldoMozo({ saldo_cents: 60_000 }));
+      await waitFor(() => expect(imprimirLiquidacion).toHaveBeenCalledTimes(1));
+      expect(imprimirLiquidacion.mock.calls[0][0]).toMatchObject({ slug: "golf-jcr", mozoId: "mozo-1" });
+      expect(imprimirLiquidacion.mock.calls[0][0].forzar).toBeUndefined();
+    });
+
+    it("«Reimprimir» fuerza el papel y puede llevar el detalle de cobros", async () => {
+      const user = userEvent.setup();
+      abrir(saldoMozo({ saldo_cents: 60_000 }));
+      await waitFor(() => expect(imprimirLiquidacion).toHaveBeenCalled());
+      imprimirLiquidacion.mockClear();
+      await user.click(screen.getByRole("checkbox", { name: "Con el detalle de cobros" }));
+      await user.click(screen.getByRole("button", { name: /Reimprimir/ }));
+      await waitFor(() => expect(imprimirLiquidacion).toHaveBeenCalledTimes(1));
+      expect(imprimirLiquidacion.mock.calls[0][0]).toMatchObject({ conCobros: true, forzar: true });
+    });
   });
 });

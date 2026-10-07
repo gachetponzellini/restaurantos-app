@@ -302,3 +302,154 @@ export async function getMiTurno(slug: string): Promise<ActionResult<MiTurno>> {
     mesas_sin_cobrar: mesas.map((x) => x.tableLabel ?? "?"),
   });
 }
+
+// ── La liquidación del mozo (spec 213, #386) ────────────────────────────────
+
+const METODO_LABEL: Record<string, string> = {
+  card_manual: "Tarjeta",
+  mp_qr: "MercadoPago QR",
+  mp_link: "MercadoPago link",
+  mp_manual: "Mercado Pago",
+  transfer: "Transferencia",
+  cuenta_corriente: "Cuenta corriente",
+  other: "Otro",
+};
+
+/**
+ * El papel que sale al tocar «Rendir»: cuánto tiene que entregar el mozo en
+ * esa caja y cómo sale el número. Guarda la foto de los números en la cola de
+ * la comandera (`print_jobs.kind = 'liquidacion'`).
+ *
+ * Sin `forzar`, si ya se imprimió una con los mismos números no imprime de
+ * nuevo (D2): abrir la rendición para mirarla no gasta papel. Si el saldo
+ * cambió (cobró otra mesa, entregó una parte) es otra liquidación y sale.
+ */
+export async function imprimirLiquidacion(input: {
+  slug: string;
+  mozoId: string;
+  cajaId: string;
+  /** Con el detalle de cada cobro en efectivo (D3: por defecto, no). */
+  conCobros?: boolean;
+  /** Reimprimir aunque ya haya salido con estos números. */
+  forzar?: boolean;
+}): Promise<ActionResult<{ impreso: boolean }>> {
+  const c = await contexto(input.slug);
+  if (!c.ok) return c;
+  if (!canRendirMozo(c.data.role)) return actionError("Solo encargado o admin pueden imprimir la rendición.");
+  const businessId = c.data.business.id as string;
+  const sb = db();
+
+  const { data: turno } = await sb
+    .from("turnos")
+    .select("abierto_at")
+    .eq("business_id", businessId)
+    .is("cerrado_at", null)
+    .maybeSingle();
+  const desde = (turno as { abierto_at: string } | null)?.abierto_at ?? null;
+
+  const { getSaldosMozos } = await import("./turno-queries");
+  const saldo = (await getSaldosMozos(businessId, desde ?? undefined)).find(
+    (s) => s.mozo_id === input.mozoId && s.caja_id === input.cajaId,
+  );
+  if (!saldo) return actionError("Ese mozo no tiene nada para rendir en esta caja.");
+
+  const huella = [
+    saldo.anterior_cents, saldo.efectivo_cents, saldo.propina_tarjeta_cents,
+    saldo.entregado_cents, saldo.pagado_cents, saldo.saldo_cents,
+  ].join("|");
+
+  if (!input.forzar) {
+    const { count } = await sb
+      .from("print_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("kind", "liquidacion")
+      .eq("mozo_id", input.mozoId)
+      .eq("caja_id", input.cajaId)
+      .eq("huella", huella);
+    if ((count ?? 0) > 0) return actionOk({ impreso: false });
+  }
+
+  // Los cobros de la ventana del turno: el efectivo (para el detalle) y lo que
+  // no se rinde (posnet/MP), como referencia.
+  let pagos = sb
+    .from("payments")
+    .select("method, amount_cents, tip_cents, created_at, orders!inner(daily_number, order_number, tables!orders_table_id_fkey(label))")
+    .eq("business_id", businessId)
+    .eq("rinde_mozo_id", input.mozoId)
+    .eq("caja_id", input.cajaId)
+    .eq("payment_status", "paid")
+    .order("created_at");
+  if (desde) pagos = pagos.gt("created_at", desde);
+  const { data: filas, error: pagosErr } = await pagos;
+  if (pagosErr) return actionError(traducir(pagosErr.message));
+  type Fila = {
+    method: string;
+    amount_cents: number;
+    tip_cents: number;
+    created_at: string;
+    orders: { daily_number: number | null; order_number: number; tables: { label: string } | null } | null;
+  };
+  const lista = (filas ?? []) as unknown as Fila[];
+  const noSeRinden = new Map<string, number>();
+  for (const p of lista) {
+    if (p.method === "cash") continue;
+    const k = METODO_LABEL[p.method] ?? p.method;
+    noSeRinden.set(k, (noSeRinden.get(k) ?? 0) + Number(p.amount_cents));
+  }
+
+  const [{ data: nombres }, { data: caja }] = await Promise.all([
+    sb.from("business_users").select("user_id, full_name").eq("business_id", businessId).in("user_id", [input.mozoId, c.data.userId]),
+    sb.from("cajas").select("name").eq("id", input.cajaId).eq("business_id", businessId).single(),
+  ]);
+  const nombre = new Map(((nombres ?? []) as { user_id: string; full_name: string | null }[]).map((u) => [u.user_id, u.full_name]));
+  if (!caja) return actionError("Caja no encontrada.");
+
+  const payload = {
+    negocio_name: c.data.business.name as string,
+    mozo_name: nombre.get(input.mozoId) ?? saldo.mozo_name,
+    caja_name: (caja as { name: string }).name,
+    turno_desde: desde,
+    impreso_at: new Date().toISOString(),
+    impreso_por: nombre.get(c.data.userId) ?? null,
+    anterior_cents: saldo.anterior_cents,
+    efectivo_cents: saldo.efectivo_cents,
+    propina_tarjeta_cents: saldo.propina_tarjeta_cents,
+    entregado_cents: saldo.entregado_cents,
+    pagado_cents: saldo.pagado_cents,
+    saldo_cents: saldo.saldo_cents,
+    no_se_rinden: [...noSeRinden].map(([label, cents]) => ({ label, cents })),
+    mesas_sin_cobrar: saldo.mesas_sin_cobrar.map((m) => m.tableLabel ?? "?"),
+    ...(input.conCobros
+      ? {
+          cobros: lista
+            .filter((p) => p.method === "cash")
+            .map((p) => ({
+              label: p.orders?.tables?.label
+                ? `Mesa ${p.orders.tables.label}`
+                : `Pedido #${p.orders?.daily_number ?? p.orders?.order_number ?? "?"}`,
+              at: p.created_at,
+              efectivo_cents: Number(p.amount_cents) - Number(p.tip_cents),
+              propina_efectivo_cents: Number(p.tip_cents),
+            })),
+        }
+      : {}),
+    reimpresion: Boolean(input.forzar),
+  };
+
+  const { error } = await sb.from("print_jobs").insert({
+    business_id: businessId,
+    kind: "liquidacion",
+    status: "pendiente",
+    mozo_id: input.mozoId,
+    caja_id: input.cajaId,
+    huella,
+    payload,
+    requested_by: c.data.userId,
+  });
+  if (error) {
+    console.error("imprimirLiquidacion", error);
+    return actionError("No pudimos mandar la rendición a la impresora.");
+  }
+  return actionOk({ impreso: true });
+}

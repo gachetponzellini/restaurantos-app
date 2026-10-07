@@ -18,10 +18,19 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminCobrarPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ business_slug: string; id: string }>;
+  searchParams?: Promise<{ volver?: string }>;
 }) {
   const { business_slug, id: tableId } = await params;
+  // Adónde volver al terminar de cobrar (p. ej. el cierre del turno). Sólo una
+  // ruta del admin de este mismo negocio: nada de redirigir afuera.
+  const volverRaw = (await searchParams)?.volver;
+  const volverA =
+    volverRaw && volverRaw.startsWith(`/${business_slug}/admin/`) && !volverRaw.startsWith("//")
+      ? volverRaw
+      : undefined;
   const business = await getBusiness(business_slug);
   if (!business) notFound();
 
@@ -110,6 +119,7 @@ export default async function AdminCobrarPage({
       existingInvoice={existingInvoice}
       afipConfigured={afipConfigured}
       clientesParaFiar={clientesParaFiar}
+      volverA={volverA}
     />
   );
 }
