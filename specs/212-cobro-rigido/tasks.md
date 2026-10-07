@@ -5,4 +5,4 @@
 - [x] Escenario «día de caja»: C43 queda anulado.
 - [x] D2 (no anular lo cerrado): implementada en `e15f4b8` y revertida antes de desplegar. La 0146 no existe.
 - [x] `pnpm typecheck && pnpm test` (4047).
-- [ ] Deploy (sin migraciones) con OK de Juan.
+- [x] Deploy (sin migraciones), 2026-10-07, `5293e0f`.
