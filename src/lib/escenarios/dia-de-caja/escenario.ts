@@ -583,6 +583,110 @@ export async function jugarElDia(n: Negocio): Promise<Dia> {
     },
   );
 
+  // ── Splits contra la caja nueva ──────────────────────────────────────────
+
+  await caso(
+    { id: "C50", titulo: "Dividida por personas y cobrada en dos cajas", cubre: "cada sub-cuenta en efectivo en una caja distinta: el saldo del mozo queda partido entre las dos", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("pedro", [{ p: "pizza", q: 2 }]);
+      const { splits } = ok(await dividirPorPersonas(orderId, 2, n.slug), "dividir");
+      await h.cobrar("pedro", orderId, { method: "cash", amount: 1_500_000, splitId: splits[0].id });
+      await h.cobrar("pedro", orderId, { method: "cash", amount: 1_500_000, splitId: splits[1].id, caja: "bar" });
+      return {
+        orderId,
+        pagado: 3_000_000,
+        efectos: [
+          { mozo: "pedro", caja: "principal", cents: 1_500_000 },
+          { mozo: "pedro", caja: "bar", cents: 1_500_000 },
+        ],
+      };
+    },
+  );
+
+  await caso(
+    { id: "C51", titulo: "Sub-cuenta cobrada, anulada y vuelta a cobrar con tarjeta", cubre: "anular el pago de una sub-cuenta la deja para cobrar de nuevo; el efectivo anulado deja de ser del mozo", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("lucia", [{ p: "milanesa", q: 2 }]);
+      const { splits } = ok(await dividirPorPersonas(orderId, 2, n.slug), "dividir");
+      const r = await h.cobrar("lucia", orderId, { method: "cash", amount: 1_200_000, splitId: splits[0].id });
+      h.como("encargada");
+      ok(await anularLineaDeCobro({ paymentId: r.payment.id, slug: n.slug, motivo: "Pagó con tarjeta" }), "anular sub-cuenta");
+      await h.cobrar("lucia", orderId, { method: "card_manual", amount: T(1_200_000), splitId: splits[0].id });
+      await h.cobrar("lucia", orderId, { method: "cash", amount: 1_200_000, splitId: splits[1].id });
+      return { orderId, pagado: 2_400_000, efectos: [{ mozo: "lucia", caja: "principal", cents: 1_200_000 }] };
+    },
+  );
+
+  await caso(
+    { id: "C52", titulo: "Re-dividida después de un pago parcial, con propina", cubre: "dividida en 2, paga uno; lo que falta se re-divide por monto y se cobra: la propina va una sola vez", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("diego", [{ p: "cafe", q: 4 }]);
+      h.como("encargada");
+      ok(await aplicarPropinaYDescuento(orderId, { tip_cents: 100_000, discount_cents: 0, discount_reason: null }, n.slug), "propina");
+      h.como("diego");
+      const { splits } = ok(await dividirPorPersonas(orderId, 2, n.slug), "dividir");
+      await h.cobrar("diego", orderId, { method: "cash", amount: splits[0].expected_amount_cents, splitId: splits[0].id });
+      const { splits: resto } = ok(await dividirPorMonto(orderId, [300_000], n.slug), "re-dividir por monto");
+      for (const sp of resto.filter((x) => x.status !== "paid" && x.status !== "cancelled")) {
+        await h.cobrar("diego", orderId, { method: "cash", amount: sp.expected_amount_cents - sp.paid_amount_cents, splitId: sp.id });
+      }
+      // Todo en efectivo: entrega lo cobrado ($11.000) menos su propina en efectivo ($1.000).
+      return { orderId, pagado: 1_100_000, efectos: [{ mozo: "diego", caja: "principal", cents: 1_000_000 }] };
+    },
+  );
+
+  await caso(
+    { id: "C53", titulo: "Sub-cuenta corregida de efectivo a tarjeta", cubre: "corregir el método del pago de una sub-cuenta: la cuenta sigue saldada y esa parte deja de ser del mozo", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("pedro", [{ p: "milanesa" }, { p: "flan" }]);
+      const it = await h.itemsDe(orderId);
+      const id = (k: keyof Negocio["productos"]) => it.find((i) => i.product_id === n.productos[k])!.id;
+      const { splits } = ok(await dividirPorItems(orderId, { 0: [id("milanesa")], 1: [id("flan")] }, n.slug), "dividir por ítems");
+      const sMila = splits.find((x) => x.expected_amount_cents === P.milanesa)!;
+      const sFlan = splits.find((x) => x.expected_amount_cents === P.flan)!;
+      await h.cobrar("pedro", orderId, { method: "cash", amount: P.milanesa, splitId: sMila.id });
+      const r = await h.cobrar("pedro", orderId, { method: "cash", amount: P.flan, splitId: sFlan.id });
+      h.como("encargada");
+      ok(
+        await corregirCobro({ paymentId: r.payment.id, slug: n.slug, motivo: "El postre lo pagó con tarjeta", method: "card_manual", last_four: "4242" }),
+        "corregir sub-cuenta",
+      );
+      return { orderId, pagado: 1_700_000, efectos: [{ mozo: "pedro", caja: "principal", cents: 1_200_000 }] };
+    },
+  );
+
+  await caso(
+    { id: "C54", titulo: "Cada sub-cuenta la cobra alguien distinto", cubre: "dividida en 3: cobran la moza y la encargada; toda la plata es de la moza de la mesa", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("lucia", [{ p: "flan", q: 3 }]);
+      const { splits } = ok(await dividirPorPersonas(orderId, 3, n.slug), "dividir en 3");
+      await h.cobrar("lucia", orderId, { method: "cash", amount: P.flan, splitId: splits[0].id });
+      await h.cobrar("encargada", orderId, { method: "cash", amount: P.flan, splitId: splits[1].id });
+      await h.cobrar("encargada", orderId, { method: "card_manual", amount: T(P.flan), splitId: splits[2].id });
+      return { orderId, pagado: 1_500_000, efectos: [{ mozo: "lucia", caja: "principal", cents: 1_000_000 }] };
+    },
+  );
+
+  await caso(
+    { id: "C55", titulo: "Dividida con propina: una parte con tarjeta (con recargo) y otra en efectivo", cubre: "propina prorrateada en las sub-cuentas + recargo de tarjeta: se queda su propina de tarjeta de lo que trae", estado: "cerrada" },
+    async () => {
+      const { orderId } = await h.abrirMesa("diego", [{ p: "pizza" }, { p: "milanesa" }]);
+      h.como("encargada");
+      ok(await aplicarPropinaYDescuento(orderId, { tip_cents: 270_000, discount_cents: 0, discount_reason: null }, n.slug), "propina");
+      h.como("diego");
+      const { splits } = ok(await dividirPorPersonas(orderId, 2, n.slug), "dividir");
+      await h.cobrar("diego", orderId, { method: "card_manual", amount: T(1_485_000), splitId: splits[0].id });
+      await h.cobrar("diego", orderId, { method: "cash", amount: 1_485_000, splitId: splits[1].id });
+      return {
+        orderId,
+        efectos: [
+          { mozo: "diego", caja: "principal", cents: 1_485_000 - 135_000 }, // efectivo sin su propina en efectivo
+          { mozo: "diego", caja: "principal", cents: -135_000 }, // su propina de la tarjeta
+        ],
+      };
+    },
+  );
+
   // ── Rendiciones a mitad del turno ────────────────────────────────────────
 
   await caso(

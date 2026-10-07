@@ -55,7 +55,7 @@ describe("preparar el demo: un día de caja abierto", () => {
       `▸ Día anterior cerrado: ${previo.mesasCobradas} mesas cobradas, ${previo.mesasAnuladas} anuladas, ` +
       `${previo.rendiciones} rendiciones, ${previo.cortes.length} cajas contadas.`;
     n = await cargarNegocioDemo(sb); // mesas libres de nuevo
-    if (n.mesas.length < 38) throw new Error(`Demo tiene ${n.mesas.length} mesas libres; el escenario usa 38.`);
+    if (n.mesas.length < 44) throw new Error(`Demo tiene ${n.mesas.length} mesas libres; el escenario usa 44.`);
 
     const inicio = { principal: await esperadoDe(n, n.cajas.principal), bar: await esperadoDe(n, n.cajas.bar) };
 

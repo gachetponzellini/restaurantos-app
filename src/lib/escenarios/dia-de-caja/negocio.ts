@@ -198,7 +198,7 @@ export async function crearNegocioDePrueba(sb: SupabaseClient, tag: string): Pro
     await sb
       .from("tables")
       .insert(
-        Array.from({ length: 44 }, (_, i) => ({
+        Array.from({ length: 52 }, (_, i) => ({
           floor_plan_id: plan.id,
           label: `${i + 1}`,
           seats: 4,
