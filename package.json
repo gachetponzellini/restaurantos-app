@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:local": "node scripts/test-env-local.mjs && vitest run",
     "test:env:local": "node scripts/test-env-local.mjs",
+    "escenario:demo": "vitest run --config vitest.escenario.config.ts",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report",
