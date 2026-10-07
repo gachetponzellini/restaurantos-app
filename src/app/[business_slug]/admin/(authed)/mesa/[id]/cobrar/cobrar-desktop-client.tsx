@@ -273,9 +273,8 @@ export function CobrarDesktopClient({
           </section>
         )}
 
-        {/* Anular cobro (admin / encargado). Spec 212: sólo con la cuenta
-            abierta; lo cobrado y cerrado se corrige, no se anula. */}
-        {(role === "admin" || role === "encargado") && totalPaid > 0 && !orderClosed && (
+        {/* Anular cobro (admin / encargado) */}
+        {(role === "admin" || role === "encargado") && totalPaid > 0 && (
           <AnularCobroSection
             orderId={cuenta.order.id}
             slug={slug}

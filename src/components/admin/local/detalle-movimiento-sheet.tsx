@@ -682,10 +682,7 @@ export function DetalleSheet({
               {/* Anular ≠ borrar: la línea deja de sumar pero sigue acá, con
                   motivo y responsable. Una fila borrada dejaría el arqueo sin
                   explicación. */}
-              {esCobro && entry.sin_anular && (
-                <p className="border-t border-zinc-100 pt-4 text-sm text-zinc-600">{entry.sin_anular}</p>
-              )}
-              {esCobro && !entry.sin_anular && (
+              {esCobro && (
                 <div className="border-t border-zinc-100 pt-4">
                   {!confirmandoAnular ? (
                     <button

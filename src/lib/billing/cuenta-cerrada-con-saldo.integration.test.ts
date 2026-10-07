@@ -130,15 +130,14 @@ describe.skipIf(!dbAvailable)("cuenta cerrada con saldo (integration · #339)", 
     const orderId = await seedOrder(1_850_000);
     const p1 = await pagar(orderId, 1_850_000);
     expect(p1.error).toBeNull();
-    // Hoy se llega a «cerrada con saldo» cuando MP devuelve uno de los pagos.
-    // Spec 212: un cobro de una cuenta cerrada ya no se anula; acá se anula con
-    // la cuenta abierta y recién después se cierra, que es el mismo estado.
-    const pago1 = (Array.isArray(p1.data) ? p1.data[0] : p1.data).payment;
-    expect((await anular(pago1.id)).error).toBeNull();
     await supabase
       .from("orders")
-      .update({ lifecycle_status: "closed", payment_status: "pending", status: "delivered" })
+      .update({ lifecycle_status: "closed", payment_status: "paid", status: "delivered" })
       .eq("id", orderId);
+
+    // Se anula la línea con la cuenta ya cerrada: queda cerrada, con saldo.
+    const pago1 = (Array.isArray(p1.data) ? p1.data[0] : p1.data).payment;
+    expect((await anular(pago1.id)).error).toBeNull();
     let o = await leerOrden(orderId);
     expect(o.lifecycle_status).toBe("closed");
     expect(o.payment_status).toBe("pending");

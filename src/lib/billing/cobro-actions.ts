@@ -1129,11 +1129,6 @@ export async function anularCobro(
   const service = createSupabaseServiceClient() as unknown as GenericClient;
   const order = await loadOrder(service, orderId, business.id);
   if (!order) return actionError("Orden no encontrada.");
-  // Spec 212 (#385) — lo cobrado y entregado no se anula: se corrige. La base
-  // lo impide igual (0146).
-  if (order.lifecycle_status === "closed") {
-    return actionError("El pedido ya está cerrado: el cobro no se anula, se corrige (método, caja, mozo o monto).");
-  }
 
   // spec 098 · H-35 — un arqueo firmado no se reescribe.
   //

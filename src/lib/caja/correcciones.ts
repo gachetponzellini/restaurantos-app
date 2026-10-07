@@ -363,9 +363,6 @@ const ERRORES_RPC: Record<string, string> = {
   // Caja v2 (0137, 0143).
   MOZO_YA_RINDIO:
     "Ese cobro ya entró en la rendición del mozo. Para corregirlo, primero anulá su entrega.",
-  // Spec 212 (#385).
-  COBRO_CERRADO_NO_SE_ANULA:
-    "El pedido ya está cerrado: el cobro no se anula, se corrige (método, caja, mozo o monto).",
   MOVIMIENTO_DE_MOZO:
     "Una entrega de mozo no se corrige acá: anulala desde la rendición del mozo.",
 };

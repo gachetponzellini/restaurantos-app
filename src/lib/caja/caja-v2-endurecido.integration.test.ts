@@ -114,11 +114,11 @@ describe.skipIf(!dbAvailable)("caja v2 · endurecido (0139)", () => {
     expect(error).toBeNull();
   });
 
-  it("anular en efectivo lo que ya entregó sigue trabado (MOZO_YA_RINDIO; si la cuenta está cerrada, ya ni se anula: 0146)", async () => {
+  it("anular en efectivo lo que ya entregó sigue trabado (MOZO_YA_RINDIO)", async () => {
     const id = await cobro({ amount: 10_000 });
     await rendir(await saldo());
     const { error } = await s.sb.from("payments").update({ payment_status: "refunded" }).eq("id", id);
-    expect(error?.message).toMatch(/MOZO_YA_RINDIO|COBRO_CERRADO_NO_SE_ANULA/);
+    expect(error?.message).toContain("MOZO_YA_RINDIO");
   });
 
   it("una entrega que ya entró en un arqueo no se anula (ARQUEO_CERRADO)", async () => {

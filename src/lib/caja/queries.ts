@@ -1123,7 +1123,7 @@ export async function getLibroDeMovimientos(
   let pagosQuery = service
     .from("payments")
     .select(
-      "id, caja_id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, order_id, payment_status, refunded_reason, mp_payment_id, orders!inner(order_number, lifecycle_status, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
+      "id, caja_id, method, amount_cents, tip_cents, created_at, attributed_mozo_id, order_id, payment_status, refunded_reason, mp_payment_id, orders!inner(order_number, delivery_type, customer_name, table_id, tables!orders_table_id_fkey(label))",
     )
     .eq("business_id", businessId)
     .in("payment_status", ["paid", "refunded"])
@@ -1356,10 +1356,6 @@ export async function getLibroDeMovimientos(
       order_number: ord?.order_number ?? null,
       anulado,
       anulado_reason: p.refunded_reason,
-      sin_anular:
-        !anulado && (ord as { lifecycle_status?: string } | null)?.lifecycle_status === "closed"
-          ? "El pedido ya está cerrado: el cobro no se anula, se corrige (método, caja, mozo o monto)."
-          : null,
       corregido: corregidos.has(p.id),
       bloqueo,
       advertencias,

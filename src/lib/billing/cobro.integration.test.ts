@@ -289,15 +289,14 @@ describe.skipIf(!dbAvailable)("billing/cobro (integration)", () => {
     expect(ord!.lifecycle_status).toBe("closed");
   });
 
-  it("anularCobro (cuenta abierta): la mesa sigue en el plano OCUPADA con su cuenta (spec 100 · 212)", { timeout: 30_000 }, async () => {
+  it("anularCobro: la mesa vuelve al plano OCUPADA con su cuenta (spec 100)", { timeout: 30_000 }, async () => {
     const { tableId: tid, orderId } = await newOrder("E");
     CURRENT_USER_ID = mozoId;
-    // Un pago parcial: la cuenta sigue abierta (una cerrada ya no se anula, spec 212).
     await registrarPago({
       orderId,
       splitId: null,
-      method: "card_manual",
-      amount_cents: 4_000,
+      method: "cash",
+      amount_cents: 10_000,
       tip_cents: 0,
       caja_id: cajaId,
       slug: businessSlug,
@@ -407,8 +406,14 @@ describe.skipIf(!dbAvailable)("billing/cobro (integration)", () => {
     expect(ord!.lifecycle_status).toBe("closed");
   });
 
-  it("anularCobro: una cuenta cobrada y cerrada no se anula, se corrige (spec 212)", { timeout: 30_000 }, async () => {
-    const { orderId } = await newOrder("E2");
+  it("anularCobro: si la cuenta ya se había pedido, vuelve a pidio_cuenta", { timeout: 30_000 }, async () => {
+    const { tableId: tid, orderId } = await newOrder("E2");
+    const pedidaAt = new Date(Date.now() - 20 * 60_000).toISOString();
+    await supabase
+      .from("orders")
+      .update({ bill_requested_at: pedidaAt })
+      .eq("id", orderId);
+
     CURRENT_USER_ID = mozoId;
     await registrarPago({
       orderId,
@@ -421,17 +426,27 @@ describe.skipIf(!dbAvailable)("billing/cobro (integration)", () => {
     });
 
     CURRENT_USER_ID = encargadoId;
-    const r = await anularCobro(orderId, "error de caja", businessSlug);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/no se anula, se corrige/);
+    expect((await anularCobro(orderId, "error de caja", businessSlug)).ok).toBe(
+      true,
+    );
 
+    const { data: tbl } = await supabase
+      .from("tables")
+      .select("operational_status, current_order_id")
+      .eq("id", tid)
+      .single();
+    expect(tbl!.operational_status).toBe("pidio_cuenta");
+    expect(tbl!.current_order_id).toBe(orderId);
+
+    // El pedido de cuenta original se conserva; no se pisa con `now()`.
     const { data: ord } = await supabase
       .from("orders")
-      .select("lifecycle_status, total_paid_cents")
+      .select("bill_requested_at")
       .eq("id", orderId)
       .single();
-    expect(ord!.lifecycle_status).toBe("closed");
-    expect(ord!.total_paid_cents).toBe(10_000);
+    expect(new Date(ord!.bill_requested_at as string).getTime()).toBe(
+      new Date(pedidaAt).getTime(),
+    );
   });
 
   it("anularCobro: con factura autorizada se rechaza y NO devuelve un peso (spec 100)", { timeout: 30_000 }, async () => {
@@ -464,8 +479,10 @@ describe.skipIf(!dbAvailable)("billing/cobro (integration)", () => {
     CURRENT_USER_ID = encargadoId;
     const r = await anularCobro(orderId, "cliente reclamó", businessSlug);
     expect(r.ok).toBe(false);
-    // Spec 212: una cuenta cerrada ya no se anula, antes de mirar la factura.
-    if (!r.ok) expect(r.error).toMatch(/no se anula, se corrige/);
+    if (!r.ok) {
+      expect(r.error).toContain("0003-00001234");
+      expect(r.error).toContain("nota de crédito");
+    }
 
     // Nada se movió: ni la orden, ni la plata.
     const { data: ord } = await supabase
@@ -517,8 +534,10 @@ describe.skipIf(!dbAvailable)("billing/cobro (integration)", () => {
     CURRENT_USER_ID = encargadoId;
     const r = await anularCobro(orderId, "cliente reclamó", businessSlug);
     expect(r.ok).toBe(false);
-    // Spec 212: una cuenta cerrada ya no se anula, antes de mirar la factura.
-    if (!r.ok) expect(r.error).toMatch(/no se anula, se corrige/);
+    if (!r.ok) {
+      // El mensaje tiene que decir la verdad: no hay número que citar todavía.
+      expect(r.error).toContain("emitiéndose");
+    }
 
     // Y sobre todo: no se devolvió un peso.
     const { data: ord } = await supabase

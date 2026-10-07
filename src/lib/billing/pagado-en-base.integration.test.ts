@@ -56,11 +56,9 @@ describe.skipIf(!dbAvailable)("pagado en base (integration · #352)", () => {
     await f.pagarOk(orderId, { amount: 500_000, split: s1 });
     const p2 = await f.pagarOk(orderId, { amount: 500_000, split: s2 });
     expect(p2.fully_paid).toBe(true);
-    // Spec 212: con la cuenta cerrada ya no se anula; se anula abierta y se
-    // cierra después (el estado al que se llega cuando MP devuelve un pago).
-    expect((await f.anular(p2.payment.id)).error).toBeNull();
     await f.cerrarOrden(orderId);
-    await f.sb.from("orders").update({ payment_status: "pending" }).eq("id", orderId);
+
+    expect((await f.anular(p2.payment.id)).error).toBeNull();
     let o = await f.leerOrden(orderId);
     expect(o.payment_status).toBe("pending");
     expect(o.total_paid_cents).toBe(500_000);

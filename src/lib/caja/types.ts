@@ -90,11 +90,6 @@ export type LibroEntry = {
   order_number: number | null;
   anulado: boolean;
   anulado_reason: string | null;
-  /**
-   * Spec 212 (#385) — por qué este cobro NO se puede anular (su pedido ya está
-   * cerrado: se corrige). null = se puede anular. Sólo cobros.
-   */
-  sin_anular?: string | null;
   /** Tiene al menos un renglón en `caja_audit_log`. */
   corregido: boolean;
   /** Por qué NO se puede corregir, en castellano. `null` = se puede. */

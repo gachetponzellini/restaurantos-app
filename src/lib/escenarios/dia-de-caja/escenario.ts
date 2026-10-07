@@ -358,17 +358,13 @@ export async function jugarElDia(n: Negocio): Promise<Dia> {
   );
 
   await caso(
-    { id: "C14", titulo: "El cobro de una cuenta cerrada no se anula: se corrige", cubre: "spec 212: anular una línea de una cuenta ya cobrada se rechaza; se corrige el método (efectivo → tarjeta)", estado: "cerrada" },
+    { id: "C14", titulo: "Cobro en efectivo anulado y vuelto a cobrar con tarjeta", cubre: "anular una línea de cobro (la cuenta queda cerrada con saldo) y cobrarla de nuevo", estado: "cerrada" },
     async () => {
       const { orderId } = await h.abrirMesa("diego", [{ p: "pizza" }]);
       const r = await h.cobrar("diego", orderId, { method: "cash", amount: P.pizza });
       h.como("encargada");
-      const anular = await anularLineaDeCobro({ paymentId: r.payment.id, slug: n.slug, motivo: "Pagó con tarjeta" });
-      if (anular.ok || !anular.error.includes("no se anula, se corrige")) throw new Error(`anular una cerrada debía rechazarse: ${JSON.stringify(anular)}`);
-      ok(
-        await corregirCobro({ paymentId: r.payment.id, slug: n.slug, motivo: "Pagó con tarjeta", method: "card_manual", last_four: "4242" }),
-        "corregir",
-      );
+      ok(await anularLineaDeCobro({ paymentId: r.payment.id, slug: n.slug, motivo: "Pagó con tarjeta" }), "anular línea");
+      await h.cobrar("diego", orderId, { method: "card_manual", amount: T(P.pizza) });
       return { orderId, efectos: [] };
     },
   );
@@ -408,14 +404,14 @@ export async function jugarElDia(n: Negocio): Promise<Dia> {
   );
 
   await caso(
-    { id: "C18", titulo: "El cobro entero de una cuenta cerrada no se anula", cubre: "spec 212: anular el cobro completo (que reabría la mesa) se rechaza y no toca un peso", estado: "cerrada" },
+    { id: "C18", titulo: "Cobro entero anulado y vuelto a cobrar en efectivo", cubre: "anular el cobro de una cuenta cerrada (la reabre) y cobrarla de nuevo", estado: "cerrada" },
     async () => {
       const { orderId } = await h.abrirMesa("diego", [{ p: "milanesa" }]);
       await h.cobrar("diego", orderId, { method: "card_manual", amount: T(P.milanesa) });
       h.como("encargada");
-      const r = await anularCobro(orderId, "Se cobró en la mesa equivocada", n.slug);
-      if (r.ok || !r.error.includes("no se anula, se corrige")) throw new Error(`anular una cerrada debía rechazarse: ${JSON.stringify(r)}`);
-      return { orderId, pagado: P.milanesa, efectos: [] };
+      ok(await anularCobro(orderId, "Se cobró en la mesa equivocada", n.slug), "anular cobro");
+      await h.cobrar("diego", orderId, { method: "cash", amount: P.milanesa });
+      return { orderId, efectos: [{ mozo: "diego", caja: "principal", cents: 1_200_000 }] };
     },
   );
 

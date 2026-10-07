@@ -46,8 +46,6 @@ export function traducirErrorDeCaja(raw: string): string {
       return "El negocio todavía no pasó a la caja nueva.";
     case "CAJA_WRONG_BUSINESS":
       return "Esa caja no es de este negocio.";
-    case "COBRO_CERRADO_NO_SE_ANULA":
-      return "El pedido ya está cerrado: el cobro no se anula, se corrige (método, caja, mozo o monto).";
     case "MOVIMIENTO_DE_MOZO":
       return "Una entrega de mozo no se corrige acá: anulala desde la rendición del mozo.";
     case "MOZO_WRONG_BUSINESS":
