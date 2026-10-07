@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { CuentaAbierta } from "@/lib/caja/queries";
@@ -182,13 +182,37 @@ describe("CierreDelTurno", () => {
 
       await screen.findByText("Cobrar 2 mesas abiertas");
       expect(screen.getByText("Faltan 2 mesas")).toBeInTheDocument();
-      const fila4 = screen.getByRole("link", { name: `Cobrar mesa 4, ${formatCurrency(60_000)}` });
+      const fila4 = screen.getByRole("link", { name: `Cobrar Mesa 4, falta ${formatCurrency(60_000)}` });
       expect(fila4).toHaveTextContent(`Cobrar ${pesos(60_000)}`);
       expect(fila4).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar");
-      expect(screen.getByRole("link", { name: `Cobrar mesa 7, ${formatCurrency(25_000)}` })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: `Cobrar Mesa 7, falta ${formatCurrency(25_000)}` })).toHaveAttribute(
         "href",
         "/golf-jcr/admin/mesa/t-7/cobrar",
       );
+    });
+    it("en el mismo listado van las cuentas cerradas con saldo, después y sin frenar el cierre", async () => {
+      conEstado(
+        estado({
+          cuentas_abiertas: [cuenta()],
+          cuentas_con_saldo: [
+            {
+              orderId: "o-208", orderNumber: 555, dailyNumber: 208, tableId: null, tableLabel: null,
+              totalCents: 1_500_000, paidCents: 0, saldoCents: 1_500_000, cerrada: true,
+            },
+          ],
+        }),
+      );
+      abrir();
+      await screen.findByText("Cobrar mesa 4");
+      const lista = screen.getByRole("region", { name: /Por cobrar/ });
+      const filas = within(lista).getAllByRole("listitem");
+      expect(filas).toHaveLength(2);
+      expect(filas[0]).toHaveTextContent("Mesa 4");
+      expect(filas[1]).toHaveTextContent("Pedido #208");
+      expect(filas[1]).toHaveTextContent("Cerrada con saldo: no frena el cierre");
+      expect(within(filas[1]).getByRole("link")).toHaveAttribute("href", "/golf-jcr/admin/pedidos/historial?q=555");
+      // Un solo aviso: no hay otro listado de «cuentas con saldo».
+      expect(screen.queryByText(/cuentas con saldo pendiente/i)).not.toBeInTheDocument();
     });
   });
 

@@ -61,7 +61,6 @@ import {
 } from "@/lib/caja/saldo-corrido";
 import { cn } from "@/lib/utils";
 import type {
-  CuentaConSaldo,
 } from "@/lib/caja/types";
 import { TZ_AR } from "@/lib/timezone";
 
@@ -74,8 +73,6 @@ type Props = {
   refetchAlMontar?: boolean;
   /** Spec 103: cada snapshot nuevo del refetch, para el badge de la tab. */
   onServerData?: (d: CajaData) => void;
-  /** Issue #339 — mesas con cobro parcial y cuentas cerradas con saldo. */
-  cuentasConSaldo?: CuentaConSaldo[];
   /**
    * Spec 153 — el `?caja=` con el que «Ver ahora» abre una caja puntual desde
    * la sección Caja. Viaja como prop desde el server y no por
@@ -93,7 +90,6 @@ type Props = {
 export function CajaAdminBoard({
   slug,
   cajas: initialCajas,
-  cuentasConSaldo: initialCuentasConSaldo = [],
   active = true,
   refetchAlMontar = false,
   onServerData,
@@ -116,9 +112,6 @@ export function CajaAdminBoard({
   // seedeado de los props y actualizado sólo por el refetch (spec 103). Antes
   // esto se refrescaba con `router.refresh()`, que re-corría las 7 tabs.
   const [cajas, setCajas] = useState(initialCajas);
-  const [cuentasConSaldo, setCuentasConSaldo] = useState(
-    initialCuentasConSaldo,
-  );
   // Se reemplaza entero con cada refetch: es plata, y sumar en el cliente es
   // como se duplica una rendición.
   const [rendicion, setRendicion] = useState(initialRendicion);
@@ -132,7 +125,6 @@ export function CajaAdminBoard({
       if (seq !== refetchSeq.current) return;
       if (res.ok) {
         setCajas(res.data.cajas);
-        setCuentasConSaldo(res.data.cuentasConSaldo);
         setRendicion(res.data.rendicion);
         onServerDataRef.current?.(res.data);
       }
@@ -296,8 +288,6 @@ export function CajaAdminBoard({
           <RefreshCw className="size-3.5" />
         </Button>
       </div>
-
-      <CuentasConSaldoAviso slug={slug} cuentas={cuentasConSaldo} />
 
       <CajaCard
         key={activeCaja.id}
@@ -861,83 +851,6 @@ function CobroRow({ payment, cajon, onEditar }: { payment: CajaPayment; cajon: C
 // ── Modales ──────────────────────────────────────────────────────
 
 
-
-// ── Cuentas con saldo pendiente (issue #339) ─────────────────────
-
-/**
- * Lo que la caja todavía no cobró entero. Una mesa con cobro parcial se ve en
- * el salón, pero una cuenta cerrada con saldo —se anularon líneas después de
- * cerrarla— no se ve en ningún lado: la mesa ya está libre. Por eso vive acá,
- * arriba de la caja, que es donde se mira la plata antes de cortar.
- */
-export function CuentasConSaldoAviso({
-  slug,
-  cuentas,
-}: {
-  slug: string;
-  cuentas: CuentaConSaldo[];
-}) {
-  if (cuentas.length === 0) return null;
-  const total = cuentas.reduce((a, c) => a + c.saldoCents, 0);
-
-  return (
-    <section
-      role="status"
-      aria-label="Cuentas con saldo pendiente"
-      className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-semibold">
-          {cuentas.length === 1
-            ? "Hay una cuenta con saldo pendiente"
-            : `Hay ${cuentas.length} cuentas con saldo pendiente`}
-        </h3>
-        <span className="text-sm font-bold tabular-nums">
-          {formatCurrency(total)}
-        </span>
-      </div>
-      <ul className="mt-3 divide-y divide-amber-200">
-        {cuentas.map((c) => {
-          const nombre = c.tableLabel
-            ? `Mesa ${c.tableLabel}`
-            : `Pedido #${c.dailyNumber ?? c.orderNumber}`;
-          const href =
-            !c.cerrada && c.tableId
-              ? `/${slug}/admin/mesa/${c.tableId}/cobrar`
-              : `/${slug}/admin/pedidos/historial?q=${c.orderNumber}`;
-          return (
-            <li
-              key={c.orderId}
-              className="flex items-center justify-between gap-3 py-2 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="font-semibold">
-                  {nombre}
-                  {c.cerrada && (
-                    <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide">
-                      Cerrada
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-amber-900/80 tabular-nums">
-                  Cobrado {formatCurrency(c.paidCents)} de{" "}
-                  {formatCurrency(c.totalCents)} · falta{" "}
-                  {formatCurrency(c.saldoCents)}
-                </p>
-              </div>
-              <IntentLink
-                href={href}
-                className="shrink-0 rounded-full bg-amber-900 px-3 py-1.5 text-xs font-semibold text-amber-50 transition hover:bg-amber-800"
-              >
-                {c.cerrada ? "Ver pedido" : "Cobrar"}
-              </IntentLink>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
 
 // ── El cajón (spec 211 · R1) ─────────────────────────────────────
 

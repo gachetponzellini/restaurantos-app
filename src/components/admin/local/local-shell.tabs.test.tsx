@@ -90,7 +90,6 @@ function shellProps() {
     }),
     caja: Promise.resolve({
       cajas: [],
-      cuentasConSaldo: [],
       rendicion: {
         rendicionPendientes: [],
         rendicionHistorial: [],

@@ -21,7 +21,6 @@ import {
   getCajasConEstado,
   getCajasForBusiness,
   getCajaUserAssignments,
-  getCuentasConSaldo,
   getRendicionesHistorial,
 } from "@/lib/caja/queries";
 import { getCuentasCorrientes } from "@/lib/caja/cuenta-corriente-queries";
@@ -30,7 +29,6 @@ import type { Caja } from "@/lib/caja/types";
 import type {
   CajaConEstado,
   CajaUserAssignment,
-  CuentaConSaldo,
   MozoRendicion,
 } from "@/lib/caja/types";
 import { getMozosByBusiness } from "@/lib/mozo/queries";
@@ -103,7 +101,6 @@ export type PedidosData = {
 export type CajaData = {
   cajas: CajaConEstado[];
   /** Issue #339 — mesas con cobro parcial y cuentas cerradas con saldo. */
-  cuentasConSaldo: CuentaConSaldo[];
   /**
    * #351 — la rendición se hace desde la vista Caja (ya no hay tab propia):
    * viaja con la caja y se refresca con el mismo refetch.
@@ -324,12 +321,13 @@ export async function loadCaja(
   businessId: string,
   service: SupabaseClient = createSupabaseServiceClient() as unknown as SupabaseClient,
 ): Promise<CajaData> {
-  const [cajas, cuentasConSaldo, rendicion] = await Promise.all([
+  // Las cuentas con saldo ya no van acá: las trae el cierre del turno, en su
+  // listado único de «Por cobrar» (getEstadoTurno).
+  const [cajas, rendicion] = await Promise.all([
     getCajasConEstado(businessId),
-    getCuentasConSaldo(businessId),
     loadRendicion(businessId, service),
   ]);
-  return { cajas, cuentasConSaldo, rendicion };
+  return { cajas, rendicion };
 }
 
 export async function loadCuentas(businessId: string): Promise<CuentasData> {

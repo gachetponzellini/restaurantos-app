@@ -353,12 +353,11 @@ function CajaPanel({
   refetchAlMontar: boolean;
   onServerData: (d: CajaData) => void;
 }) {
-  const { cajas, cuentasConSaldo, rendicion } = use(promise);
+  const { cajas, rendicion } = use(promise);
   return (
     <CajaAdminBoard
       slug={slug}
       cajas={cajas}
-      cuentasConSaldo={cuentasConSaldo}
       rendicion={rendicion}
       showAssignments={role === "admin"}
       cajaPedida={cajaPedida}

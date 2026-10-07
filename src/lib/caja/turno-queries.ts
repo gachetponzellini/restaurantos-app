@@ -3,7 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
-import { getCuentasAbiertas, getMesasSinCobrarPorMozo, type CuentaAbierta } from "./queries";
+import { getCuentasAbiertas, getCuentasConSaldo, getMesasSinCobrarPorMozo, type CuentaAbierta } from "./queries";
+import type { CuentaConSaldo } from "./types";
 import type { MesaSinCobrar } from "./mesas-sin-cobrar";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +93,8 @@ export type EstadoTurno = {
   turno_id: string | null;
   abierto_at: string | null;
   cuentas_abiertas: CuentaAbierta[];
+  /** Cuentas que quedaron con saldo (cerradas sin pagar entero, pedidos con un pago parcial). */
+  cuentas_con_saldo?: CuentaConSaldo[];
   saldos: SaldoMozo[];
   cajas: CajaDelTurno[];
 };
@@ -103,7 +106,7 @@ export type EstadoTurno = {
  */
 export async function getEstadoTurno(businessId: string): Promise<EstadoTurno> {
   const service = db();
-  const [turno, cuentas, saldos, cajasRes, sinContar, cortes] = await Promise.all([
+  const [turno, cuentas, conSaldo, saldos, cajasRes, sinContar, cortes] = await Promise.all([
     service
       .from("turnos")
       .select("id, abierto_at")
@@ -111,6 +114,7 @@ export async function getEstadoTurno(businessId: string): Promise<EstadoTurno> {
       .is("cerrado_at", null)
       .maybeSingle(),
     getCuentasAbiertas(businessId),
+    getCuentasConSaldo(businessId),
     // Las cifras de la ventana del turno; el saldo y si está resuelto, los de ahora.
     service
       .from("turnos")
@@ -147,6 +151,7 @@ export async function getEstadoTurno(businessId: string): Promise<EstadoTurno> {
     turno_id: t?.id ?? null,
     abierto_at: t?.abierto_at ?? null,
     cuentas_abiertas: cuentas,
+    cuentas_con_saldo: conSaldo,
     saldos,
     cajas: ((cajasRes.data ?? []) as Array<{ id: string; name: string; is_default: boolean }>).map((c) => ({
       id: c.id,

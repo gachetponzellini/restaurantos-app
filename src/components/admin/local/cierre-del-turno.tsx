@@ -9,6 +9,7 @@ import { IntentLink } from "@/components/ui/intent-link";
 import { RendirMozoModal } from "@/components/admin/local/rendir-mozo-modal";
 import { getEstadoTurnoTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { pasosDelTurno } from "@/lib/caja/pasos-del-turno";
+import { porCobrar } from "@/lib/caja/por-cobrar";
 import type { EstadoTurno, SaldoMozo } from "@/lib/caja/turno-queries";
 import { cerrarTurno } from "@/lib/caja/turno-actions";
 import { formatCurrency } from "@/lib/currency";
@@ -88,6 +89,7 @@ export function CierreDelTurno({
   }
 
   const pasos = pasosDelTurno(estado, cajaActivaId);
+  const porCobrarFilas = porCobrar(estado.cuentas_abiertas, estado.cuentas_con_saldo ?? []);
   const p = pasos.proximo;
   const pendientes = estado.saldos.filter((s) => !s.resuelto);
   const variasCajas = estado.cajas.length > 1;
@@ -210,24 +212,52 @@ export function CierreDelTurno({
         )}
       </ol>
 
-      {estado.cuentas_abiertas.length > 0 && (
-        <ul className="divide-y divide-border/60 rounded-xl ring-1 ring-border/70">
-          {estado.cuentas_abiertas.map((m) => (
-            <li key={m.order_id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-              <span className="min-w-0 truncate">
-                <span className="font-medium">Mesa {m.table_label}</span>
-                {m.mozo_name && <span className="text-muted-foreground"> · {m.mozo_name}</span>}
+      {porCobrarFilas.length > 0 && (
+        <section aria-labelledby="por-cobrar" className="rounded-xl ring-1 ring-border/70">
+          <div className="flex items-baseline justify-between gap-3 border-b border-border/60 px-4 py-2.5">
+            <h4 id="por-cobrar" className="text-sm font-semibold">
+              Por cobrar
+              <span className="ml-1.5 font-normal text-muted-foreground">
+                · {porCobrarFilas.length} {porCobrarFilas.length === 1 ? "cuenta" : "cuentas"}
               </span>
-              <IntentLink
-                href={`/${slug}/admin/mesa/${m.table_id}/cobrar`}
-                className={buttonVariants({ size: "sm", variant: "secondary" })}
-                aria-label={`Cobrar mesa ${m.table_label}, ${formatCurrency(m.pendiente_cents)}`}
-              >
-                Cobrar {formatCurrency(m.pendiente_cents)}
-              </IntentLink>
-            </li>
-          ))}
-        </ul>
+            </h4>
+            <span className="text-sm font-bold tabular-nums">
+              {formatCurrency(porCobrarFilas.reduce((a, f) => a + f.faltaCents, 0))}
+            </span>
+          </div>
+          <ul className="divide-y divide-border/60">
+            {porCobrarFilas.map((f) => (
+              <li key={f.orderId} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <span className="min-w-0">
+                  <span className="block truncate">
+                    <span className="font-medium">{f.nombre}</span>
+                    {f.mozo && <span className="text-muted-foreground"> · {f.mozo}</span>}
+                  </span>
+                  <span className={cn("block text-xs", f.frena ? "text-amber-800" : "text-muted-foreground")}>
+                    {f.detalle}
+                    {f.pagadoCents > 0 && (
+                      <span className="tabular-nums">
+                        {" "}
+                        · cobrado {formatCurrency(f.pagadoCents)} de {formatCurrency(f.totalCents)}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <IntentLink
+                  href={
+                    f.destino.kind === "mesa"
+                      ? `/${slug}/admin/mesa/${f.destino.tableId}/cobrar`
+                      : `/${slug}/admin/pedidos/historial?q=${f.destino.orderNumber}`
+                  }
+                  className={buttonVariants({ size: "sm", variant: f.frena ? "secondary" : "outline" })}
+                  aria-label={`Cobrar ${f.nombre}, falta ${formatCurrency(f.faltaCents)}`}
+                >
+                  Cobrar {formatCurrency(f.faltaCents)}
+                </IntentLink>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {estado.cuentas_abiertas.length === 0 && pendientes.length > 0 && (
