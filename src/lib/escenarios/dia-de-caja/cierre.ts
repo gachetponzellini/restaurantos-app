@@ -63,6 +63,44 @@ export async function mesasAbiertas(n: Negocio) {
   }[];
 }
 
+/**
+ * El C43 deja una cuenta cerrada con saldo (contracargo de MP): es lo que hace
+ * la app, y en el día queda a la vista en el aviso de «cuentas con saldo». Al
+ * re-armar el demo, las de corridas anteriores se saldan como se saldaría una
+ * de verdad (el cliente vuelve y paga en efectivo) ANTES de cerrar ese día, así
+ * no se acumulan.
+ */
+export async function saldarContracargosViejos(n: Negocio): Promise<number> {
+  const { data } = await n.sb
+    .from("orders")
+    .select("id, total_cents, total_paid_cents")
+    .eq("business_id", n.businessId)
+    .eq("customer_name", "Devolución Prueba")
+    .eq("lifecycle_status", "closed")
+    .neq("payment_status", "paid");
+  let saldadas = 0;
+  setActor(n.gente.encargada);
+  for (const o of (data ?? []) as { id: string; total_cents: number; total_paid_cents: number }[]) {
+    const falta = o.total_cents - o.total_paid_cents;
+    if (falta <= 0) continue;
+    ok(
+      await registrarPago({
+        orderId: o.id,
+        splitId: null,
+        method: "cash",
+        amount_cents: falta,
+        tip_cents: 0,
+        caja_id: n.cajas.principal,
+        slug: n.slug,
+        requestId: randomUUID(),
+      }),
+      "saldar contracargo viejo",
+    );
+    saldadas++;
+  }
+  return saldadas;
+}
+
 export async function cerrarElDia(n: Negocio): Promise<ResultadoCierre> {
   const r: ResultadoCierre = { mesasCobradas: 0, mesasAnuladas: 0, rendiciones: 0, cortes: [], turnoCerrado: false };
 

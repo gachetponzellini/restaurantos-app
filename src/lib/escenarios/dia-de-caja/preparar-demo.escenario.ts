@@ -39,7 +39,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 
 const { cargarNegocioDemo } = await import("./negocio");
 const { jugarElDia, totales, pesos } = await import("./escenario");
-const { cerrarElDia, esperadoDe, saldosDe, mesasAbiertas } = await import("./cierre");
+const { cerrarElDia, esperadoDe, saldosDe, mesasAbiertas, saldarContracargosViejos } = await import("./cierre");
 
 describe("preparar el demo: un día de caja abierto", () => {
   it("arma el día y deja la hoja del cierre", async () => {
@@ -50,10 +50,12 @@ describe("preparar el demo: un día de caja abierto", () => {
 
     // 1 · Arrancar limpio.
     let n = await cargarNegocioDemo(sb);
+    const contracargos = await saldarContracargosViejos(n);
     const previo = await cerrarElDia(n);
     const anterior =
       `▸ Día anterior cerrado: ${previo.mesasCobradas} mesas cobradas, ${previo.mesasAnuladas} anuladas, ` +
-      `${previo.rendiciones} rendiciones, ${previo.cortes.length} cajas contadas.`;
+      `${previo.rendiciones} rendiciones, ${previo.cortes.length} cajas contadas` +
+      (contracargos ? `, ${contracargos} contracargo(s) viejo(s) saldado(s).` : ".");
     n = await cargarNegocioDemo(sb); // mesas libres de nuevo
     if (n.mesas.length < 44) throw new Error(`Demo tiene ${n.mesas.length} mesas libres; el escenario usa 44.`);
 
@@ -104,6 +106,9 @@ describe("preparar el demo: un día de caja abierto", () => {
       `  Caja Bar       — el cajón debería tener ${pesos(ahora.bar)}`,
       ...saldos.map((s) => `  ${nombre.get(s.mozo_id)!.padEnd(10)} en ${cajaKey.get(s.caja_id) === "bar" ? "la Bar      " : "la Principal"} ${s.saldo_cents < 0 ? "la caja le debe" : "tiene que entregar"} ${pesos(Math.abs(s.saldo_cents))}`),
       ...pendientes.map((c) => `  Mesa sin cobrar (${c.id}): falta ${pesos(c.pendiente!.falta)} — de ${c.pendiente!.quien}`),
+      "  En el aviso amarillo «cuentas con saldo» también aparece el C43: un pedido para retirar",
+      "  devuelto por Mercado Pago (contracargo) que queda cerrado con saldo. No bloquea el cierre",
+      "  y no es efectivo: no cambia ningún número de abajo.",
       "",
       "Si cobrás las dos mesas en EFECTIVO en la Principal y rendís a todos lo justo:",
       `  Caja Principal debería cerrar en ${pesos(ahora.principal + saldoCaja("principal") + totalPendiente)}`,
