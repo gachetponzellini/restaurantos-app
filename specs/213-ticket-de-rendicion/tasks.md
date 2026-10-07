@@ -11,4 +11,4 @@
   - los botones de cada fila con el estilo principal;
   - cobrar una mesa desde el cierre vuelve al cierre (`?volver=`).
 - [x] `pnpm typecheck && pnpm test` (4062).
-- [ ] 0146 al cloud + deploy (con OK de Juan). Verificar con la comandera real del golf.
+- [x] 0146 al cloud + deploy (OK de Juan, 2026-10-07; `741b55b`). Pendiente: verificar con la comandera real del golf.
