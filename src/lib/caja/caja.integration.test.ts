@@ -517,7 +517,15 @@ describe.skipIf(!dbAvailable)("caja continua (integration)", () => {
       .insert({ business_id: businessId, name: "Bar" })
       .select("id")
       .single();
-    await supabase.from("orders").update({ lifecycle_status: "open" }).eq("id", openOrderId);
+    // Una cuenta abierta nueva: un pedido cerrado no se reabre (spec 212 · 0146).
+    const { data: abierta } = await supabase
+      .from("orders")
+      .insert({
+        business_id: businessId, table_id: table1, lifecycle_status: "open", delivery_type: "dine_in",
+        subtotal_cents: 20_000, total_cents: 20_000, status: "pending", customer_name: "Mesa 1", customer_phone: "000",
+      })
+      .select("id")
+      .single();
 
     const bar = await getCierreCajaData(cB!.id, businessId);
     expect(bar!.cuentas_abiertas.length).toBeGreaterThan(0);
@@ -525,7 +533,7 @@ describe.skipIf(!dbAvailable)("caja continua (integration)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/Mesa/);
 
-    await supabase.from("orders").update({ lifecycle_status: "closed" }).eq("id", openOrderId);
+    await supabase.from("orders").update({ lifecycle_status: "cancelled", status: "cancelled" }).eq("id", abierta!.id);
     await supabase.from("cajas").update({ is_active: false }).eq("id", cB!.id);
   });
 

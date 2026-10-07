@@ -1,7 +1,8 @@
 // @vitest-environment node
 //
 // #355 — anular el cobro completo de una cuenta es UNA transacción y devuelve
-// la propina del excedente.
+// la propina del excedente. Spec 212 (#385): sólo con la cuenta abierta; una
+// cuenta cobrada y cerrada no se anula, se corrige.
 //
 // Antes eran seis escrituras sueltas (reabrir, reembolsar, auditar, borrar
 // pendientes, resetear sub-cuentas, resetear total): un fallo en el medio
@@ -51,33 +52,30 @@ describe.skipIf(!dbAvailable)("anular el cobro completo (integration · #355)", 
   }, 60_000);
   afterAll(s.teardown, 60_000);
 
-  it("devuelve la propina del excedente y deja la cuenta como antes de cobrar", async () => {
+  it("en una cuenta abierta: devuelve la propina del excedente y la deja como antes de cobrar", async () => {
     const { orderId } = await s.mesa([1_000_000]);
-    // Tarjeta por $12.000 sobre $10.000: $2.000 de propina por excedente.
-    const r = await cobrar(orderId, 1_200_000);
+    await dividirPorPersonas(orderId, 2, s.ctx.slug);
+    const [a] = await s.subcuentasVivas(orderId);
+    // Tarjeta por $6.000 sobre una sub-cuenta de $5.000: $1.000 de propina por excedente.
+    const r = await cobrar(orderId, 600_000, a.id);
     expect(r.ok).toBe(true);
     let o = await s.orden(orderId);
-    expect(o.total_cents).toBe(1_200_000);
-    expect(o.lifecycle_status).toBe("closed");
+    expect(o.tip_cents).toBe(100_000);
+    expect(o.lifecycle_status).toBe("open");
 
-    const a = await anularCobro(orderId, "se cobró la mesa equivocada", s.ctx.slug);
-    expect(a.ok).toBe(true);
+    const anulado = await anularCobro(orderId, "se cobró la mesa equivocada", s.ctx.slug);
+    expect(anulado.ok).toBe(true);
     o = await s.orden(orderId);
     expect(o.lifecycle_status).toBe("open");
     expect(o.tip_cents).toBe(0);
     expect(o.total_cents).toBe(1_000_000);
     expect(o.total_paid_cents).toBe(0);
-    expect(o.payment_status).toBe("pending");
     expect(await s.pagosVivos(orderId)).toHaveLength(0);
-
-    // Se vuelve a cobrar lo que se debe, sin la propina fantasma.
-    expect((await cobrar(orderId, 1_000_000)).ok).toBe(true);
-    expect((await s.orden(orderId)).lifecycle_status).toBe("closed");
   });
 
-  it("deja rastro en el libro por cada línea reembolsada", async () => {
-    const { orderId } = await s.mesa([1_000_000]);
-    await dividirPorPersonas(orderId, 2, s.ctx.slug);
+  it("en una cuenta abierta: deja rastro en el libro por cada línea reembolsada", async () => {
+    const { orderId } = await s.mesa([1_500_000]);
+    await dividirPorPersonas(orderId, 3, s.ctx.slug);
     const [a, b] = await s.subcuentasVivas(orderId);
     await cobrar(orderId, a.expected_amount_cents, a.id);
     await cobrar(orderId, b.expected_amount_cents, b.id);
@@ -96,23 +94,14 @@ describe.skipIf(!dbAvailable)("anular el cobro completo (integration · #355)", 
     expect(vivas.every((x) => x.paid_amount_cents === 0 && x.status === "pending")).toBe(true);
   });
 
-  it("si la mesa ya tiene otra cuenta abierta no toca un peso", async () => {
-    const { orderId, tableId } = await s.mesa([1_000_000]);
+  it("spec 212 · una cuenta cobrada y cerrada no se anula: no toca un peso", async () => {
+    const { orderId } = await s.mesa([1_000_000]);
     expect((await cobrar(orderId, 1_000_000)).ok).toBe(true);
-    // Se sentó gente nueva en la misma mesa.
-    await s.sb.from("orders").insert({
-      business_id: s.ctx.businessId,
-      customer_name: "Nuevos",
-      customer_phone: "0",
-      delivery_type: "dine_in",
-      table_id: tableId,
-      subtotal_cents: 0,
-      total_cents: 0,
-      lifecycle_status: "open",
-    });
+    expect((await s.orden(orderId)).lifecycle_status).toBe("closed");
 
-    const a = await anularCobro(orderId, "error", s.ctx.slug);
-    expect(a.ok).toBe(false);
+    const r = await anularCobro(orderId, "error", s.ctx.slug);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/no se anula, se corrige/);
     expect(await s.pagosVivos(orderId)).toHaveLength(1);
     expect((await s.orden(orderId)).lifecycle_status).toBe("closed");
   });

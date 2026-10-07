@@ -64,11 +64,10 @@ export async function mesasAbiertas(n: Negocio) {
 }
 
 /**
- * El C43 deja una cuenta cerrada con saldo (contracargo de MP): es lo que hace
- * la app, y en el día queda a la vista en el aviso de «cuentas con saldo». Al
- * re-armar el demo, las de corridas anteriores se saldan como se saldaría una
- * de verdad (el cliente vuelve y paga en efectivo) ANTES de cerrar ese día, así
- * no se acumulan.
+ * Antes de la spec 212 el C43 dejaba una cuenta cerrada con saldo (contracargo
+ * de MP); desde la 212 ese pedido queda anulado. Al re-armar el demo, las que
+ * hayan quedado de corridas viejas se saldan como se saldaría una de verdad (el
+ * cliente vuelve y paga en efectivo) ANTES de cerrar ese día.
  */
 export async function saldarContracargosViejos(n: Negocio): Promise<number> {
   const { data } = await n.sb

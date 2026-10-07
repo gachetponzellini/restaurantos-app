@@ -18,12 +18,11 @@ const CancelInput = z.object({
 });
 
 /**
- * Statuses the customer can cancel on their own. We intentionally cut this
- * off at "confirmed" — once the kitchen is preparing it, cancellation needs
- * to go through the business (food may already be spoiled/paid for). The
- * customer can still coordinate via WhatsApp in that case.
+ * Estados en los que el cliente cancela solo. Spec 212 · D4 (#385): sólo
+ * mientras está pendiente — una vez confirmado no cancela ni pide la
+ * devolución; si hace falta, lo coordina con el local.
  */
-const CUSTOMER_CANCELLABLE_STATUSES = new Set(["pending", "confirmed"]);
+const CUSTOMER_CANCELLABLE_STATUSES = new Set(["pending"]);
 
 /**
  * Result signals to the UI whether a refund was also processed so it can

@@ -185,6 +185,51 @@ export async function aplicarReembolsoMp(
       p_order_id: params.orderId,
     });
     if (error) console.error("MP · recalcular lo pagado tras el reembolso", error);
+    await anularSiNoQuedaNadaPago(service, params.orderId, params.businessId);
   }
   return { reembolsados };
+}
+
+const MOTIVO_DEVOLUCION_MP = "Devuelto en Mercado Pago";
+
+/**
+ * Spec 212 · R3 (#385) — si Mercado Pago devolvió la plata y el pedido no tiene
+ * ningún otro pago vivo, el pedido queda ANULADO: sale de «Entregados» y de
+ * «Por cobrar». Un pedido cerrado no se toca ni en ítems ni en stock (la
+ * comida ya salió): sólo pasa a anulado. Uno abierto se anula como cualquier
+ * cancelación. Si queda otro pago vivo (se devolvió uno de dos), no se anula.
+ */
+async function anularSiNoQuedaNadaPago(service: SupabaseClient, orderId: string, businessId: string) {
+  const { count } = await service
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("order_id", orderId)
+    .eq("payment_status", "paid");
+  if ((count ?? 0) > 0) return;
+
+  const { data: orden } = await service
+    .from("orders")
+    .select("lifecycle_status")
+    .eq("id", orderId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+  const estado = (orden as { lifecycle_status: string } | null)?.lifecycle_status;
+  if (estado === "closed") {
+    const { error } = await service
+      .from("orders")
+      .update({
+        lifecycle_status: "cancelled",
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: MOTIVO_DEVOLUCION_MP,
+        cancelled_by: null,
+      })
+      .eq("id", orderId)
+      .eq("business_id", businessId)
+      .eq("lifecycle_status", "closed");
+    if (error) console.error("MP · anular el pedido devuelto", error);
+  } else if (estado === "open") {
+    const { cancelarOrden } = await import("@/lib/orders/cancel-order");
+    await cancelarOrden(service as never, { orderId, businessId, motivo: MOTIVO_DEVOLUCION_MP, actorUserId: null });
+  }
 }
