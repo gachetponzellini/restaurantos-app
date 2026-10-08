@@ -68,6 +68,12 @@ describe.skipIf(!dbAvailable)("SEC-04 · superficie RPC sin login (integration)"
   ];
 
   it.each(cerradasParaAnon)("anon no puede llamar %s", async (fn, args) => {
+    // Control positivo: con el service role la misma llamada existe y anda. Si
+    // no, un nombre de argumento mal escrito daría PGRST202 y el caso pasaría
+    // sin probar el revoke.
+    const control = await admin.rpc(fn, args);
+    expect(control.error, `${fn} (service role)`).toBeNull();
+
     const { error } = await anon.rpc(fn, args);
     expect(esNoLlamable(error), `${fn}: ${error?.code ?? "sin error"}`).toBe(true);
   });
