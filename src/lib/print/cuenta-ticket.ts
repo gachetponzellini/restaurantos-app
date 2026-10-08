@@ -76,6 +76,45 @@ export type CuentaTicketData = {
   splits?: CuentaTicketSplit[] | null;
 };
 
+/**
+ * Spec 214: junta los renglones del mismo producto al mismo precio unitario.
+ * Cada carga del mozo es un `order_items` aparte, y la mesa que pide una
+ * gaseosa más después recibía «4x Gaseosa» arriba y «1x Gaseosa» abajo de
+ * todo: así no se controla la cuenta. Queda en el lugar de la primera vez que
+ * se pidió. Con distinto precio unitario no se junta: no se inventa un precio
+ * que no está en la carta. La comparación es en cruz para no dividir centavos.
+ */
+export function agruparItemsCuenta(
+  items: readonly CuentaTicketItem[],
+): CuentaTicketItem[] {
+  const out: CuentaTicketItem[] = [];
+  for (const it of items) {
+    const igual = out.find(
+      (o) =>
+        o.product_name === it.product_name &&
+        o.line_total_cents * it.quantity === it.line_total_cents * o.quantity,
+    );
+    if (igual) {
+      igual.quantity += it.quantity;
+      igual.line_total_cents += it.line_total_cents;
+    } else {
+      out.push({
+        product_name: it.product_name,
+        quantity: it.quantity,
+        line_total_cents: it.line_total_cents,
+      });
+    }
+  }
+  return out;
+}
+
+/** Los ítems de una parte de la cuenta dividida, ya juntos y en texto. */
+export function itemsDeParte(items: readonly CuentaTicketItem[]): string[] {
+  return agruparItemsCuenta(items).map(
+    (it) => `${it.quantity}x ${it.product_name}`,
+  );
+}
+
 /** Centavos → "110500.00". Sin símbolo de moneda: la térmica es ASCII. */
 function money(cents: number): string {
   return (Math.round(cents) / 100).toFixed(2);
@@ -142,7 +181,7 @@ export function buildCuentaTicketLines(c: CuentaTicketData): Line[] {
   // ── Lo consumido ──────────────────────────────────────────────────────────
   // Spec 200: importe en el mismo renglón e interlineado compacto — la cuenta
   // no tiene doble alto en la lista, así que los 64 pt eran aire puro.
-  const items = c.items ?? [];
+  const items = agruparItemsCuenta(c.items ?? []);
   for (const it of items) {
     for (const l of itemConImporte(
       `${it.quantity}x ${it.product_name}`,

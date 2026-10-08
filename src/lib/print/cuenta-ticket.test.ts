@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCuentaTicketLines, type CuentaTicketData } from "./cuenta-ticket";
+import {
+  agruparItemsCuenta,
+  buildCuentaTicketLines,
+  itemsDeParte,
+  type CuentaTicketData,
+} from "./cuenta-ticket";
 
 // Spec 080 — la cuenta que se le da al cliente. Lo que se prueba es qué dice el
 // papel: si el cliente no puede chequear que le cobraron bien, el ticket no
@@ -149,6 +154,86 @@ describe("buildCuentaTicketLines", () => {
     expect(agua?.spacing).toBe(32);
     expect(text(base())).not.toContain("Subtotal:");
     expect(text(base({ tip_cents: 100000 }))).toContain("Subtotal:");
+  });
+
+  // Spec 214 — la foto de kcc (mesa 14): «4x Gaseosa» arriba y «1x Gaseosa»
+  // abajo de todo, porque la quinta se cargó después. Así no se controla.
+  describe("spec 214 · productos repetidos en un solo renglón", () => {
+    const gaseosa = (quantity: number) => ({
+      product_name: "Gaseosa",
+      quantity,
+      line_total_cents: 280000 * quantity,
+    });
+
+    it("junta el mismo producto cargado en dos tandas", () => {
+      const t = text(
+        base({
+          items: [
+            gaseosa(4),
+            { product_name: "Flan", quantity: 1, line_total_cents: 600000 },
+            gaseosa(1),
+          ],
+        }),
+      );
+      expect(t).toMatch(/5x Gaseosa +14000\.00/);
+      expect(t).not.toContain("4x Gaseosa");
+      expect(t).not.toContain("1x Gaseosa");
+    });
+
+    it("queda en el lugar de la primera vez que se pidió", () => {
+      const lines = buildCuentaTicketLines(
+        base({
+          items: [
+            gaseosa(4),
+            { product_name: "Flan", quantity: 1, line_total_cents: 600000 },
+            gaseosa(1),
+          ],
+        }),
+      ).map((l) => l.text);
+      const iGaseosa = lines.findIndex((l) => l.startsWith("5x Gaseosa"));
+      const iFlan = lines.findIndex((l) => l.startsWith("1x Flan"));
+      expect(iGaseosa).toBeGreaterThan(-1);
+      expect(iGaseosa).toBeLessThan(iFlan);
+    });
+
+    it("con distinto precio unitario no los junta (no inventa un promedio)", () => {
+      expect(
+        agruparItemsCuenta([
+          gaseosa(2),
+          { product_name: "Gaseosa", quantity: 1, line_total_cents: 300000 },
+        ]),
+      ).toEqual([
+        gaseosa(2),
+        { product_name: "Gaseosa", quantity: 1, line_total_cents: 300000 },
+      ]);
+    });
+
+    it("no junta productos distintos ni pierde plata", () => {
+      const items = [
+        gaseosa(4),
+        { product_name: "Cafe", quantity: 2, line_total_cents: 500000 },
+        gaseosa(1),
+        { product_name: "Cafe", quantity: 1, line_total_cents: 250000 },
+      ];
+      const out = agruparItemsCuenta(items);
+      expect(out).toEqual([
+        gaseosa(5),
+        { product_name: "Cafe", quantity: 3, line_total_cents: 750000 },
+      ]);
+      const suma = (xs: typeof items) =>
+        xs.reduce((n, x) => n + x.line_total_cents, 0);
+      expect(suma(out)).toBe(suma(items));
+    });
+
+    it("los ítems de cada parte de la división también se juntan", () => {
+      expect(
+        itemsDeParte([
+          gaseosa(1),
+          { product_name: "Flan", quantity: 1, line_total_cents: 600000 },
+          gaseosa(2),
+        ]),
+      ).toEqual(["3x Gaseosa", "1x Flan"]);
+    });
   });
 
   // Spec 201 — la división de la cuenta sale en el mismo papel.

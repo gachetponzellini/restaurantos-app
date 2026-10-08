@@ -24,6 +24,7 @@ import {
 import type { CierreResumenSnapshot } from "@/lib/caja/types";
 import {
   buildCuentaTicketContent,
+  itemsDeParte,
   type CuentaTicketData,
 } from "@/lib/print/cuenta-ticket";
 import {
@@ -1550,16 +1551,24 @@ async function buildPrintableCuentaTickets(
         expected_amount_cents: sp.expected_amount_cents,
         paid_amount_cents: sp.paid_amount_cents,
         status: sp.status,
-        items: (sp.order_split_items ?? []).flatMap(({ order_item_id }) => {
-          const it = order.order_items.find(
-            (x) => x.id === order_item_id && !x.cancelled_at,
-          );
-          return it
-            ? [
-                `${it.quantity}x ${sanitizeTicketText(it.products?.name) ?? "—"}`,
-              ]
-            : [];
-        }),
+        // Spec 214: el mismo producto en dos cargas sale en un solo renglón.
+        items: itemsDeParte(
+          (sp.order_split_items ?? []).flatMap(({ order_item_id }) => {
+            const it = order.order_items.find(
+              (x) => x.id === order_item_id && !x.cancelled_at,
+            );
+            return it
+              ? [
+                  {
+                    product_name:
+                      sanitizeTicketText(it.products?.name) ?? "—",
+                    quantity: it.quantity,
+                    line_total_cents: it.unit_price_cents * it.quantity,
+                  },
+                ]
+              : [];
+          }),
+        ),
       })),
     };
 
