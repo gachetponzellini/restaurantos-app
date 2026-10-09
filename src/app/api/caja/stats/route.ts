@@ -17,9 +17,11 @@ export async function GET(req: Request) {
   }
 
   const service = createSupabaseServiceClient();
+  // Spec 216 — caja y slug del negocio en una sola ronda (antes, dos
+  // encadenadas antes de poder siquiera chequear el acceso).
   const { data: cajaRow } = await service
     .from("cajas")
-    .select("id, business_id, is_administrative")
+    .select("id, business_id, is_administrative, businesses!inner(slug)")
     .eq("id", cajaId)
     .maybeSingle();
   if (!cajaRow) {
@@ -27,14 +29,16 @@ export async function GET(req: Request) {
   }
   // `is_administrative` (0067) todavía no está en `database.types.ts` — el
   // `pnpm db:types` del repo necesita el CLI linkeado.
-  const { business_id: businessId, is_administrative: esAdministrativa } =
-    cajaRow as unknown as { business_id: string; is_administrative: boolean };
-
-  const { data: bizRow } = await service
-    .from("businesses")
-    .select("slug")
-    .eq("id", businessId)
-    .single();
+  const {
+    business_id: businessId,
+    is_administrative: esAdministrativa,
+    businesses: biz,
+  } = cajaRow as unknown as {
+    business_id: string;
+    is_administrative: boolean;
+    businesses: { slug: string } | { slug: string }[] | null;
+  };
+  const bizRow = Array.isArray(biz) ? biz[0] : biz;
   if (!bizRow) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

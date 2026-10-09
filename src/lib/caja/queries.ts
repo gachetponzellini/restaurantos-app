@@ -393,12 +393,36 @@ export async function getPaymentsPeriodoActual(
     ),
   );
   const mozoNameById = new Map<string, string>();
-  if (mozoIds.length > 0) {
-    const { data: bu } = await service
-      .from("business_users")
-      .select("user_id, full_name")
-      .eq("business_id", businessId)
-      .in("user_id", mozoIds);
+  // spec 147 — comprobantes de las órdenes del período, en una sola query.
+  // "Fallido" es la orden que tiene una factura `failed` y **ninguna viva**:
+  // si el reintento salió con CAE, el cobro ya no tiene nada raro que mostrar.
+  const orderIds = Array.from(
+    new Set(rows.map((r) => r.order_id).filter(Boolean)),
+  );
+  // Spec 216 — nombres y comprobantes no dependen entre sí: una sola ronda.
+  // #360 — las facturas van por lotes: con más de ~600 órdenes el `.in()` no
+  // entra en la URL.
+  const [buRes, invRows] = await Promise.all([
+    mozoIds.length > 0
+      ? service
+          .from("business_users")
+          .select("user_id, full_name")
+          .eq("business_id", businessId)
+          .in("user_id", mozoIds)
+      : Promise.resolve({ data: [] }),
+    orderIds.length > 0
+      ? enLotes(orderIds, async (lote) => {
+          const { data } = await service
+            .from("invoices")
+            .select("order_id, status")
+            .in("order_id", lote)
+            .in("tipo_comprobante", ["factura_a", "factura_b"]);
+          return (data ?? []) as { order_id: string | null; status: string }[];
+        })
+      : Promise.resolve([] as { order_id: string | null; status: string }[]),
+  ]);
+  {
+    const bu = buRes.data;
     for (const m of (bu ?? []) as {
       user_id: string;
       full_name: string | null;
@@ -407,23 +431,8 @@ export async function getPaymentsPeriodoActual(
     }
   }
 
-  // spec 147 — comprobantes de las órdenes del período, en una sola query.
-  // "Fallido" es la orden que tiene una factura `failed` y **ninguna viva**:
-  // si el reintento salió con CAE, el cobro ya no tiene nada raro que mostrar.
-  const orderIds = Array.from(
-    new Set(rows.map((r) => r.order_id).filter(Boolean)),
-  );
   const conFallo = new Set<string>();
-  if (orderIds.length > 0) {
-    // #360 — por lotes: con más de ~600 órdenes el `.in()` no entra en la URL.
-    const invRows = await enLotes(orderIds, async (lote) => {
-      const { data } = await service
-        .from("invoices")
-        .select("order_id, status")
-        .in("order_id", lote)
-        .in("tipo_comprobante", ["factura_a", "factura_b"]);
-      return (data ?? []) as { order_id: string | null; status: string }[];
-    });
+  {
     const vivas = new Set<string>();
     for (const inv of invRows as {
       order_id: string | null;
@@ -472,16 +481,19 @@ export async function getCajaLiveStats(
 ): Promise<CajaLiveStats | null> {
   const service = db();
 
-  const { data: cajaRow } = await service
-    .from("cajas")
-    .select("id, business_id, is_active, created_at")
-    .eq("id", cajaId)
-    .maybeSingle();
+  // Spec 216 — una ronda en vez de dos: el corte ya va acotado por negocio.
+  const [{ data: cajaRow }, ultimoCorte] = await Promise.all([
+    service
+      .from("cajas")
+      .select("id, business_id, is_active, created_at")
+      .eq("id", cajaId)
+      .maybeSingle(),
+    getUltimoCorte(cajaId, businessId),
+  ]);
   if (!cajaRow) return null;
   if ((cajaRow as { business_id: string }).business_id !== businessId)
     return null;
 
-  const ultimoCorte = await getUltimoCorte(cajaId, businessId);
   const periodoDesdeFecha =
     ultimoCorte?.created_at ?? (cajaRow as { created_at: string }).created_at;
 
@@ -539,7 +551,14 @@ async function getCajaStatsEnVentana(
     return q.order("id");
   };
 
-  const pagosLeidos = await fetchAll(armarPagos, "payments");
+  // Spec 216 — el desglose no depende de los pagos: sale en la misma ronda.
+  const [pagosLeidos, desgloseRes] = await Promise.all([
+    fetchAll(armarPagos, "payments"),
+    service.rpc("desglose_esperado_caja", {
+      p_caja_id: cajaId,
+      p_hasta: hasta ? new Date(new Date(hasta).getTime() - 1).toISOString() : "infinity",
+    }),
+  ]);
 
   const paymentRows = pagosLeidos as unknown as Array<{
     method: PaymentMethod;
@@ -606,10 +625,7 @@ async function getCajaStatsEnVentana(
   // los números que no coincidían. Para una ventana cerrada se mira hasta
   // justo antes del corte: si no, la base encontraría ese mismo corte como el
   // «anterior» y la ventana quedaría vacía.
-  const { data: d, error: dErr } = await service.rpc("desglose_esperado_caja", {
-    p_caja_id: cajaId,
-    p_hasta: hasta ? new Date(new Date(hasta).getTime() - 1).toISOString() : "infinity",
-  });
+  const { data: d, error: dErr } = desgloseRes;
   if (dErr) throw new Error(`desglose_esperado_caja: ${dErr.message}`);
   const desglose = d as Record<string, number>;
   const expected_cash_cents = Number(desglose.esperado_cents);
@@ -1114,8 +1130,17 @@ export async function getLibroDeMovimientos(
   const service = db();
   // spec 160 · con `true`: si la administrativa se cae del Map, la orden de pago
   // sale con `caja_name: "—"` y `arqueado: false`, y queda corregible para siempre.
-  const cajas = await getCajasConEstado(businessId, true);
-  const cajaById = new Map(cajas.map((c) => [c.id, c]));
+  //
+  // Spec 216 — las cajas y las rendiciones no dependen de los cobros: arrancan
+  // ya y se esperan junto con la primera ronda. Con el server lejos de la base
+  // (gru1 ↔ us-east-1) cada ronda encadenada cuesta ~130 ms; el libro pasó de
+  // 4 rondas a 2, y es lo que paga cada «editar movimiento» de la caja.
+  const cajasP = getCajasConEstado(businessId, true);
+  const rendicionesP = service
+    .from("mozo_rendiciones")
+    .select("mozo_id, created_at")
+    .eq("business_id", businessId)
+    .gte("created_at", filtros.from);
 
   const quiereCobros = !filtros.tipo || filtros.tipo === "cobro";
   const quiereMovs = !filtros.tipo || filtros.tipo !== "cobro";
@@ -1155,14 +1180,17 @@ export async function getLibroDeMovimientos(
     movsQuery = movsQuery.eq("kind", filtros.tipo);
   }
 
-  const [pagosRes, movsRes] = await Promise.all([
+  const [pagosRes, movsRes, cajas, rendicionesRes] = await Promise.all([
     quiereCobros ? pagosQuery : Promise.resolve({ data: [] }),
     // Un filtro por método o por mozo es de cobros: una sangría no tiene
     // ninguno de los dos, así que mostrarlas igual sería ruido.
     quiereMovs && !filtros.method && !filtros.mozoId
       ? movsQuery
       : Promise.resolve({ data: [] }),
+    cajasP,
+    rendicionesP,
   ]);
+  const cajaById = new Map(cajas.map((c) => [c.id, c]));
 
   type PagoRow = {
     id: string;
@@ -1216,7 +1244,7 @@ export async function getLibroDeMovimientos(
   const orderIds = Array.from(new Set(pagos.map((p) => p.order_id)));
   const entityIds = [...pagos.map((p) => p.id), ...movs.map((m) => m.id)];
 
-  const [nombresRes, auditRes, facturasRes, rendicionesRes] = await Promise.all(
+  const [nombresRes, auditRes, facturasRes] = await Promise.all(
     [
       mozoIds.length > 0
         ? service
@@ -1240,11 +1268,6 @@ export async function getLibroDeMovimientos(
             .eq("status", "authorized")
             .in("order_id", orderIds)
         : Promise.resolve({ data: [] }),
-      service
-        .from("mozo_rendiciones")
-        .select("mozo_id, created_at")
-        .eq("business_id", businessId)
-        .gte("created_at", filtros.from),
     ],
   );
 

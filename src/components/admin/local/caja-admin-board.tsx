@@ -380,9 +380,16 @@ function CajaCard({
   } | null>(null);
   const editar = (createdAt: string, id: string) =>
     startTransition(async () => {
-      const r = await getEntradaDelLibroTabData(slug, { cajaId: caja.id, createdAt, id });
-      if (!r.ok) toast.error(r.error);
-      else setEditando(r.data);
+      // Spec 216 — hasta que llega el renglón no se veía nada: el encargado
+      // tocaba de nuevo creyendo que no había agarrado el click.
+      toast.loading("Abriendo el movimiento…", { id: "abrir-movimiento" });
+      try {
+        const r = await getEntradaDelLibroTabData(slug, { cajaId: caja.id, createdAt, id });
+        if (!r.ok) toast.error(r.error);
+        else setEditando(r.data);
+      } finally {
+        toast.dismiss("abrir-movimiento");
+      }
     });
 
   useEffect(() => {
