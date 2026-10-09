@@ -42,6 +42,19 @@ export function admiteCobro(o: OrdenParaSaldo): boolean {
   return o.lifecycle_status === "open" || esCuentaCerradaConSaldo(o);
 }
 
+/**
+ * ¿Se puede anular esta cuenta ya cerrada? (spec 215). `null` = sí; si no, por qué.
+ *
+ * Es la segunda mitad del camino de la spec 092 («primero se deshace la plata,
+ * después se anula») para una mesa que ya se liberó: la plata la mira
+ * `bloqueoPorPlata`, acá sólo el estado de la orden.
+ */
+export function puedeAnularCuentaCerrada(o: OrdenParaSaldo): string | null {
+  if (o.status === "cancelled" || o.lifecycle_status === "cancelled") return "La cuenta ya está anulada.";
+  if (o.lifecycle_status === "open") return "La mesa sigue abierta: anulala desde el salón.";
+  return null;
+}
+
 /** Lo que el aviso de Caja tiene que mostrar. */
 export function tieneSaldoPendiente(o: OrdenParaSaldo): boolean {
   if (o.status === "cancelled") return false;

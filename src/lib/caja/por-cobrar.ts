@@ -22,6 +22,8 @@ export type FilaPorCobrar = {
   faltaCents: number;
   /** Frena el cierre de las cajas (mesa con la cuenta abierta). */
   frena: boolean;
+  /** Cerrada con saldo: se puede anular desde la fila (spec 215). */
+  anulable: boolean;
   destino: { kind: "mesa"; tableId: string } | { kind: "pedido"; orderNumber: number };
 };
 
@@ -37,6 +39,7 @@ export function porCobrar(abiertas: CuentaAbierta[], conSaldo: CuentaConSaldo[])
       pagadoCents: pagado,
       faltaCents: a.pendiente_cents,
       frena: true,
+      anulable: false,
       destino: { kind: "mesa", tableId: a.table_id },
     };
   });
@@ -52,6 +55,7 @@ export function porCobrar(abiertas: CuentaAbierta[], conSaldo: CuentaConSaldo[])
       pagadoCents: c.paidCents,
       faltaCents: c.saldoCents,
       frena: false,
+      anulable: c.cerrada,
       destino:
         !c.cerrada && c.tableId ? { kind: "mesa", tableId: c.tableId } : { kind: "pedido", orderNumber: c.orderNumber },
     });

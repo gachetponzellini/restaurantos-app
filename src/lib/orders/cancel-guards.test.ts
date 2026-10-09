@@ -11,7 +11,7 @@ import { bloqueoPorPlata } from "./cancel-guards";
  */
 
 let pagos: { amount_cents: number }[];
-let facturas: { status: string }[];
+let facturas: { status: string; provider?: string }[];
 
 function fakeService() {
   return {
@@ -76,5 +76,20 @@ describe("bloqueoPorPlata", () => {
     expect(await bloqueoPorPlata(fakeService(), ["o1"])).toMatch(
       /anulá el cobro primero/i,
     );
+  });
+
+  it("una factura de SANDBOX no frena: no es fiscal (spec 215 · D4)", async () => {
+    // En KCC todas las mesas cobradas tienen una B de sandbox hasta que ARCA
+    // esté activo: si frenara, no se podría anular ninguna.
+    facturas = [{ status: "authorized", provider: "sandbox" }];
+    expect(await bloqueoPorPlata(fakeService(), ["o1"])).toBeNull();
+  });
+
+  it("una real sigue frenando aunque haya otra de sandbox", async () => {
+    facturas = [
+      { status: "authorized", provider: "sandbox" },
+      { status: "authorized", provider: "gateway" },
+    ];
+    expect(await bloqueoPorPlata(fakeService(), ["o1"])).toMatch(/nota de crédito/i);
   });
 });

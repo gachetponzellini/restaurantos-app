@@ -64,11 +64,16 @@ export async function bloqueoPorPlata(
 
   const { data: facturas } = await service
     .from("invoices")
-    .select("status")
+    .select("status, provider")
     .in("order_id", orderIds)
     .in("status", ["pending", "authorized"]);
 
-  const rows = (facturas ?? []) as { status: string }[];
+  // spec 215 · D4 — una factura de sandbox no es fiscal: no hay nada que
+  // compensar con una nota de crédito. Si frenara, en un negocio sin ARCA
+  // activo no se podría anular ninguna mesa cobrada.
+  const rows = ((facturas ?? []) as { status: string; provider?: string | null }[]).filter(
+    (f) => f.provider !== "sandbox",
+  );
   if (rows.length > 0) {
     const autorizada = rows.some((f) => f.status === "authorized");
     return autorizada

@@ -78,6 +78,12 @@ export async function cancelarOrden(
      * pago de MP o un «Aceptar» del local pueden entrar entre medio.
      */
     soloSiPendienteImpago?: boolean;
+    /**
+     * Spec 215 — también una cuenta **cerrada** (la mesa ya se liberó), siempre
+     * que no tenga nada pagado al momento de escribir. Sus comandas activas se
+     * cancelan sin ticket «ANULADA»: la mesa terminó hace rato.
+     */
+    desdeCerrada?: boolean;
   },
 ): Promise<CancelarOrdenResult> {
   const nowIso = params.nowIso ?? new Date().toISOString();
@@ -93,13 +99,17 @@ export async function cancelarOrden(
       cancelled_by: params.actorUserId,
     })
     .eq("id", params.orderId)
-    .eq("business_id", params.businessId)
-    // Sólo desde `open`, y a propósito. Es guarda optimista contra la carrera
-    // "el mozo cobra la mesa mientras el encargado la anula": entre el SELECT
-    // del caller y este UPDATE la orden puede haberse cerrado, y anular algo ya
-    // cobrado es una decisión con plata adentro que le corresponde a la spec 092
-    // (guardas de `payments` e `invoices`), no a este helper.
-    .eq("lifecycle_status", "open");
+    .eq("business_id", params.businessId);
+  // Sólo desde `open`, y a propósito. Es guarda optimista contra la carrera
+  // "el mozo cobra la mesa mientras el encargado la anula": entre el SELECT
+  // del caller y este UPDATE la orden puede haberse cerrado, y anular algo ya
+  // cobrado es una decisión con plata adentro que le corresponde a la spec 092
+  // (guardas de `payments` e `invoices`), no a este helper.
+  update = params.desdeCerrada
+    ? // Spec 215: la cerrada entra sólo sin plata. Mismo motivo que arriba: un
+      // cobro del saldo puede entrar entre el control del caller y acá.
+      update.in("lifecycle_status", ["open", "closed"]).eq("total_paid_cents", 0)
+    : update.eq("lifecycle_status", "open");
   if (params.soloSiPendienteImpago) {
     update = update.eq("status", "pending").neq("payment_status", "paid");
   }
@@ -138,6 +148,8 @@ export async function cancelDownstream(
     motivo: string;
     actorUserId: string | null;
     nowIso?: string;
+    /** Spec 215 — sin ticket «ANULADA» para las comandas. */
+    desdeCerrada?: boolean;
   },
 ): Promise<CancelDownstreamResult> {
   const nowIso = params.nowIso ?? new Date().toISOString();
@@ -170,13 +182,17 @@ export async function cancelDownstream(
   //    `cancelarComanda` y que el trigger de la 089).
   const { data: comandas } = await service
     .from("comandas")
-    .update({
-      cancelled_at: nowIso,
-      cancelled_reason: params.motivo,
-      cancelled_by: params.actorUserId,
-      reprint_requested_at: nowIso,
-      print_failed_at: null,
-    })
+    .update(
+      params.desdeCerrada
+        ? { cancelled_at: nowIso, cancelled_reason: params.motivo, cancelled_by: params.actorUserId }
+        : {
+            cancelled_at: nowIso,
+            cancelled_reason: params.motivo,
+            cancelled_by: params.actorUserId,
+            reprint_requested_at: nowIso,
+            print_failed_at: null,
+          },
+    )
     .eq("order_id", params.orderId)
     .in("status", COMANDAS_ACTIVAS)
     .is("cancelled_at", null)
@@ -188,6 +204,18 @@ export async function cancelDownstream(
   //    `total_cents` completo: es el número que `emitInvoice` usaba para
   //    facturar y el que inflaba el denominador del reporte fiscal.
   await recomputeOrderTotals(service, params.orderId);
+
+  // 4) Spec 215 · D4 — la factura de sandbox no frena la anulación (no es
+  //    fiscal, ver `bloqueoPorPlata`), pero no puede quedar autorizada sobre una
+  //    venta que ya no existe: inflaría lo facturado (spec 091). Una factura
+  //    real nunca llega acá: la guarda la frena antes.
+  const { error: facturaErr } = await service
+    .from("invoices")
+    .update({ status: "cancelled", cancelled_reason: params.motivo, cancelled_by: params.actorUserId })
+    .eq("order_id", params.orderId)
+    .eq("provider", "sandbox")
+    .in("status", ["pending", "authorized"]);
+  if (facturaErr) console.error("cancelDownstream · factura sandbox", facturaErr);
 
   return { itemsCancelled, comandasCancelled };
 }

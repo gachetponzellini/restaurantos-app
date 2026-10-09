@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   admiteCobro,
   esCuentaCerradaConSaldo,
+  puedeAnularCuentaCerrada,
   saldoCents,
   tieneSaldoPendiente,
   type OrdenParaSaldo,
@@ -68,5 +69,27 @@ describe("saldo pendiente (#339)", () => {
 
   it("abierta: se cobra como siempre", () => {
     expect(admiteCobro(orden())).toBe(true);
+  });
+});
+
+describe("puedeAnularCuentaCerrada (spec 215)", () => {
+  // Mesa 14 de KCC: el cobro se anuló porque la venta se facturó por fuera.
+  // La cuenta quedó cerrada con saldo y no había forma de darla de baja.
+  it("una cuenta cerrada con saldo se puede anular", () => {
+    expect(puedeAnularCuentaCerrada(orden({ lifecycle_status: "closed", status: "delivered" }))).toBeNull();
+  });
+
+  it("una cerrada y saldada también (la plata la frena otra guarda)", () => {
+    expect(
+      puedeAnularCuentaCerrada(orden({ lifecycle_status: "closed", status: "delivered", total_paid_cents: 1_850_000 })),
+    ).toBeNull();
+  });
+
+  it("una abierta no: eso es «Anular mesa» desde el salón", () => {
+    expect(puedeAnularCuentaCerrada(orden())).toMatch(/abierta/i);
+  });
+
+  it("una ya cancelada no", () => {
+    expect(puedeAnularCuentaCerrada(orden({ lifecycle_status: "cancelled", status: "cancelled" }))).toMatch(/anulada/i);
   });
 });

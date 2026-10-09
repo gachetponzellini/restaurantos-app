@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { IntentLink } from "@/components/ui/intent-link";
+import { AnularCuentaCerrada } from "@/components/admin/local/anular-cuenta-cerrada";
 import { RendirMozoModal } from "@/components/admin/local/rendir-mozo-modal";
 import { getEstadoTurnoTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { pasosDelTurno } from "@/lib/caja/pasos-del-turno";
@@ -216,7 +217,7 @@ export function CierreDelTurno({
           </div>
           <ul className="divide-y divide-border/60">
             {porCobrarFilas.map((f) => (
-              <li key={f.orderId} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+              <li key={f.orderId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm">
                 <span className="min-w-0">
                   <span className="block truncate">
                     <span className="font-medium">{f.nombre}</span>
@@ -243,6 +244,17 @@ export function CierreDelTurno({
                 >
                   <Receipt className="size-4" /> Cobrar {formatCurrency(f.faltaCents)}
                 </IntentLink>
+                {f.anulable && (
+                  <AnularCuentaCerrada
+                    slug={slug}
+                    orderId={f.orderId}
+                    nombre={f.nombre}
+                    onAnulada={() => {
+                      void cargar();
+                      onChanged();
+                    }}
+                  />
+                )}
               </li>
             ))}
           </ul>

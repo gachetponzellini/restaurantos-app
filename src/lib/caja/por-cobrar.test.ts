@@ -76,4 +76,12 @@ describe("porCobrar — un solo listado de lo que falta cobrar", () => {
   it("vacío si no falta nada", () => {
     expect(porCobrar([], [])).toEqual([]);
   });
+
+  it("sólo las cuentas cerradas se pueden anular desde acá (spec 215)", () => {
+    const filas = porCobrar(
+      [abierta({ order_id: "o1", table_label: "R04" })],
+      [conSaldo({ orderId: "o2", tableLabel: "14" }), conSaldo({ orderId: "o3", cerrada: false, paidCents: 500_000, saldoCents: 1_000_000 })],
+    );
+    expect(Object.fromEntries(filas.map((f) => [f.orderId, f.anulable]))).toEqual({ o1: false, o2: true, o3: false });
+  });
 });
