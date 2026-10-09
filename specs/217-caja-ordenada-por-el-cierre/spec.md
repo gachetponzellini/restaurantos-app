@@ -1,6 +1,6 @@
 # Spec 217 · La caja ordenada por el cierre del turno
 
-**Estado:** aprobada por Juan (2026-10-08) sobre la maqueta «Caja reordenada». Issue #390.
+**Estado:** aprobada por Juan (2026-10-08) sobre la maqueta «Caja reordenada». En producción el 2026-10-08. Issue #390.
 
 ## Problema
 
