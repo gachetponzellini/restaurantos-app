@@ -19,6 +19,7 @@ import { CierreDelTurno } from "@/components/admin/local/cierre-del-turno";
 import { CajaAssignmentsPanel } from "@/components/admin/local/caja-assignments-tab";
 import { DetalleSheet } from "@/components/admin/local/detalle-movimiento-sheet";
 import {
+  COBRO_METHOD_ORDER,
   METHOD_COLOR,
   METHOD_LABEL,
   methodIcon,
@@ -441,6 +442,7 @@ function CajaCard({
   const cobros = stats?.cobros_count ?? 0;
   const porMetodo = stats?.ventas_por_metodo;
   const porOrigen = stats?.ventas_por_origen;
+  const porOrigenYMetodo = stats?.ventas_por_origen_y_metodo;
   const periodoDesdeFecha = stats?.periodo_desde ?? caja.periodo_desde;
 
   const periodoLabel = (() => {
@@ -519,6 +521,7 @@ function CajaCard({
         propinas={propinas}
         porMetodo={porMetodo}
         porOrigen={porOrigen}
+        porOrigenYMetodo={porOrigenYMetodo}
       />
 
       {/* Spec 217 · D7 — el registro de la caja, con las dos acciones que lo alimentan. */}
@@ -681,6 +684,7 @@ function VentasDelPeriodo({
   propinas,
   porMetodo,
   porOrigen,
+  porOrigenYMetodo,
 }: {
   cargando: boolean;
   ventas: number;
@@ -688,18 +692,32 @@ function VentasDelPeriodo({
   propinas: number;
   porMetodo: CajaLiveStats["ventas_por_metodo"] | undefined;
   porOrigen: CajaLiveStats["ventas_por_origen"] | undefined;
+  porOrigenYMetodo: CajaLiveStats["ventas_por_origen_y_metodo"] | undefined;
 }) {
-  const metodos = porMetodo
-    ? (Object.entries(porMetodo) as [keyof typeof METHOD_LABEL, number][])
-        .filter(([, c]) => c > 0)
-        .sort((a, b) => (a[0] === "cash" ? -1 : b[0] === "cash" ? 1 : b[1] - a[1]))
-    : [];
-  const totalMetodos = metodos.reduce((a, [, c]) => a + c, 0);
+  type Metodo = keyof typeof METHOD_LABEL;
+  const montoDe = (m: Metodo) => (porMetodo?.[m] ?? 0) as number;
+  // Mismos medios que «Cobrado por método» (sin la cuenta corriente, que es fiado y va aparte).
+  const conPlata = COBRO_METHOD_ORDER.filter((m) => montoDe(m) > 0).sort((a, b) =>
+    a === "cash" ? -1 : b === "cash" ? 1 : montoDe(b) - montoDe(a),
+  );
+  const fiado = montoDe("cuenta_corriente");
+  const metodos: Metodo[] = fiado > 0 ? [...conPlata, "cuenta_corriente"] : conPlata;
+  const sinUso = COBRO_METHOD_ORDER.filter((m) => montoDe(m) === 0);
+  const totalMetodos = metodos.reduce((a, m) => a + montoDe(m), 0);
+  const pct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : "0%");
+
   const origenes = porOrigen
-    ? Object.entries(porOrigen)
-        .filter(([, c]) => c > 0)
-        .sort((a, b) => b[1] - a[1])
+    ? (Object.entries(porOrigen) as [string, number][]).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1])
     : [];
+  const totalOrigenes = origenes.reduce((a, [, c]) => a + c, 0);
+  const desgloseDe = (o: string) => {
+    const fila = (porOrigenYMetodo as Record<string, Record<string, number>> | undefined)?.[o] ?? {};
+    return (Object.entries(fila) as [Metodo, number][])
+      .filter(([, c]) => c > 0)
+      .sort((a, b) => (a[0] === "cash" ? -1 : b[0] === "cash" ? 1 : b[1] - a[1]))
+      .map(([m, c]) => `${METHOD_LABEL[m]} ${formatCurrency(c)}`)
+      .join(" · ");
+  };
 
   return (
     <section aria-labelledby="ventas-titulo" className="rounded-2xl bg-card px-5 py-4 ring-1 ring-border/70">
@@ -723,24 +741,45 @@ function VentasDelPeriodo({
         <p className="mt-2 text-sm text-muted-foreground">Todavía no hubo cobros en este período.</p>
       )}
       {!cargando && totalMetodos > 0 && (
-        <div className="mt-3 space-y-2">
-          <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-muted">
-            {metodos.map(([m, c]) => (
-              <div key={m} style={{ width: `${(c / totalMetodos) * 100}%`, background: METHOD_COLOR[m] }} />
-            ))}
+        <div className="mt-3 space-y-3">
+          <div className="space-y-2">
+            <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-muted">
+              {metodos.map((m) => (
+                <div key={m} style={{ width: `${(montoDe(m) / totalMetodos) * 100}%`, background: METHOD_COLOR[m] }} />
+              ))}
+            </div>
+            <dl aria-label="Por medio de pago" className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+              {metodos.map((m) => (
+                <div key={m} className="flex items-center gap-1.5">
+                  <span aria-hidden className="size-2 rounded-sm ring-1 ring-border/60" style={{ background: METHOD_COLOR[m] }} />
+                  <dt className="text-foreground/80">{METHOD_LABEL[m]}</dt>
+                  <dd className="tabular-nums">
+                    <span className="font-semibold">{formatCurrency(montoDe(m))}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">{pct(montoDe(m), totalMetodos)}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-            {metodos.map(([m, c]) => (
-              <div key={m} className="flex items-center gap-1.5">
-                <span aria-hidden className="size-2 rounded-sm" style={{ background: METHOD_COLOR[m] }} />
-                <dt className="text-foreground/80">{METHOD_LABEL[m]}</dt>
-                <dd className="font-semibold tabular-nums">{formatCurrency(c)}</dd>
-              </div>
-            ))}
-          </dl>
-          {origenes.length > 1 && (
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {origenes.map(([o, c]) => `${ORIGEN_LABEL[o] ?? o} ${formatCurrency(c)}`).join(" · ")}
+
+          {origenes.length > 0 && (
+            <dl aria-label="Por origen" className="grid gap-1 border-t border-border/60 pt-2.5 text-sm">
+              {origenes.map(([o, c]) => (
+                <div key={o} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <dt className="w-24 shrink-0 font-medium">{ORIGEN_LABEL[o] ?? o}</dt>
+                  <dd className="tabular-nums">
+                    <span className="font-semibold">{formatCurrency(c)}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">{pct(c, totalOrigenes)}</span>
+                  </dd>
+                  <dd className="text-xs tabular-nums text-muted-foreground">{desgloseDe(o)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {sinUso.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Sin cobros con {sinUso.map((m) => METHOD_LABEL[m]).join(", ")}.
             </p>
           )}
         </div>

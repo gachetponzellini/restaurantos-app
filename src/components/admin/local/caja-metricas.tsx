@@ -68,7 +68,7 @@ export function methodIcon(method: PaymentMethod) {
 // Orden canónico de métodos para el desglose. Las filas con monto > 0 se
 // muestran como barras (ordenadas por monto desc); las que están en $0 se
 // colapsan en una sola línea al pie, para no competir con los cobros reales.
-const COBRO_METHOD_ORDER: PaymentMethod[] = [
+export const COBRO_METHOD_ORDER: PaymentMethod[] = [
   "cash",
   "mp_qr",
   "mp_link",
