@@ -40,12 +40,24 @@ La encargada usa la caja **sobre todo para cerrar** (Juan, 2026-10-08).
 - **D10 · sin cambios de datos ni de reglas:** mismas queries, mismas actions, mismos modales (Rendir,
   Contar, Sangría, Ingreso, Editar).
 
+## Ajustes de Juan sobre la primera versión (2026-10-08)
+
+- **D11 · paso 2 en filas, no tabla:** cada mozo pendiente es una fila con sus iniciales, de dónde sale lo
+  que tiene que entregar en una línea (cobró · su propina · ya entregó) y el monto grande a la derecha con
+  su botón. Los que ya rindieron van aparte («Ya rindieron»), compactos, con «Rindió $X a las HH:MM» y
+  **Imprimir / Reimprimir** su rendición del turno.
+- **D12 · se va «Rendiciones anteriores»**: el papel de cada rendición está en su fila. Para el admin queda
+  «Quién cobra en cada caja».
+- **D13 · movimientos:** los últimos 10, sin scroll interno (antipatrón), con «Ver todos en el libro». Cada
+  línea: qué fue, hora y qué le hizo al cajón; a la derecha el monto y cómo queda el cajón.
+
 ## Requisitos
 
 - **R1:** `efectivoDelTurno(saldos, directoCents)`: pura; reparte el efectivo en caja directo, rendido,
   a rendir, propinas y deuda (la cuenta que hoy hace `EfectivoDeLaCaja`).
 - **R2:** `pasoAbierto(proximo)` y `porQueNoSeCuenta(caja, estado)`: puras.
 - **R3:** `CierreDelTurno` con pestañas y los tres paneles; recibe stats y cobros por caja del tablero.
+- **R3b:** `rendicionDelTurno(rendiciones, mozo, caja, desde)`: pura; la última no anulada del turno.
 - **R4:** tablero: selector con «debería haber», movimientos con Sangría/Ingreso, Ventas plegado;
   sin `EfectivoDeLaCaja` ni `CajonCard` sueltos.
 

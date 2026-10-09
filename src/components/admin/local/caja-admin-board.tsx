@@ -16,7 +16,7 @@ import { IntentLink } from "@/components/ui/intent-link";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { CerrarCajaModal } from "@/components/admin/local/cerrar-caja-modal";
 import { CierreDelTurno } from "@/components/admin/local/cierre-del-turno";
-import { HistorialYAsignaciones } from "@/components/admin/local/historial-y-asignaciones";
+import { CajaAssignmentsPanel } from "@/components/admin/local/caja-assignments-tab";
 import { DetalleSheet } from "@/components/admin/local/detalle-movimiento-sheet";
 import {
   METHOD_LABEL,
@@ -313,17 +313,27 @@ export function CajaAdminBoard({
           setContarAlEntrar(id);
           selectCaja(id);
         }}
+        rendiciones={rendicion?.rendicionHistorial ?? []}
         alPie={
-          rendicion ? (
-            <HistorialYAsignaciones
-              slug={slug}
-              historial={rendicion.rendicionHistorial}
-              cajas={cajas}
-              assignments={rendicion.cajaAssignments}
-              members={rendicion.businessMembers}
-              showAssignments={showAssignments}
-              onChanged={resincronizar}
-            />
+          // Spec 217 — el historial de rendiciones se fue: cada mozo que ya
+          // rindió tiene su «Reimprimir» en el paso 2. Queda, sólo para el
+          // admin, quién cobra en cada caja.
+          rendicion && showAssignments ? (
+            <details className="group rounded-2xl bg-card ring-1 ring-border/70">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-5 py-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                Quién cobra en cada caja
+                <ChevronDown className="size-4 transition group-open:rotate-180" aria-hidden />
+              </summary>
+              <div className="border-t border-border/60 p-5">
+                <CajaAssignmentsPanel
+                  slug={slug}
+                  cajas={cajas}
+                  assignments={rendicion.cajaAssignments}
+                  members={rendicion.businessMembers}
+                  onChanged={resincronizar}
+                />
+              </div>
+            </details>
           ) : null
         }
       />
@@ -343,6 +353,13 @@ export function CajaAdminBoard({
 
 // ── Card de caja (siempre operativa) ─────────────────────────────
 
+/**
+ * Spec 217 — la caja muestra los últimos movimientos, no todos: una lista con
+ * scroll adentro de una página que también scrollea es un antipatrón (Juan,
+ * 2026-10-08). El resto está en el libro.
+ */
+const ULTIMOS_MOVIMIENTOS = 10;
+
 function CajaCard({
   caja,
   stats,
@@ -355,6 +372,7 @@ function CajaCard({
   puedeEditarComoAdmin,
   statsByCaja,
   paymentsByCaja,
+  rendiciones,
   abrirConteo,
   onConteoAbierto,
   onContarOtraCaja,
@@ -373,6 +391,8 @@ function CajaCard({
   /** Spec 217 — el cierre del turno mira todas las cajas, no sólo la de la vista. */
   statsByCaja: Record<string, CajaLiveStats | null>;
   paymentsByCaja: Record<string, CajaPayment[]>;
+  /** Las últimas rendiciones: el «Reimprimir» de cada mozo que ya rindió. */
+  rendiciones: RendicionData["rendicionHistorial"];
   abrirConteo: boolean;
   onConteoAbierto: () => void;
   onContarOtraCaja: (cajaId: string) => void;
@@ -491,6 +511,7 @@ function CajaCard({
         onChanged={onChanged}
         statsByCaja={statsByCaja}
         paymentsByCaja={paymentsByCaja}
+        rendiciones={rendiciones}
       />
 
       {/* Spec 217 · D7 — el registro de la caja, con las dos acciones que lo alimentan. */}
@@ -540,8 +561,8 @@ function CajaCard({
         ) : visibles.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Ningún movimiento con ese filtro.</p>
         ) : (
-          <ul className="mt-3 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
-            {visibles.map(({ linea, efecto, saldoDespues }) => {
+          <ul className="mt-3 divide-y divide-border/60 rounded-xl ring-1 ring-border/70">
+            {visibles.slice(0, ULTIMOS_MOVIMIENTOS).map(({ linea, efecto, saldoDespues }) => {
               const e = linea.entry;
               const cajon = { efecto, saldoDespues, mozo: e.kind === "cobro" && e.data.rinde_mozo_id ? e.data.attributed_mozo_name : null };
               return e.kind === "cobro" ? (
@@ -551,6 +572,17 @@ function CajaCard({
               );
             })}
           </ul>
+        )}
+        {visibles.length > ULTIMOS_MOVIMIENTOS && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Estos son los últimos {ULTIMOS_MOVIMIENTOS} de {visibles.length}.{" "}
+            <IntentLink
+              href={`/${slug}/admin/caja/movimientos?caja=${caja.id}`}
+              className="font-semibold text-foreground underline underline-offset-2"
+            >
+              Ver todos en el libro
+            </IntentLink>
+          </p>
         )}
       </section>
 
@@ -667,18 +699,35 @@ type Cajon = { efecto: number; saldoDespues: number | null; mozo: string | null 
 
 /** Spec 211 · R4 — qué le hizo la línea al cajón y cómo lo dejó. */
 function EfectoEnCajon({ cajon, esEfectivo, anulado }: { cajon: Cajon; esEfectivo?: boolean; anulado?: boolean }) {
-  const queda = cajon.saldoDespues === null ? null : `queda ${formatCurrency(cajon.saldoDespues)}`;
   let texto: string;
   if (anulado) texto = "Anulado: no mueve el cajón";
   else if (cajon.efecto > 0) texto = `Cajón +${formatCurrency(cajon.efecto)}`;
   else if (cajon.efecto < 0) texto = `Cajón −${formatCurrency(-cajon.efecto)}`;
   else if (esEfectivo) texto = `No entra al cajón: lo tiene ${cajon.mozo ?? "el mozo"} hasta que rinda`;
   else texto = "No mueve el cajón";
+  return <>{texto}</>;
+}
+
+/**
+ * Spec 217 — el monto y cómo queda el cajón, juntos a la derecha: se leen
+ * de un vistazo bajando por la lista.
+ */
+function MontoYSaldo({ monto, tono, cajon }: { monto: string; tono: string; cajon: Cajon }) {
   return (
-    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
-      {texto}
-      {queda && <span className="text-foreground/70"> · {queda}</span>}
-    </p>
+    <div className="shrink-0 text-right">
+      <p className={cn("text-sm font-bold tabular-nums", tono)}>{monto}</p>
+      {cajon.saldoDespues !== null && (
+        <p className="text-xs tabular-nums text-muted-foreground">queda {formatCurrency(cajon.saldoDespues)}</p>
+      )}
+    </div>
+  );
+}
+
+function BotonEditar({ onEditar }: { onEditar: () => void }) {
+  return (
+    <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={onEditar} aria-label="Editar este movimiento">
+      Editar
+    </Button>
   );
 }
 
@@ -695,50 +744,28 @@ function MovimientoRow({ mov, cajon, onEditar }: { mov: CajaMovimiento; cajon: C
     minute: "2-digit",
   });
   return (
-    <li>
-      <div
-        className={cn(
-          "flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50",
-          mov.cancelled_at && "opacity-50",
-        )}
-      >
+    <li className={cn("flex items-center gap-3 px-4 py-3", mov.cancelled_at && "opacity-50")}>
       <span
         className={cn(
-          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
+          "flex size-8 shrink-0 items-center justify-center rounded-full",
           sale ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700",
         )}
       >
-        {sale ? (
-          <ArrowDownToLine className="size-3.5" strokeWidth={2.25} />
-        ) : (
-          <ArrowUpFromLine className="size-3.5" strokeWidth={2.25} />
-        )}
+        {sale ? <ArrowDownToLine className="size-4" strokeWidth={2.25} /> : <ArrowUpFromLine className="size-4" strokeWidth={2.25} />}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {MOVIMIENTO_LABEL[mov.kind]}
-            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/70 tabular-nums">{time}</span>
-          </p>
-          <p className={cn("shrink-0 text-sm font-bold tabular-nums", sale ? "text-rose-700" : "text-emerald-700")}>
-            {sale ? "−" : "+"}
-            {formatCurrency(mov.amount_cents)}
-          </p>
-        </div>
-        {mov.reason && <p className="mt-0.5 truncate text-xs text-muted-foreground">{mov.reason}</p>}
-        <EfectoEnCajon cajon={cajon} anulado={mov.cancelled_at !== null} />
+        <p className="truncate text-sm">
+          <span className="font-semibold">{MOVIMIENTO_LABEL[mov.kind]}</span>
+          {mov.reason && mov.reason.trim() !== MOVIMIENTO_LABEL[mov.kind] && (
+            <span className="text-muted-foreground"> · {mov.reason}</span>
+          )}
+        </p>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {time} · <EfectoEnCajon cajon={cajon} anulado={mov.cancelled_at !== null} />
+        </p>
       </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-2 shrink-0 self-center"
-          onClick={onEditar}
-          aria-label="Editar este movimiento"
-        >
-          Editar
-        </Button>
-      </div>
+      <MontoYSaldo monto={`${sale ? "−" : "+"}${formatCurrency(mov.amount_cents)}`} tono={sale ? "text-rose-700" : "text-emerald-700"} cajon={cajon} />
+      <BotonEditar onEditar={onEditar} />
     </li>
   );
 }
@@ -758,58 +785,31 @@ function CobroRow({ payment, cajon, onEditar }: { payment: CajaPayment; cajon: C
         (payment.order_number > 0 ? `#${payment.order_number}` : "Orden");
 
   return (
-    <li>
-      {/* La línea es accionable: lleva al libro, que es donde se corrige. */}
-      <div
-        className="flex items-start gap-3 px-3 py-2.5 transition hover:bg-muted/50"
-      >
-      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
-        <Icon className="size-3.5" strokeWidth={2.25} />
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
+        <Icon className="size-4" strokeWidth={2.25} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {origen}
-            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground/70 tabular-nums">{time}</span>
-          </p>
-          <p className="shrink-0 text-sm font-bold tabular-nums text-foreground">
-            +{formatCurrency(payment.amount_cents)}
-          </p>
-        </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
-            {METHOD_LABEL[payment.method]}
-            {payment.attributed_mozo_name && (
-              <><span className="mx-1 text-muted-foreground/50">·</span>{payment.attributed_mozo_name}</>
-            )}
-            {/* spec 147 — el cobro está bien; lo que falta es el papel de ARCA.
-                Mismo lenguaje visual que la comanda que no imprimió (spec 33). */}
-            {payment.comprobante_fallido && (
-              <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 align-middle">
-                <ReceiptText className="size-3" strokeWidth={2.25} />
-                Sin comprobante
-              </span>
-            )}
-          </p>
-          {payment.tip_cents > 0 && (
-            <p className="shrink-0 text-[11px] text-emerald-700 tabular-nums">
-              +{formatCurrency(payment.tip_cents)} propina
-            </p>
+        <p className="truncate text-sm">
+          <span className="font-semibold">{origen}</span>
+          <span className="text-muted-foreground"> · {METHOD_LABEL[payment.method]}</span>
+          {payment.attributed_mozo_name && <span className="text-muted-foreground"> · {payment.attributed_mozo_name}</span>}
+        </p>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {time} · <EfectoEnCajon cajon={cajon} esEfectivo={payment.method === "cash"} />
+          {payment.tip_cents > 0 && <span className="text-emerald-700"> · incluye {formatCurrency(payment.tip_cents)} de propina</span>}
+          {/* spec 147 — el cobro está bien; lo que falta es el papel de ARCA.
+              Mismo lenguaje visual que la comanda que no imprimió (spec 33). */}
+          {payment.comprobante_fallido && (
+            <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 align-middle">
+              <ReceiptText className="size-3" strokeWidth={2.25} />
+              Sin comprobante
+            </span>
           )}
-        </div>
-        <EfectoEnCajon cajon={cajon} esEfectivo={payment.method === "cash"} />
+        </p>
       </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-2 shrink-0 self-center"
-          onClick={onEditar}
-          aria-label="Editar este movimiento"
-        >
-          Editar
-        </Button>
-      </div>
+      <MontoYSaldo monto={`+${formatCurrency(payment.amount_cents)}`} tono="text-foreground" cajon={cajon} />
+      <BotonEditar onEditar={onEditar} />
     </li>
   );
 }

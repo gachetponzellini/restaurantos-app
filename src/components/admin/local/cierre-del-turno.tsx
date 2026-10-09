@@ -1,18 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Check, Lock, Receipt } from "lucide-react";
+import { AlertTriangle, Check, Lock, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { IntentLink } from "@/components/ui/intent-link";
 import { AnularCuentaCerrada } from "@/components/admin/local/anular-cuenta-cerrada";
 import { DesgloseDelCajon } from "@/components/admin/local/desglose-del-cajon";
+import { ImprimirRendicionBoton } from "@/components/admin/local/imprimir-rendicion-boton";
 import { RendirMozoModal } from "@/components/admin/local/rendir-mozo-modal";
 import { getEstadoTurnoTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { efectivoDelTurno } from "@/lib/caja/efectivo-del-turno";
 import { nombreDeCaja, pasoAbierto, pasosDelTurno, porQueNoSeCuenta } from "@/lib/caja/pasos-del-turno";
 import { porCobrar } from "@/lib/caja/por-cobrar";
+import { rendicionDelTurno, type RendicionParaFila } from "@/lib/caja/rendiciones-del-turno";
 import type { CajaPayment } from "@/lib/caja/queries";
 import { TXT } from "@/lib/caja/textos";
 import type { CajaDelTurno, EstadoTurno, SaldoMozo } from "@/lib/caja/turno-queries";
@@ -23,6 +25,8 @@ import { TZ_AR } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
 type Paso = 1 | 2 | 3;
+
+type RendicionDelTurno = RendicionParaFila & { delivered_cash_cents: number; ya_impresa?: boolean };
 
 /**
  * «Cierre del turno», el eje de la tab Caja (spec 211 · R6; spec 217). Un turno
@@ -45,6 +49,7 @@ export function CierreDelTurno({
   onChanged,
   statsByCaja = {},
   paymentsByCaja = {},
+  rendiciones = [],
 }: {
   slug: string;
   cajaActivaId: string;
@@ -57,6 +62,8 @@ export function CierreDelTurno({
   statsByCaja?: Record<string, CajaLiveStats | null>;
   /** Los cobros del período de cada caja: el detalle de la rendición de cada mozo. */
   paymentsByCaja?: Record<string, CajaPayment[]>;
+  /** Las últimas rendiciones: el «Reimprimir» de cada mozo que ya rindió. */
+  rendiciones?: RendicionDelTurno[];
 }) {
   const [estado, setEstado] = useState<EstadoTurno | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -266,6 +273,9 @@ export function CierreDelTurno({
               0,
             )}
             onRendir={setRindiendo}
+            slug={slug}
+            rendiciones={rendiciones}
+            desde={estado.abierto_at}
           />
         )}
         {abierto === 3 && (
@@ -368,17 +378,22 @@ function PanelRendiciones({
   variasCajas,
   directoCents,
   onRendir,
+  slug,
+  rendiciones,
+  desde,
 }: {
   saldos: SaldoMozo[];
   variasCajas: boolean;
   directoCents: number;
   onRendir: (m: SaldoMozo) => void;
+  slug: string;
+  rendiciones: RendicionDelTurno[];
+  desde: string | null;
 }) {
   if (saldos.length === 0) {
     return <p className="rounded-xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">Ningún mozo cobró en efectivo en este turno.</p>;
   }
   const e = efectivoDelTurno(saldos, directoCents);
-  const conAnterior = saldos.some((m) => m.anterior_cents !== 0);
   const enCajon = e.directoCents + e.rendidoCents;
   const pct = (n: number) => (e.totalCents > 0 ? `${(n / e.totalCents) * 100}%` : "0%");
   const partes = [
@@ -387,9 +402,12 @@ function PanelRendiciones({
     { label: "Propinas que se quedan", cents: e.propinasCents, dot: "bg-violet-500" },
     { label: "Quedó como deuda", cents: e.deudaCents, dot: "bg-rose-500" },
   ].filter((x, i) => i < 2 || x.cents > 0);
+  const listo = (m: SaldoMozo) => m.resuelto && m.saldo_cents === 0;
+  const faltan = saldos.filter((m) => !listo(m));
+  const rindieron = saldos.filter(listo);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       <div role="group" aria-label="Dónde está el efectivo" className="space-y-2.5 rounded-xl bg-muted/40 px-4 py-3">
         <p className="text-sm text-foreground/80">
           Efectivo del turno <span className="font-semibold tabular-nums text-foreground">{formatCurrency(e.totalCents)}</span>
@@ -409,75 +427,157 @@ function PanelRendiciones({
         </dl>
       </div>
 
-      <div className="overflow-x-auto rounded-xl ring-1 ring-border/70">
-        <table className="w-full min-w-[42rem] border-collapse text-sm">
-          <caption className="sr-only">Efectivo de cada mozo y lo que tiene que entregar</caption>
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th scope="col" className="px-4 py-2 font-medium">Mozo</th>
-              {conAnterior && <th scope="col" className="px-3 py-2 text-right font-medium">Traía de antes</th>}
-              <th scope="col" className="px-3 py-2 text-right font-medium">Cobró en efectivo</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">{TXT.suPropina}</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">{TXT.entrego}</th>
-              <th scope="col" className="px-3 py-2 text-right font-medium">Tiene que entregar</th>
-              <th scope="col" className="px-4 py-2"><span className="sr-only">Acción</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {saldos.map((m) => {
-              const listo = m.resuelto && m.saldo_cents === 0;
-              return (
-                <tr key={`${m.mozo_id}-${m.caja_id}`} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-2.5">
-                    <span className="font-semibold">{m.mozo_name}</span>
-                    {variasCajas && <span className="text-muted-foreground"> · {m.caja_name}</span>}
-                    {m.mesas_sin_cobrar.length > 0 && (
-                      <span className="block text-xs text-amber-800">
-                        {m.mesas_sin_cobrar.length === 1 ? "Tiene 1 mesa sin cobrar" : `Tiene ${m.mesas_sin_cobrar.length} mesas sin cobrar`}
-                      </span>
-                    )}
-                  </td>
-                  {conAnterior && (
-                    <td className="px-3 py-2.5 text-right tabular-nums">{m.anterior_cents ? formatCurrency(m.anterior_cents) : "—"}</td>
-                  )}
-                  <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(m.efectivo_cents)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-violet-800">
-                    {m.propina_tarjeta_cents ? `− ${formatCurrency(m.propina_tarjeta_cents)}` : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{m.entregado_cents ? formatCurrency(m.entregado_cents) : "—"}</td>
-                  <td
-                    className={cn(
-                      "px-3 py-2.5 text-right font-bold tabular-nums",
-                      m.deuda ? "text-rose-700" : m.saldo_cents > 0 ? "text-amber-800" : m.saldo_cents < 0 ? "text-violet-800" : "text-muted-foreground",
-                    )}
-                  >
-                    {m.saldo_cents === 0
-                      ? "—"
-                      : m.saldo_cents < 0
-                        ? `la caja le debe ${formatCurrency(-m.saldo_cents)}`
-                        : formatCurrency(m.saldo_cents)}
-                  </td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">
-                    {listo ? (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{TXT.rindio}</span>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant={m.deuda ? "ghost" : "default"}
-                        onClick={() => onRendir(m)}
-                        aria-label={`Rendir a ${m.mozo_name}`}
-                      >
-                        {m.deuda ? "Debe · ver" : m.saldo_cents < 0 ? "Darle la propina" : "Rendir"}
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {faltan.length > 0 && (
+        <section aria-labelledby="rend-faltan" className="space-y-2">
+          <h4 id="rend-faltan" className="text-sm font-semibold">
+            Faltan rendir <span className="font-normal tabular-nums text-muted-foreground">· {faltan.length}</span>
+          </h4>
+          <ul className="space-y-2">
+            {faltan.map((m) => (
+              <FilaPorRendir key={`${m.mozo_id}-${m.caja_id}`} m={m} variasCajas={variasCajas} onRendir={onRendir} />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {rindieron.length > 0 && (
+        <section aria-labelledby="rend-listos" className="space-y-2">
+          <h4 id="rend-listos" className="text-sm font-semibold">
+            Ya rindieron <span className="font-normal tabular-nums text-muted-foreground">· {rindieron.length}</span>
+          </h4>
+          <ul className="divide-y divide-border/60 rounded-xl bg-muted/30">
+            {rindieron.map((m) => (
+              <FilaRendida
+                key={`${m.mozo_id}-${m.caja_id}`}
+                m={m}
+                variasCajas={variasCajas}
+                slug={slug}
+                rendicion={rendicionDelTurno(rendiciones, m.mozo_id, m.caja_id, desde)}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** «LM» para Lucía Moza: un ancla visual para encontrar a cada uno rápido. */
+function Iniciales({ nombre, listo = false }: { nombre: string; listo?: boolean }) {
+  const ini = nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join("");
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+        listo ? "bg-emerald-100 text-emerald-800" : "bg-muted text-foreground/80",
+      )}
+    >
+      {listo ? <Check className="size-4" /> : ini}
+    </span>
+  );
+}
+
+function FilaPorRendir({
+  m,
+  variasCajas,
+  onRendir,
+}: {
+  m: SaldoMozo;
+  variasCajas: boolean;
+  onRendir: (m: SaldoMozo) => void;
+}) {
+  // De dónde sale lo que tiene que entregar, en una línea y sin los ceros.
+  const partes: string[] = [];
+  if (m.anterior_cents) partes.push(`traía ${formatCurrency(m.anterior_cents)} de antes`);
+  partes.push(`Cobró ${formatCurrency(m.efectivo_cents)} en efectivo`);
+  if (m.propina_tarjeta_cents) partes.push(`su propina − ${formatCurrency(m.propina_tarjeta_cents)}`);
+  if (m.entregado_cents) partes.push(`ya entregó ${formatCurrency(m.entregado_cents)}`);
+
+  const leDebe = !m.deuda && m.saldo_cents < 0;
+  const rotulo = m.deuda ? "Quedó debiendo" : leDebe ? "La caja le debe" : "Tiene que entregar";
+  const monto = formatCurrency(Math.abs(m.saldo_cents));
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-3 ring-1 ring-border/70">
+      <div className="flex min-w-0 flex-[1_1_18rem] items-center gap-3">
+        <Iniciales nombre={m.mozo_name} />
+        <div className="min-w-0">
+          <p className="truncate text-sm">
+            <span className="font-semibold">{m.mozo_name}</span>
+            {variasCajas && <span className="text-muted-foreground"> · {m.caja_name}</span>}
+          </p>
+          <p className="text-xs tabular-nums text-muted-foreground">{partes.join(" · ")}</p>
+          {m.mesas_sin_cobrar.length > 0 && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-800">
+              <AlertTriangle className="size-3.5" aria-hidden />
+              {m.mesas_sin_cobrar.length === 1 ? "Tiene 1 mesa sin cobrar" : `Tiene ${m.mesas_sin_cobrar.length} mesas sin cobrar`}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="ml-auto flex items-center gap-4">
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">{rotulo}</p>
+          <p
+            className={cn(
+              "text-xl font-bold tracking-tight tabular-nums",
+              m.deuda ? "text-rose-700" : leDebe ? "text-violet-800" : "text-foreground",
+            )}
+          >
+            {monto}
+          </p>
+        </div>
+        <Button
+          variant={m.deuda ? "outline" : "default"}
+          className="min-w-28"
+          onClick={() => onRendir(m)}
+          aria-label={`Rendir a ${m.mozo_name}`}
+        >
+          {m.deuda ? "Ver la deuda" : leDebe ? "Darle la propina" : "Rendir"}
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+function FilaRendida({
+  m,
+  variasCajas,
+  slug,
+  rendicion,
+}: {
+  m: SaldoMozo;
+  variasCajas: boolean;
+  slug: string;
+  rendicion: RendicionDelTurno | null;
+}) {
+  const hora = rendicion
+    ? new Date(rendicion.created_at).toLocaleTimeString("es-AR", { timeZone: TZ_AR, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    : null;
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+      <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-3">
+        <Iniciales nombre={m.mozo_name} listo />
+        <p className="min-w-0 truncate text-sm">
+          <span className="font-medium">{m.mozo_name}</span>
+          {variasCajas && <span className="text-muted-foreground"> · {m.caja_name}</span>}
+        </p>
+      </div>
+      <p className="text-sm tabular-nums text-muted-foreground">
+        {rendicion ? `Rindió ${formatCurrency(rendicion.delivered_cash_cents)} a las ${hora}` : "No tenía nada para rendir"}
+      </p>
+      {rendicion && (
+        <div className="ml-auto">
+          <ImprimirRendicionBoton slug={slug} rendicionId={rendicion.id} mozoName={m.mozo_name} yaImpresa={rendicion.ya_impresa} />
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -517,7 +617,7 @@ function TarjetaDeCaja({
   const titulo = /^caja\b/i.test(caja.name.trim()) ? caja.name.trim() : `Caja ${caja.name}`;
   const id = `tarjeta-caja-${caja.id}`;
   const hora = caja.ultimo_corte_at
-    ? new Date(caja.ultimo_corte_at).toLocaleTimeString("es-AR", { timeZone: TZ_AR, hour: "2-digit", minute: "2-digit" })
+    ? new Date(caja.ultimo_corte_at).toLocaleTimeString("es-AR", { timeZone: TZ_AR, hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
     : null;
 
   return (

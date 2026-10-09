@@ -35,6 +35,11 @@ vi.mock("@/lib/caja/turno-actions", () => ({
   imprimirLiquidacion: async () => ({ ok: true, data: { impreso: false } }),
 }));
 
+const imprimirRendicion = vi.fn(async () => ({ ok: true as const, data: { reimpresion: true } }));
+vi.mock("@/lib/caja/rendicion-print-actions", () => ({
+  imprimirRendicion: (...args: unknown[]) => imprimirRendicion(...(args as [])),
+}));
+
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 vi.mock("sonner", () => ({
@@ -131,7 +136,13 @@ function stats(cajaId: string, d: Partial<CajaLiveStats["desglose_esperado"]> & 
   } as unknown as CajaLiveStats;
 }
 
-function abrir(cajaActivaId = "caja-1", statsByCaja: Record<string, CajaLiveStats | null> = {}) {
+type Rendicion = NonNullable<Parameters<typeof CierreDelTurno>[0]["rendiciones"]>[number];
+
+function abrir(
+  cajaActivaId = "caja-1",
+  statsByCaja: Record<string, CajaLiveStats | null> = {},
+  rendiciones: Rendicion[] = [],
+) {
   return render(
     <CierreDelTurno
       slug="golf-jcr"
@@ -141,13 +152,16 @@ function abrir(cajaActivaId = "caja-1", statsByCaja: Record<string, CajaLiveStat
       onContar={onContar}
       onChanged={onChanged}
       statsByCaja={statsByCaja}
+      rendiciones={rendiciones}
     />,
   );
 }
 
-/** La fila de la tabla de mozos (paso 2). */
+/** La fila de un mozo en el paso 2 (spec 217: filas, no tabla). */
 function filaDe(nombre: string) {
-  return screen.getByRole("row", { name: new RegExp(nombre) });
+  const fila = screen.getByText(nombre).closest("li");
+  expect(fila).not.toBeNull();
+  return fila as HTMLElement;
 }
 
 function conEstado(e: EstadoTurno) {
@@ -286,25 +300,57 @@ describe("CierreDelTurno", () => {
       );
       abrir();
 
-      await screen.findByText(`la caja le debe ${pesos(6_000)}`);
+      await screen.findByText("La caja le debe");
+      expect(filaDe("Lucía Pérez")).toHaveTextContent(pesos(6_000));
       expect(within(filaDe("Lucía Pérez")).getByRole("button")).toHaveTextContent("Darle la propina");
       await userEvent.click(screen.getByRole("button", { name: "Rendir a Lucía Pérez" }));
       expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: `Darle ${formatCurrency(6_000)} de propina del cajón` })).toBeInTheDocument();
     });
 
-    it("los mozos ya resueltos se ven como «Rindió», sin botón (spec 217 · D3)", async () => {
+    it("los que ya rindieron van aparte, con lo que entregaron y para reimprimir (spec 217)", async () => {
       conEstado(
         estado({
           saldos: [mozo(), mozo({ mozo_id: "mozo-2", mozo_name: "Beto Ruiz", saldo_cents: 0, entregado_cents: 40_000, resuelto: true })],
           cajas: [caja({ sin_contar: true })],
         }),
       );
+      abrir("caja-1", {}, [
+        {
+          id: "rend-9",
+          mozo_id: "mozo-2",
+          caja_id: "caja-1",
+          created_at: "2026-10-06T22:03:00Z",
+          anulada_at: null,
+          delivered_cash_cents: 40_000,
+          ya_impresa: true,
+        },
+      ]);
+      await screen.findByText("Falta 1");
+      expect(screen.getByRole("heading", { name: /Faltan rendir/ })).toHaveTextContent("1");
+      expect(screen.getByRole("heading", { name: /Ya rindieron/ })).toHaveTextContent("1");
+      expect(filaDe("Beto Ruiz")).toHaveTextContent(`Rindió ${pesos(40_000)} a las 19:03`);
+      expect(within(filaDe("Beto Ruiz")).queryByRole("button", { name: /Rendir a/ })).not.toBeInTheDocument();
+      await userEvent.click(within(filaDe("Beto Ruiz")).getByRole("button", { name: "Imprimir rendición de Beto Ruiz" }));
+      expect(imprimirRendicion).toHaveBeenCalledWith("rend-9", "golf-jcr");
+      expect(screen.getAllByRole("button", { name: /Rendir a/ })).toHaveLength(1);
+    });
+
+    it("cada fila pendiente dice de dónde sale lo que tiene que entregar", async () => {
+      conEstado(
+        estado({
+          saldos: [mozo({ efectivo_cents: 106_600, propina_tarjeta_cents: 1_000, entregado_cents: 10_000, saldo_cents: 95_600, mesas_sin_cobrar: [{ orderId: "o", tableLabel: "4" } as never] })],
+          cajas: [caja({ sin_contar: true })],
+        }),
+      );
       abrir();
       await screen.findByText("Falta 1");
-      expect(filaDe("Beto Ruiz")).toHaveTextContent("Rindió");
-      expect(within(filaDe("Beto Ruiz")).queryByRole("button")).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: /Rendir a/ })).toHaveLength(1);
+      const fila = filaDe("Lucía Pérez");
+      expect(fila).toHaveTextContent(`Cobró ${pesos(106_600)} en efectivo`);
+      expect(fila).toHaveTextContent(`su propina − ${pesos(1_000)}`);
+      expect(fila).toHaveTextContent(`ya entregó ${pesos(10_000)}`);
+      expect(fila).toHaveTextContent(`Tiene que entregar${pesos(95_600)}`);
+      expect(fila).toHaveTextContent("Tiene 1 mesa sin cobrar");
     });
 
     it("arriba dice dónde está el efectivo del turno", async () => {

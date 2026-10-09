@@ -378,6 +378,10 @@ export type MozoRendicion = {
   /** Esperado / entregado / diferencia por canal (spec 203). `{}` en las viejas. */
   por_canal: Partial<Record<CanalRendicion, LiquidacionDeCanal>>;
   created_at: string;
+  /** La caja donde se rindió (caja v2; null en las viejas). */
+  caja_id?: string | null;
+  /** Anulada (`anular_entrega_tx`): ya no cuenta. */
+  anulada_at?: string | null;
 };
 
 export type CajaUserAssignment = {
