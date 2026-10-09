@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pasoAbierto, pasosDelTurno, porQueNoSeCuenta } from "./pasos-del-turno";
+import { pasoAbierto, pasosDelTurno, porQueNoSeCuenta, turnoSinActividad } from "./pasos-del-turno";
 
 const mesa = (label: string) => ({ order_id: `o-${label}`, table_id: `t-${label}`, table_label: label });
 const saldo = (o: { mozo: string; caja?: string; saldo: number; resuelto?: boolean }) => ({
@@ -129,3 +129,33 @@ describe("porQueNoSeCuenta (spec 217 · D4): el botón apagado dice por qué", (
     expect(porQueNoSeCuenta("c1", estado({ saldos: [saldo({ mozo: "Ana", saldo: 100, resuelto: true })] }))).toBeNull();
   });
 });
+
+describe("turnoSinActividad (spec 217): la caja recién cerrada, con el turno nuevo vacío", () => {
+  const base = {
+    abierto_at: "2026-10-08T23:00:00Z",
+    cuentas_abiertas: [] as { table_label: string }[],
+    cuentas_con_saldo: [] as unknown[],
+    saldos: [] as unknown[],
+    cajas: [{ sin_contar: false, ultimo_corte_at: "2026-10-08T22:59:00Z" }],
+  };
+
+  it("sin mesas, sin mozos y con las cajas contadas antes de abrir el turno: no hay nada que cerrar", () => {
+    expect(turnoSinActividad(base)).toBe(true);
+  });
+
+  it("una caja contada DENTRO del turno es un turno que se trabajó: sí se cierra", () => {
+    expect(turnoSinActividad({ ...base, cajas: [{ sin_contar: false, ultimo_corte_at: "2026-10-09T03:00:00Z" }] })).toBe(false);
+  });
+
+  it("cualquier mesa, mozo, cuenta con saldo o caja con movimiento lo activa", () => {
+    expect(turnoSinActividad({ ...base, cuentas_abiertas: [{ table_label: "7" }] })).toBe(false);
+    expect(turnoSinActividad({ ...base, saldos: [{}] })).toBe(false);
+    expect(turnoSinActividad({ ...base, cuentas_con_saldo: [{}] })).toBe(false);
+    expect(turnoSinActividad({ ...base, cajas: [{ sin_contar: true, ultimo_corte_at: null }] })).toBe(false);
+  });
+
+  it("sin turno abierto no se adivina: se muestra el cierre normal", () => {
+    expect(turnoSinActividad({ ...base, abierto_at: null })).toBe(false);
+  });
+});
+

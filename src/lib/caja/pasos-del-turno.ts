@@ -138,3 +138,25 @@ export function porQueNoSeCuenta(
   return razones.length ? razones.join(" · ") : null;
 }
 
+/**
+ * Spec 217 — el turno recién abierto, con la caja limpia: no hay mesas, ni
+ * mozos con plata, ni cuentas con saldo, y cada caja se contó ANTES de que
+ * abriera (el cierre anterior). Ahí no hay nada que cerrar: ofrecer «Cerrar el
+ * turno» sobre un turno vacío confunde. Una caja contada DENTRO del turno es
+ * un turno que se trabajó, y ese sí se cierra.
+ */
+export function turnoSinActividad(input: {
+  abierto_at: string | null;
+  cuentas_abiertas: unknown[];
+  cuentas_con_saldo?: unknown[];
+  saldos: unknown[];
+  cajas: { sin_contar: boolean; ultimo_corte_at: string | null }[];
+}): boolean {
+  if (!input.abierto_at) return false;
+  if (input.cuentas_abiertas.length || input.saldos.length || (input.cuentas_con_saldo ?? []).length) return false;
+  const abierto = new Date(input.abierto_at).getTime();
+  return input.cajas.every(
+    (c) => !c.sin_contar && (c.ultimo_corte_at === null || new Date(c.ultimo_corte_at).getTime() <= abierto),
+  );
+}
+

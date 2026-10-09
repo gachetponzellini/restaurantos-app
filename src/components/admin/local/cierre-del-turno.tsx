@@ -12,7 +12,7 @@ import { ImprimirRendicionBoton } from "@/components/admin/local/imprimir-rendic
 import { RendirMozoModal } from "@/components/admin/local/rendir-mozo-modal";
 import { getEstadoTurnoTabData } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import { efectivoDelTurno } from "@/lib/caja/efectivo-del-turno";
-import { nombreDeCaja, pasoAbierto, pasosDelTurno, porQueNoSeCuenta } from "@/lib/caja/pasos-del-turno";
+import { nombreDeCaja, pasoAbierto, pasosDelTurno, porQueNoSeCuenta, turnoSinActividad } from "@/lib/caja/pasos-del-turno";
 import { porCobrar } from "@/lib/caja/por-cobrar";
 import { rendicionDelTurno, type RendicionParaFila } from "@/lib/caja/rendiciones-del-turno";
 import type { CajaPayment } from "@/lib/caja/queries";
@@ -181,11 +181,37 @@ export function CierreDelTurno({
     },
   ];
 
+  if (turnoSinActividad(estado)) {
+    const desde = new Date(estado.abierto_at as string).toLocaleTimeString("es-AR", {
+      timeZone: TZ_AR,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    return (
+      <section aria-labelledby="turno-titulo" className="space-y-3 rounded-2xl bg-card p-5 ring-1 ring-border/70">
+        <h3 id="turno-titulo" className="text-lg font-semibold tracking-tight">Cierre del turno</h3>
+        <div className="flex items-start gap-3 rounded-xl bg-muted/40 px-4 py-3.5">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+            <Check className="size-4" aria-hidden />
+          </span>
+          <div className="text-sm">
+            <p className="font-semibold">Turno abierto desde las {desde}</p>
+            <p className="mt-0.5 text-muted-foreground">
+              Todavía no hay nada para cerrar. El turno anterior quedó cerrado y {estado.cajas.length > 1 ? "las cajas arrancan" : "la caja arranca"} con
+              lo que se dejó de fondo. Cuando se cobren mesas, acá vas a ver qué falta.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="turno-titulo" className="space-y-4 rounded-2xl bg-card p-5 ring-1 ring-border/70">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 id="turno-titulo" className="text-base font-semibold">Cierre del turno</h3>
+          <h3 id="turno-titulo" className="text-lg font-semibold tracking-tight">Cierre del turno</h3>
           <p className="text-xs text-muted-foreground">
             Uno para todo el local: cobrá las mesas, rendí a los mozos y contá {variasCajas ? "cada caja" : "la caja"}.
           </p>
@@ -320,50 +346,60 @@ function PanelPorCobrar({
     return <p className="rounded-xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">Todas las mesas están cobradas.</p>;
   }
   return (
-    <section aria-labelledby="por-cobrar" className="rounded-xl ring-1 ring-border/70">
-      <div className="flex items-baseline justify-between gap-3 border-b border-border/60 px-4 py-2.5">
+    <section aria-labelledby="por-cobrar" className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
         <h4 id="por-cobrar" className="text-sm font-semibold">
-          Por cobrar
-          <span className="ml-1.5 font-normal text-muted-foreground">
-            · {filas.length} {filas.length === 1 ? "cuenta" : "cuentas"}
-          </span>
+          Por cobrar <span className="font-normal tabular-nums text-muted-foreground">· {filas.length}</span>
         </h4>
-        <span className="text-sm font-bold tabular-nums">{formatCurrency(filas.reduce((a, f) => a + f.faltaCents, 0))}</span>
+        <p className="text-sm text-muted-foreground">
+          Falta en total <span className="font-semibold tabular-nums text-foreground">{formatCurrency(filas.reduce((a, f) => a + f.faltaCents, 0))}</span>
+        </p>
       </div>
-      <ul className="divide-y divide-border/60">
+      <ul className="space-y-2">
         {filas.map((f) => (
-          <li key={f.orderId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm">
-            <span className="min-w-0">
-              <span className="block truncate">
-                <span className="font-medium">{f.nombre}</span>
-                {f.mozo && <span className="text-muted-foreground"> · {f.mozo}</span>}
-              </span>
-              <span className={cn("block text-xs", f.frena ? "text-amber-800" : "text-muted-foreground")}>
-                {f.detalle}
-                {f.pagadoCents > 0 && (
-                  <span className="tabular-nums">
-                    {" "}
-                    · cobrado {formatCurrency(f.pagadoCents)} de {formatCurrency(f.totalCents)}
-                  </span>
+          <li key={f.orderId} className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-3 ring-1 ring-border/70">
+            <div className="flex min-w-0 flex-[1_1_18rem] items-center gap-3">
+              {/* La mesa, como se la nombra en el salón: el ancla para encontrarla. */}
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg px-1.5 text-xs font-bold tabular-nums",
+                  f.frena ? "bg-amber-100 text-amber-900" : "bg-muted text-foreground/80",
                 )}
+              >
+                {f.nombre.startsWith("Mesa ") ? f.nombre.slice(5) : "#"}
               </span>
-            </span>
-            <span className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm">
+                  <span className="font-semibold">{f.nombre}</span>
+                  {f.mozo && <span className="text-muted-foreground"> · {f.mozo}</span>}
+                </p>
+                <p className={cn("text-xs tabular-nums", f.frena ? "text-amber-800" : "text-muted-foreground")}>
+                  {f.detalle}
+                  {f.pagadoCents > 0 && ` · cobrado ${formatCurrency(f.pagadoCents)} de ${formatCurrency(f.totalCents)}`}
+                </p>
+              </div>
+            </div>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Falta cobrar</p>
+                <p className="text-xl font-bold tracking-tight tabular-nums">{formatCurrency(f.faltaCents)}</p>
+              </div>
               <IntentLink
                 href={
                   f.destino.kind === "mesa"
                     ? `/${slug}/admin/mesa/${f.destino.tableId}/cobrar?volver=${encodeURIComponent(volverAlCierre)}`
                     : `/${slug}/admin/pedidos/historial?q=${f.destino.orderNumber}`
                 }
-                className={buttonVariants({ size: "sm" })}
+                className={cn(buttonVariants(), "min-w-28")}
                 aria-label={`Cobrar ${f.nombre}, falta ${formatCurrency(f.faltaCents)}`}
               >
-                <Receipt className="size-4" /> Cobrar {formatCurrency(f.faltaCents)}
+                <Receipt className="size-4" /> Cobrar
               </IntentLink>
               {f.anulable && (
                 <AnularCuentaCerrada slug={slug} orderId={f.orderId} nombre={f.nombre} onAnulada={onAnulada} />
               )}
-            </span>
+            </div>
           </li>
         ))}
       </ul>

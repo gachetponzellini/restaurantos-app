@@ -19,11 +19,10 @@ import { CierreDelTurno } from "@/components/admin/local/cierre-del-turno";
 import { CajaAssignmentsPanel } from "@/components/admin/local/caja-assignments-tab";
 import { DetalleSheet } from "@/components/admin/local/detalle-movimiento-sheet";
 import {
+  METHOD_COLOR,
   METHOD_LABEL,
-  VentasPorMetodo,
   methodIcon,
 } from "@/components/admin/local/caja-metricas";
-import { CobrosPorOrigen } from "@/components/admin/local/cobros-por-origen";
 import { SegmentedSelector } from "@/components/admin/local/segmented-selector";
 import { MovimientoModal } from "@/components/admin/local/movimiento-modal";
 import { Button } from "@/components/ui/button";
@@ -442,7 +441,6 @@ function CajaCard({
   const cobros = stats?.cobros_count ?? 0;
   const porMetodo = stats?.ventas_por_metodo;
   const porOrigen = stats?.ventas_por_origen;
-  const porOrigenYMetodo = stats?.ventas_por_origen_y_metodo;
   const periodoDesdeFecha = stats?.periodo_desde ?? caja.periodo_desde;
 
   const periodoLabel = (() => {
@@ -514,10 +512,19 @@ function CajaCard({
         rendiciones={rendiciones}
       />
 
+      <VentasDelPeriodo
+        cargando={cargandoStats}
+        ventas={ventas}
+        cobros={cobros}
+        propinas={propinas}
+        porMetodo={porMetodo}
+        porOrigen={porOrigen}
+      />
+
       {/* Spec 217 · D7 — el registro de la caja, con las dos acciones que lo alimentan. */}
       <section aria-labelledby="movimientos-titulo" className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 id="movimientos-titulo" className="text-base font-semibold">
+          <h3 id="movimientos-titulo" className="text-lg font-semibold tracking-tight">
             Movimientos de {caja.name}
             <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">· {entries.length}</span>
           </h3>
@@ -585,42 +592,6 @@ function CajaCard({
           </p>
         )}
       </section>
-
-      {/* Spec 217 · D8 — lectura, no operación: plegado y al final. */}
-      <details className="group rounded-2xl bg-card ring-1 ring-border/70">
-        <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <span className="text-base font-semibold">Ventas del período</span>
-          <span className="flex items-baseline gap-2 text-sm text-muted-foreground">
-            {cargandoStats ? (
-              <span className="inline-block h-5 w-40 animate-pulse rounded bg-muted align-middle" />
-            ) : (
-              <>
-                <span className="text-lg font-bold tabular-nums text-foreground">{formatCurrency(ventas)}</span>
-                <span className="tabular-nums">
-                  {cobros} {cobros === 1 ? "cobro" : "cobros"}
-                  {/* Las propinas no están adentro de este número —es venta, no
-                      lo que entró— así que se dicen aparte y con esa palabra. */}
-                  {propinas > 0 && ` · más ${formatCurrency(propinas)} de propina`}
-                </span>
-              </>
-            )}
-            <ChevronDown className="size-4 self-center transition group-open:rotate-180" aria-hidden />
-          </span>
-        </summary>
-        <div className="border-t border-border/60 px-5 py-4">
-          {porMetodo && porOrigen && porOrigenYMetodo && cobros > 0 ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <VentasPorMetodo porMetodo={porMetodo} embebido />
-              <div>
-                <h4 className="text-sm font-semibold">Por origen</h4>
-                <CobrosPorOrigen porOrigen={porOrigen} porOrigenYMetodo={porOrigenYMetodo} />
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Todavía no hubo cobros en este período.</p>
-          )}
-        </div>
-      </details>
 
       {alPie}
 
@@ -694,6 +665,89 @@ function CajaCard({
 }
 
 // ── Sub-componentes ──────────────────────────────────────────────
+
+const ORIGEN_LABEL: Record<string, string> = { salon: "Salón", delivery: "Delivery", takeaway: "Take away", otro: "Otro" };
+
+/**
+ * Spec 217 — las ventas del período en una franja chica, arriba de los
+ * movimientos: el total, una barra por medio de pago (el efectivo primero y
+ * más oscuro: es el único que se cuenta) y una línea por origen. Es lectura,
+ * no operación: no compite con el cierre.
+ */
+function VentasDelPeriodo({
+  cargando,
+  ventas,
+  cobros,
+  propinas,
+  porMetodo,
+  porOrigen,
+}: {
+  cargando: boolean;
+  ventas: number;
+  cobros: number;
+  propinas: number;
+  porMetodo: CajaLiveStats["ventas_por_metodo"] | undefined;
+  porOrigen: CajaLiveStats["ventas_por_origen"] | undefined;
+}) {
+  const metodos = porMetodo
+    ? (Object.entries(porMetodo) as [keyof typeof METHOD_LABEL, number][])
+        .filter(([, c]) => c > 0)
+        .sort((a, b) => (a[0] === "cash" ? -1 : b[0] === "cash" ? 1 : b[1] - a[1]))
+    : [];
+  const totalMetodos = metodos.reduce((a, [, c]) => a + c, 0);
+  const origenes = porOrigen
+    ? Object.entries(porOrigen)
+        .filter(([, c]) => c > 0)
+        .sort((a, b) => b[1] - a[1])
+    : [];
+
+  return (
+    <section aria-labelledby="ventas-titulo" className="rounded-2xl bg-card px-5 py-4 ring-1 ring-border/70">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <h3 id="ventas-titulo" className="text-lg font-semibold tracking-tight">Ventas del período</h3>
+        {cargando ? (
+          <span className="inline-block h-6 w-48 animate-pulse rounded bg-muted" aria-busy />
+        ) : (
+          <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+            <span className="text-xl font-bold tracking-tight tabular-nums text-foreground">{formatCurrency(ventas)}</span>
+            <span className="tabular-nums">
+              {cobros} {cobros === 1 ? "cobro" : "cobros"}
+              {/* Las propinas no están adentro de este número —es venta, no
+                  lo que entró— así que se dicen aparte y con esa palabra. */}
+              {propinas > 0 && ` · más ${formatCurrency(propinas)} de propina`}
+            </span>
+          </p>
+        )}
+      </div>
+      {!cargando && totalMetodos === 0 && (
+        <p className="mt-2 text-sm text-muted-foreground">Todavía no hubo cobros en este período.</p>
+      )}
+      {!cargando && totalMetodos > 0 && (
+        <div className="mt-3 space-y-2">
+          <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-muted">
+            {metodos.map(([m, c]) => (
+              <div key={m} style={{ width: `${(c / totalMetodos) * 100}%`, background: METHOD_COLOR[m] }} />
+            ))}
+          </div>
+          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {metodos.map(([m, c]) => (
+              <div key={m} className="flex items-center gap-1.5">
+                <span aria-hidden className="size-2 rounded-sm" style={{ background: METHOD_COLOR[m] }} />
+                <dt className="text-foreground/80">{METHOD_LABEL[m]}</dt>
+                <dd className="font-semibold tabular-nums">{formatCurrency(c)}</dd>
+              </div>
+            ))}
+          </dl>
+          {origenes.length > 1 && (
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {origenes.map(([o, c]) => `${ORIGEN_LABEL[o] ?? o} ${formatCurrency(c)}`).join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 type Cajon = { efecto: number; saldoDespues: number | null; mozo: string | null };
 

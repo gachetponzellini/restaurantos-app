@@ -50,7 +50,7 @@ export const METHOD_COLOR: Record<PaymentMethod, string> = {
   transfer: "#C4C4C8",
   mp_manual: "#71717A",
   other: "#D4D4D8",
-  cuenta_corriente: "Cuenta corriente",
+  cuenta_corriente: "#E4E4E7",
 };
 
 export function methodIcon(method: PaymentMethod) {
@@ -205,11 +205,8 @@ export function VentasPorOrigen({
  */
 export function VentasPorMetodo({
   porMetodo,
-  embebido = false,
 }: {
   porMetodo: Record<PaymentMethod, number>;
-  /** Spec 217 — dentro de «Ventas del período»: sin tarjeta propia (nunca una tarjeta adentro de otra). */
-  embebido?: boolean;
 }) {
   const metodos = COBRO_METHOD_ORDER.map((key) => ({
     key,
@@ -224,14 +221,10 @@ export function VentasPorMetodo({
   const vacios = metodos.filter((m) => m.amount === 0);
 
   return (
-    <section className={embebido ? undefined : "rounded-2xl bg-card p-5 ring-1 ring-border/70"}>
-      {embebido ? (
-        <h4 className="text-sm font-semibold">Por medio de pago</h4>
-      ) : (
-        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Cobrado por método
-        </p>
-      )}
+    <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Cobrado por método
+      </p>
 
       {activos.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">Todavía no se cobró nada.</p>

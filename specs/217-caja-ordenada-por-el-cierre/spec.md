@@ -51,6 +51,18 @@ La encargada usa la caja **sobre todo para cerrar** (Juan, 2026-10-08).
 - **D13 · movimientos:** los últimos 10, sin scroll interno (antipatrón), con «Ver todos en el libro». Cada
   línea: qué fue, hora y qué le hizo al cajón; a la derecha el monto y cómo queda el cajón.
 
+## Segunda ronda de ajustes (2026-10-08)
+
+- **D14 · el modal de Rendir** no recorta el borde de su primera tarjeta.
+- **D15 · turno nuevo, caja limpia:** sin mesas, sin mozos, sin cuentas con saldo y con cada caja contada
+  antes de que abriera el turno, no hay nada que cerrar: en vez de los pasos y de «Cerrar el turno», dice
+  «Turno abierto desde las HH:MM» y que todavía no hay nada para cerrar.
+- **D16 · ventas** en una franja chica **arriba de los movimientos**: total, una barra por medio de pago
+  con su leyenda y una línea por origen. Sin desplegable.
+- **D17 · títulos de cada parte** más grandes (Cierre del turno, Ventas del período, Movimientos).
+- **D18 · paso 1 en filas**, como las rendiciones: la mesa como etiqueta, el mozo, el estado, y «Falta
+  cobrar» grande al lado de «Cobrar» (y «Anular» en las cerradas).
+
 ## Requisitos
 
 - **R1:** `efectivoDelTurno(saldos, directoCents)`: pura; reparte el efectivo en caja directo, rendido,
@@ -58,6 +70,7 @@ La encargada usa la caja **sobre todo para cerrar** (Juan, 2026-10-08).
 - **R2:** `pasoAbierto(proximo)` y `porQueNoSeCuenta(caja, estado)`: puras.
 - **R3:** `CierreDelTurno` con pestañas y los tres paneles; recibe stats y cobros por caja del tablero.
 - **R3b:** `rendicionDelTurno(rendiciones, mozo, caja, desde)`: pura; la última no anulada del turno.
+- **R3c:** `turnoSinActividad(estado)`: pura.
 - **R4:** tablero: selector con «debería haber», movimientos con Sangría/Ingreso, Ventas plegado;
   sin `EfectivoDeLaCaja` ni `CajonCard` sueltos.
 

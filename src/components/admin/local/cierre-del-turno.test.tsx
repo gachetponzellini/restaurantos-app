@@ -63,7 +63,8 @@ function caja(over: Partial<CajaDelTurno> = {}): CajaDelTurno {
     name: "Principal",
     is_default: true,
     sin_contar: false,
-    ultimo_corte_at: null,
+    // Contada dentro del turno (abierto 12:00): un turno trabajado, no uno vacío.
+    ultimo_corte_at: "2026-10-06T20:00:00Z",
     ...over,
   };
 }
@@ -224,7 +225,11 @@ describe("CierreDelTurno", () => {
 
       await screen.findByText("Faltan 2 mesas");
       const fila4 = screen.getByRole("link", { name: `Cobrar Mesa 4, falta ${formatCurrency(60_000)}` });
-      expect(fila4).toHaveTextContent(`Cobrar ${pesos(60_000)}`);
+      expect(fila4).toHaveTextContent("Cobrar");
+      // Spec 217 — cada mesa es una fila: lo que falta, grande, al lado del botón.
+      const item4 = fila4.closest("li") as HTMLElement;
+      expect(item4).toHaveTextContent(`Falta cobrar${pesos(60_000)}`);
+      expect(item4).toHaveTextContent("Lucía Pérez");
       expect(fila4).toHaveAttribute("href", "/golf-jcr/admin/mesa/t-4/cobrar?volver=%2Fgolf-jcr%2Fadmin%2Foperacion%3Ftab%3Dcaja%26caja%3Dcaja-1");
       expect(screen.getByRole("link", { name: `Cobrar Mesa 7, falta ${formatCurrency(25_000)}` })).toHaveAttribute(
         "href",
@@ -410,6 +415,17 @@ describe("CierreDelTurno", () => {
       await screen.findByText("Principal pendiente · Barra ✓");
       await userEvent.click(primario("Contar la caja Principal"));
       expect(onContar).toHaveBeenCalledWith("caja-1");
+    });
+  });
+
+  describe("turno nuevo, sin nada todavía (spec 217)", () => {
+    it("no ofrece cerrar un turno vacío: dice desde cuándo está abierto", async () => {
+      conEstado(estado({ abierto_at: "2026-10-06T23:30:00Z", cajas: [caja({ ultimo_corte_at: "2026-10-06T23:29:00Z" })] }));
+      abrir();
+      expect(await screen.findByText("Turno abierto desde las 20:30")).toBeInTheDocument();
+      expect(screen.getByText(/Todavía no hay nada para cerrar/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Cerrar el turno" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     });
   });
 

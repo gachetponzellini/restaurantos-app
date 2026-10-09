@@ -162,7 +162,9 @@ export function RendirMozoModal({
       <ModalContent size="lg">
         <ModalHeader title={`Rendición de ${saldo.mozo_name}`} eyebrow={saldo.caja_name} icon={<UserRound />} />
         <ModalBody>
-          <div className="space-y-4">
+          {/* `pt-1`: el área de scroll recorta el anillo de la primera tarjeta
+              justo en su borde de arriba (spec 217). */}
+          <div className="space-y-4 pt-1">
             <dl className="overflow-hidden rounded-xl ring-1 ring-border">
               {filas.map((f) => (
                 <div key={f.label} className="flex items-baseline justify-between gap-3 border-b border-border/60 px-4 py-2.5 text-sm">
