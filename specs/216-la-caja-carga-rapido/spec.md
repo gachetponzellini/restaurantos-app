@@ -11,10 +11,13 @@ abrir.
 Medido en los logs:
 
 - La base no es el cuello: una carga de la caja son ~26 queries y ~300 ms de base.
-- Las funciones de Vercel corren en **gru1** y la base en **us-east-1**: cada ronda de queries
-  **encadenadas** cuesta ~130 ms de viaje. Lo que duele es la cantidad de rondas en serie, no la cantidad
-  de queries.
-- Mover la región sería la mejora más grande, pero queda fuera por decisión de Juan.
+- ~~Las funciones de Vercel corren en **gru1** y la base en **us-east-1**: cada ronda de queries
+  encadenadas cuesta ~130 ms de viaje.~~ **Corrección (2026-10-08):** las funciones corren en **iad1**,
+  la misma región que la base (`regions: ["iad1"]` en cada deploy). El `region=gru1` de los runtime logs
+  es el nodo de borde por donde entra el pedido desde Argentina, no donde corre la función. Cada ronda
+  encadenada cuesta poco; los cambios de esta spec siguen siendo válidos (menos rondas en serie, menos
+  queries repetidas) pero ganan menos de lo estimado.
+- La región ya es la correcta: no hay nada que mover.
 
 ## Decisiones
 
@@ -35,7 +38,6 @@ Medido en los logs:
 
 ## Fuera de alcance (fase 2)
 
-- Región de Vercel.
 - `saldos_mozos` / `saldo_mozo` sin ventana (362 ms promedio, picos de 5 s): necesita migración y TDD.
 - Cargar en el servidor sólo la tab que se mira.
 - Un endpoint de stats por negocio en vez de uno por caja.
