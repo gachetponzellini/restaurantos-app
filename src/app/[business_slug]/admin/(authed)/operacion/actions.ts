@@ -227,35 +227,11 @@ export async function getEstadoTurnoTabData(
 }
 
 // Lo que viene del cliente: ids y fechas válidos antes de tocar la base.
-const SaldosCajaInput = z.object({ cajaId: z.string().uuid(), desde: z.string().datetime({ offset: true }) });
 const EntradaDelLibroInput = z.object({
   cajaId: z.string().uuid(),
   createdAt: z.string().datetime({ offset: true }),
   id: z.string().uuid(),
 });
-
-/**
- * Spec 211 · R1/R2 — los mozos con plata de una caja, con las cifras del
- * período abierto de esa caja (`desde`) y el saldo de ahora.
- */
-export async function getSaldosCajaTabData(
-  slug: string,
-  cajaId: string,
-  desde: string,
-): Promise<ActionResult<import("@/lib/caja/turno-queries").SaldoMozo[]>> {
-  const ctx = await requireOperacionContext(slug, { soloSupervision: true });
-  if (!ctx.ok) return ctx;
-  const ok = SaldosCajaInput.safeParse({ cajaId, desde });
-  if (!ok.success) return actionError("Datos inválidos.");
-  const { getSaldosMozos } = await import("@/lib/caja/turno-queries");
-  try {
-    const saldos = await getSaldosMozos(ctx.data.businessId, desde);
-    return actionOk(saldos.filter((m) => m.caja_id === cajaId));
-  } catch (e) {
-    console.error("[operacion] getSaldosCajaTabData", e);
-    return actionError("No se pudieron cargar los saldos de los mozos.");
-  }
-}
 
 /**
  * Spec 211 · R4/R5 — el renglón del libro de un movimiento de la caja, para

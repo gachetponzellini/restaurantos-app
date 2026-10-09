@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { CuentaAbierta } from "@/lib/caja/queries";
 import type { CajaDelTurno, EstadoTurno, SaldoMozo } from "@/lib/caja/turno-queries";
+import type { CajaLiveStats } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
 
 type OperacionActions = typeof import("@/app/[business_slug]/admin/(authed)/operacion/actions");
@@ -111,7 +112,26 @@ function estado(over: Partial<EstadoTurno> = {}): EstadoTurno {
 const onContar = vi.fn();
 const onChanged = vi.fn();
 
-function abrir(cajaActivaId = "caja-1") {
+/** Los stats vivos de una caja: sólo lo que la franja lee (el desglose del cajón). */
+function stats(cajaId: string, d: Partial<CajaLiveStats["desglose_esperado"]> & { esperado: number }): CajaLiveStats {
+  const { esperado, ...desglose } = d;
+  return {
+    caja_id: cajaId,
+    expected_cash_cents: esperado,
+    desglose_esperado: {
+      apertura_cents: 0,
+      retiro_cierre_cents: 0,
+      efectivo_cents: 0,
+      ingresos_cents: 0,
+      rendiciones_cents: 0,
+      sangrias_cents: 0,
+      propinas_pagadas_cents: 0,
+      ...desglose,
+    },
+  } as unknown as CajaLiveStats;
+}
+
+function abrir(cajaActivaId = "caja-1", statsByCaja: Record<string, CajaLiveStats | null> = {}) {
   return render(
     <CierreDelTurno
       slug="golf-jcr"
@@ -120,8 +140,14 @@ function abrir(cajaActivaId = "caja-1") {
       refreshKey={0}
       onContar={onContar}
       onChanged={onChanged}
+      statsByCaja={statsByCaja}
     />,
   );
+}
+
+/** La fila de la tabla de mozos (paso 2). */
+function filaDe(nombre: string) {
+  return screen.getByRole("row", { name: new RegExp(nombre) });
 }
 
 function conEstado(e: EstadoTurno) {
@@ -225,7 +251,9 @@ describe("CierreDelTurno", () => {
 
       await screen.findByRole("heading", { name: "Cierre del turno" });
       expect(screen.getByText("Falta 1")).toBeInTheDocument();
-      expect(screen.getByText(`tiene que entregar ${pesos(100_000)}`)).toBeInTheDocument();
+      // Spec 217 — se abre el paso que falta: la tabla de mozos.
+      expect(screen.getByRole("tab", { name: /Rendiciones/ })).toHaveAttribute("aria-selected", "true");
+      expect(filaDe("Lucía Pérez")).toHaveTextContent(pesos(100_000));
       expect(screen.queryByRole("button", { name: /^Rendir a Lucía Pérez$/ })).toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: /Rendir a/ })).toHaveLength(1);
 
@@ -259,21 +287,38 @@ describe("CierreDelTurno", () => {
       abrir();
 
       await screen.findByText(`la caja le debe ${pesos(6_000)}`);
+      expect(within(filaDe("Lucía Pérez")).getByRole("button")).toHaveTextContent("Darle la propina");
       await userEvent.click(screen.getByRole("button", { name: "Rendir a Lucía Pérez" }));
       expect(await screen.findByText("Rendición de Lucía Pérez")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: `Darle ${formatCurrency(6_000)} de propina del cajón` })).toBeInTheDocument();
     });
 
-    it("los mozos ya resueltos no aparecen en la lista de pendientes", async () => {
+    it("los mozos ya resueltos se ven como «Rindió», sin botón (spec 217 · D3)", async () => {
       conEstado(
         estado({
-          saldos: [mozo(), mozo({ mozo_id: "mozo-2", mozo_name: "Beto Ruiz", saldo_cents: 0, resuelto: true })],
+          saldos: [mozo(), mozo({ mozo_id: "mozo-2", mozo_name: "Beto Ruiz", saldo_cents: 0, entregado_cents: 40_000, resuelto: true })],
           cajas: [caja({ sin_contar: true })],
         }),
       );
       abrir();
       await screen.findByText("Falta 1");
-      expect(screen.queryByText("Beto Ruiz")).not.toBeInTheDocument();
+      expect(filaDe("Beto Ruiz")).toHaveTextContent("Rindió");
+      expect(within(filaDe("Beto Ruiz")).queryByRole("button")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /Rendir a/ })).toHaveLength(1);
+    });
+
+    it("arriba dice dónde está el efectivo del turno", async () => {
+      conEstado(
+        estado({
+          saldos: [mozo({ efectivo_cents: 106_600, entregado_cents: 10_000, saldo_cents: 95_600, propina_tarjeta_cents: 1_000 })],
+          cajas: [caja({ sin_contar: true })],
+        }),
+      );
+      abrir("caja-1", { "caja-1": stats("caja-1", { esperado: 15_000, efectivo_cents: 5_000 }) });
+      const resumen = await screen.findByRole("group", { name: "Dónde está el efectivo" });
+      expect(resumen).toHaveTextContent(`En el cajón${pesos(15_000)}`);
+      expect(resumen).toHaveTextContent(`En manos de los mozos${pesos(95_600)}`);
+      expect(resumen).toHaveTextContent(`Propinas que se quedan${pesos(1_000)}`);
     });
   });
 
@@ -319,6 +364,60 @@ describe("CierreDelTurno", () => {
       await screen.findByText("Principal pendiente · Barra ✓");
       await userEvent.click(primario("Contar la caja Principal"));
       expect(onContar).toHaveBeenCalledWith("caja-1");
+    });
+  });
+
+  describe("pestañas (spec 217 · D1)", () => {
+    it("con mesas pendientes se puede mirar otro paso tocándolo", async () => {
+      conEstado(estado({ cuentas_abiertas: [cuenta()], saldos: [mozo()], cajas: [caja({ sin_contar: true })] }));
+      abrir();
+      await screen.findByText("Falta 1 mesa");
+      expect(screen.getByRole("tab", { name: /Mesas cobradas/ })).toHaveAttribute("aria-selected", "true");
+      expect(screen.queryByRole("button", { name: /Rendir a/ })).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("tab", { name: /Rendiciones/ }));
+      expect(screen.getByRole("button", { name: "Rendir a Lucía Pérez" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /Cobrar Mesa 4/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("paso 3: contar las cajas (spec 217 · D4)", () => {
+    it("muestra lo que debería haber en cada cajón y de dónde sale", async () => {
+      conEstado(estado({ cajas: [caja({ sin_contar: true })] }));
+      abrir("caja-1", {
+        "caja-1": stats("caja-1", { esperado: 62_000, apertura_cents: 50_000, rendiciones_cents: 10_000, ingresos_cents: 5_000, sangrias_cents: 3_000 }),
+      });
+      const tarjeta = await screen.findByRole("region", { name: "Caja Principal" });
+      expect(tarjeta).toHaveTextContent(`Debería haber${pesos(62_000)}`);
+      expect(tarjeta).toHaveTextContent(`Fondo que quedó del cierre anterior${pesos(50_000)}`);
+      expect(tarjeta).toHaveTextContent(`+ Rendiciones de los mozos${pesos(10_000)}`);
+      expect(tarjeta).toHaveTextContent(`− Sangrías${pesos(3_000)}`);
+    });
+
+    it("si la caja no se puede contar, el botón está apagado y dice por qué", async () => {
+      conEstado(estado({ saldos: [mozo()], cajas: [caja({ sin_contar: true })] }));
+      abrir();
+      await userEvent.click(await screen.findByRole("tab", { name: /Contar la caja/ }));
+      const boton = screen.getByRole("button", { name: "Contar la caja Principal" });
+      expect(boton).toBeDisabled();
+      expect(screen.getByText("Falta rendir a Lucía Pérez")).toBeInTheDocument();
+      await userEvent.click(boton);
+      expect(onContar).not.toHaveBeenCalled();
+    });
+
+    it("una caja contada lo dice y no ofrece contarla", async () => {
+      conEstado(
+        estado({
+          cajas: [
+            caja({ id: "caja-1", name: "Principal", sin_contar: true }),
+            caja({ id: "caja-2", name: "Barra", is_default: false, sin_contar: false, ultimo_corte_at: "2026-10-06T23:05:00Z" }),
+          ],
+        }),
+      );
+      abrir();
+      const barra = await screen.findByRole("region", { name: "Caja Barra" });
+      expect(barra).toHaveTextContent("Contada");
+      expect(within(barra).queryByRole("button")).not.toBeInTheDocument();
     });
   });
 

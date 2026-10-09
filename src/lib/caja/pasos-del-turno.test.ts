@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pasosDelTurno } from "./pasos-del-turno";
+import { pasoAbierto, pasosDelTurno, porQueNoSeCuenta } from "./pasos-del-turno";
 
 const mesa = (label: string) => ({ order_id: `o-${label}`, table_id: `t-${label}`, table_label: label });
 const saldo = (o: { mozo: string; caja?: string; saldo: number; resuelto?: boolean }) => ({
@@ -89,3 +89,43 @@ describe("pasosDelTurno (spec 211 · R6)", () => {
   });
 });
 
+describe("pasoAbierto (spec 217 · D1): qué paso se muestra al entrar", () => {
+  it("cobrar → 1, rendir → 2, contar y cerrar → 3", () => {
+    expect(pasoAbierto({ kind: "cobrar", label: "", tableId: "t" })).toBe(1);
+    expect(pasoAbierto({ kind: "rendir", label: "", mozoId: "m", cajaId: "c" })).toBe(2);
+    expect(pasoAbierto({ kind: "contar", label: "", cajaId: "c" })).toBe(3);
+    expect(pasoAbierto({ kind: "turno", label: "" })).toBe(3);
+  });
+});
+
+describe("porQueNoSeCuenta (spec 217 · D4): el botón apagado dice por qué", () => {
+  const estado = (o: { mesas?: string[]; saldos?: ReturnType<typeof saldo>[] }) => ({
+    cuentas_abiertas: (o.mesas ?? []).map(mesa),
+    saldos: o.saldos ?? [],
+    cajas: [caja("c1", true), caja("c2", true)],
+  });
+
+  it("sin nada pendiente, se cuenta", () => {
+    expect(porQueNoSeCuenta("c1", estado({}))).toBeNull();
+  });
+
+  it("con mesas abiertas, ninguna caja se cuenta (cerrar_caja_tx)", () => {
+    expect(porQueNoSeCuenta("c1", estado({ mesas: ["7"] }))).toBe("Falta cobrar la mesa 7");
+    expect(porQueNoSeCuenta("c2", estado({ mesas: ["7", "9"] }))).toBe("Faltan cobrar 2 mesas");
+  });
+
+  it("frenan sólo los mozos sin rendir de ESA caja", () => {
+    const e = estado({ saldos: [saldo({ mozo: "Ana", saldo: 100 }), saldo({ mozo: "Leo", caja: "c2", saldo: 50 })] });
+    expect(porQueNoSeCuenta("c1", e)).toBe("Falta rendir a Ana");
+    expect(porQueNoSeCuenta("c2", e)).toBe("Falta rendir a Leo");
+  });
+
+  it("junta las dos razones, y nombra a todos los que faltan", () => {
+    const e = estado({ mesas: ["7"], saldos: [saldo({ mozo: "Ana", saldo: 100 }), saldo({ mozo: "Beto", saldo: -10 })] });
+    expect(porQueNoSeCuenta("c1", e)).toBe("Falta cobrar la mesa 7 · Falta rendir a Ana y Beto");
+  });
+
+  it("un mozo resuelto (o con deuda reconocida) no frena", () => {
+    expect(porQueNoSeCuenta("c1", estado({ saldos: [saldo({ mozo: "Ana", saldo: 100, resuelto: true })] }))).toBeNull();
+  });
+});

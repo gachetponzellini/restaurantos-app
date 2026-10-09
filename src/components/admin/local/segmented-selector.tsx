@@ -11,6 +11,8 @@ export type SegmentedItem = {
    * número (muestra 0), Caja lo omite cuando no hubo cobros.
    */
   count?: number;
+  /** Texto secundario al lado del nombre (spec 217: lo que debería haber en el cajón). */
+  hint?: string;
 };
 
 /**
@@ -51,6 +53,11 @@ export function SegmentedSelector({
               )}
             >
               <span>{item.label}</span>
+              {item.hint && (
+                <span className={cn("ml-1.5 font-normal tabular-nums", isActive ? "text-white/75" : "text-muted-foreground")}>
+                  {item.hint}
+                </span>
+              )}
               {item.count != null && (
                 <span
                   className={cn(

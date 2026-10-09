@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  ChevronDown,
   ReceiptText,
   RefreshCw,
   Settings,
@@ -15,7 +16,6 @@ import { IntentLink } from "@/components/ui/intent-link";
 import { Surface } from "@/components/admin/shell/page-shell";
 import { CerrarCajaModal } from "@/components/admin/local/cerrar-caja-modal";
 import { CierreDelTurno } from "@/components/admin/local/cierre-del-turno";
-import { EfectivoDeLaCaja } from "@/components/admin/local/efectivo-de-la-caja";
 import { HistorialYAsignaciones } from "@/components/admin/local/historial-y-asignaciones";
 import { DetalleSheet } from "@/components/admin/local/detalle-movimiento-sheet";
 import {
@@ -50,7 +50,6 @@ import {
 } from "@/app/[business_slug]/admin/(authed)/operacion/actions";
 import type { LibroEntry } from "@/lib/caja/types";
 import { formatCurrency } from "@/lib/currency";
-import { TXT } from "@/lib/caja/textos";
 import {
   conSaldoCorrido,
   efectoEnCajon,
@@ -261,6 +260,7 @@ export function CajaAdminBoard({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
+        {/* Spec 217 · D6 — cada caja dice lo que debería haber en su cajón. */}
         {cajas.length > 1 ? (
           <SegmentedSelector
             ariaLabel="Seleccionar caja"
@@ -269,12 +269,17 @@ export function CajaAdminBoard({
             items={cajas.map((c) => ({
               id: c.id,
               label: c.name,
-              count: statsByCaja[c.id]?.cobros_count || undefined,
+              hint: statsByCaja[c.id] ? `· ${formatCurrency(statsByCaja[c.id]!.expected_cash_cents)}` : undefined,
             }))}
           />
         ) : (
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Refresco cada 30s
+          <p className="text-sm font-semibold text-foreground">
+            {cajas[0].name}
+            {statsByCaja[cajas[0].id] && (
+              <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
+                · {formatCurrency(statsByCaja[cajas[0].id]!.expected_cash_cents)} en el cajón
+              </span>
+            )}
           </p>
         )}
         <Button
@@ -300,6 +305,8 @@ export function CajaAdminBoard({
         active={active}
         refreshKey={refreshKey}
         puedeEditarComoAdmin={showAssignments}
+        statsByCaja={statsByCaja}
+        paymentsByCaja={paymentsByCaja}
         abrirConteo={contarAlEntrar === activeCaja.id}
         onConteoAbierto={() => setContarAlEntrar(null)}
         onContarOtraCaja={(id) => {
@@ -346,6 +353,8 @@ function CajaCard({
   active,
   refreshKey,
   puedeEditarComoAdmin,
+  statsByCaja,
+  paymentsByCaja,
   abrirConteo,
   onConteoAbierto,
   onContarOtraCaja,
@@ -361,6 +370,9 @@ function CajaCard({
   active: boolean;
   refreshKey: number;
   puedeEditarComoAdmin: boolean;
+  /** Spec 217 — el cierre del turno mira todas las cajas, no sólo la de la vista. */
+  statsByCaja: Record<string, CajaLiveStats | null>;
+  paymentsByCaja: Record<string, CajaPayment[]>;
   abrirConteo: boolean;
   onConteoAbierto: () => void;
   onContarOtraCaja: (cajaId: string) => void;
@@ -454,56 +466,21 @@ function CajaCard({
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">
-              {caja.name}
-            </h3>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-800">
-              <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
-              Activa
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Período activo <span suppressHydrationWarning>{periodoLabel}</span>
-            {/* Spec 149 · acá decía «· último corte registrado», que anunciaba
-                un dato sin mostrarlo ni llevar a ningún lado. Ahora es la
-                entrada al cierre archivado. */}
-            {caja.ultimo_corte && (
-              <>
-                <span className="mx-1 text-muted-foreground/50">·</span>
-                <IntentLink
-                  href={`/${slug}/admin/caja/cierres?caja=${caja.id}`}
-                  className="font-medium underline underline-offset-2 transition hover:text-foreground"
-                >
-                  ver cierres anteriores
-                </IntentLink>
-              </>
-            )}
-          </p>
-        </div>
-        {/* Spec 209 · R2 — sangría e ingreso son acciones del turno, no el
-            paso principal: el primario vive en «Cierre del turno». */}
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSangriaOpen(true)}
-          >
-            <ArrowDownToLine className="size-3.5" /> Sangría
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIngresoOpen(true)}
-          >
-            <ArrowUpFromLine className="size-3.5" /> Ingreso
-          </Button>
-        </div>
-      </header>
+      {/* Spec 217 · D6 — el período y sus cierres; el nombre ya está en el selector. */}
+      <p className="text-xs text-muted-foreground">
+        {caja.name}: período abierto <span suppressHydrationWarning>{periodoLabel}</span>
+        {caja.ultimo_corte && (
+          <>
+            <span className="mx-1 text-muted-foreground/50">·</span>
+            <IntentLink
+              href={`/${slug}/admin/caja/cierres?caja=${caja.id}`}
+              className="font-medium underline underline-offset-2 transition hover:text-foreground"
+            >
+              cierres anteriores
+            </IntentLink>
+          </>
+        )}
+      </p>
 
       <CierreDelTurno
         slug={slug}
@@ -512,124 +489,106 @@ function CajaCard({
         refreshKey={refreshKey}
         onContar={(id) => (id === caja.id ? setCorteOpen(true) : onContarOtraCaja(id))}
         onChanged={onChanged}
+        statsByCaja={statsByCaja}
+        paymentsByCaja={paymentsByCaja}
       />
 
-      <div className="grid grid-cols-1 gap-3">
-        <div className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Cobrado en el período
-          </p>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-foreground tabular-nums">
+      {/* Spec 217 · D7 — el registro de la caja, con las dos acciones que lo alimentan. */}
+      <section aria-labelledby="movimientos-titulo" className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 id="movimientos-titulo" className="text-base font-semibold">
+            Movimientos de {caja.name}
+            <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">· {entries.length}</span>
+          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSangriaOpen(true)}>
+              <ArrowDownToLine className="size-3.5" /> Sangría
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIngresoOpen(true)}>
+              <ArrowUpFromLine className="size-3.5" /> Ingreso
+            </Button>
+            {/* El período es el hot path del turno; el libro (spec 070) es el
+                histórico con filtros, los anulados y la corrección. */}
+            <IntentLink
+              href={`/${slug}/admin/caja/movimientos?caja=${caja.id}`}
+              className="px-1 text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground/90 hover:underline"
+            >
+              Ver todos
+            </IntentLink>
+          </div>
+        </div>
+        {entries.length > 0 && (
+          <div role="group" aria-label="Filtrar movimientos" className="mt-3 flex flex-wrap gap-1.5">
+            {FILTROS_CAJA.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={filtro === f.id}
+                onClick={() => setFiltro(f.id)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition",
+                  filtro === f.id ? "bg-foreground text-background ring-foreground" : "bg-card text-foreground/80 ring-border hover:bg-muted",
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {entries.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Todavía no hubo movimientos en este período.</p>
+        ) : visibles.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Ningún movimiento con ese filtro.</p>
+        ) : (
+          <ul className="mt-3 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
+            {visibles.map(({ linea, efecto, saldoDespues }) => {
+              const e = linea.entry;
+              const cajon = { efecto, saldoDespues, mozo: e.kind === "cobro" && e.data.rinde_mozo_id ? e.data.attributed_mozo_name : null };
+              return e.kind === "cobro" ? (
+                <CobroRow key={`p-${e.data.id}`} payment={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
+              ) : (
+                <MovimientoRow key={`m-${e.data.id}`} mov={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Spec 217 · D8 — lectura, no operación: plegado y al final. */}
+      <details className="group rounded-2xl bg-card ring-1 ring-border/70">
+        <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="text-base font-semibold">Ventas del período</span>
+          <span className="flex items-baseline gap-2 text-sm text-muted-foreground">
             {cargandoStats ? (
-              <span className="inline-block h-8 w-32 animate-pulse rounded-lg bg-primary/10 align-middle" />
-            ) : (
-              formatCurrency(ventas)
-            )}
-          </p>
-          <p className="mt-1 text-xs text-foreground/70">
-            {cargandoStats ? (
-              " "
+              <span className="inline-block h-5 w-40 animate-pulse rounded bg-muted align-middle" />
             ) : (
               <>
-                {cobros} {cobros === 1 ? "cobro" : "cobros"}
-                {/* Las propinas no están adentro de este número —es venta, no
-                    lo que entró— así que se dicen aparte y con esa palabra. */}
-                {propinas > 0 && ` · más ${formatCurrency(propinas)} de propina`}
+                <span className="text-lg font-bold tabular-nums text-foreground">{formatCurrency(ventas)}</span>
+                <span className="tabular-nums">
+                  {cobros} {cobros === 1 ? "cobro" : "cobros"}
+                  {/* Las propinas no están adentro de este número —es venta, no
+                      lo que entró— así que se dicen aparte y con esa palabra. */}
+                  {propinas > 0 && ` · más ${formatCurrency(propinas)} de propina`}
+                </span>
               </>
             )}
-          </p>
+            <ChevronDown className="size-4 self-center transition group-open:rotate-180" aria-hidden />
+          </span>
+        </summary>
+        <div className="border-t border-border/60 px-5 py-4">
+          {porMetodo && porOrigen && porOrigenYMetodo && cobros > 0 ? (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <VentasPorMetodo porMetodo={porMetodo} embebido />
+              <div>
+                <h4 className="text-sm font-semibold">Por origen</h4>
+                <CobrosPorOrigen porOrigen={porOrigen} porOrigenYMetodo={porOrigenYMetodo} />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Todavía no hubo cobros en este período.</p>
+          )}
         </div>
-      </div>
-
-      {porMetodo && cobros > 0 && <VentasPorMetodo porMetodo={porMetodo} />}
-
-      {/* Spec 211 · R1 — después de lo cobrado, dónde está el efectivo, y
-          después el cajón: lo que se cuenta. */}
-      <EfectivoDeLaCaja
-        slug={slug}
-        cajaId={caja.id}
-        stats={stats}
-        payments={payments}
-        active={active}
-        refreshKey={refreshKey}
-        onChanged={onChanged}
-      />
-
-      <CajonCard stats={stats} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Cobros por origen
-          </p>
-          {porOrigen && porOrigenYMetodo && cobros > 0 ? (
-            <CobrosPorOrigen
-              porOrigen={porOrigen}
-              porOrigenYMetodo={porOrigenYMetodo}
-            />
-          ) : (
-            <p className="mt-3 text-xs text-muted-foreground">Todavía no hubo cobros.</p>
-          )}
-        </section>
-
-        <section className="rounded-2xl bg-card p-5 ring-1 ring-border/70">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Movimientos del período
-            </p>
-            <div className="flex items-baseline gap-2">
-              {/* El período es el hot path del turno; el libro (spec 070) es el
-                  histórico con filtros, los anulados y la corrección. */}
-              <IntentLink
-                href={`/${slug}/admin/caja/movimientos?caja=${caja.id}`}
-                className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground/90 hover:underline"
-              >
-                Ver todos
-              </IntentLink>
-              <p className="text-xs font-semibold tabular-nums text-foreground/80">
-                {entries.length}
-              </p>
-            </div>
-          </div>
-          {entries.length > 0 && (
-            <div role="group" aria-label="Filtrar movimientos" className="mt-3 flex flex-wrap gap-1.5">
-              {FILTROS_CAJA.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  aria-pressed={filtro === f.id}
-                  onClick={() => setFiltro(f.id)}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition",
-                    filtro === f.id ? "bg-foreground text-background ring-foreground" : "bg-card text-foreground/80 ring-border hover:bg-muted",
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {entries.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Todavía no hubo movimientos.
-            </p>
-          ) : visibles.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground">Ningún movimiento con ese filtro.</p>
-          ) : (
-            <ul className="mt-3 max-h-[28rem] divide-y divide-border/60 overflow-y-auto rounded-lg ring-1 ring-border/70">
-              {visibles.map(({ linea, efecto, saldoDespues }) => {
-                const e = linea.entry;
-                const cajon = { efecto, saldoDespues, mozo: e.kind === "cobro" && e.data.rinde_mozo_id ? e.data.attributed_mozo_name : null };
-                return e.kind === "cobro" ? (
-                  <CobroRow key={`p-${e.data.id}`} payment={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
-                ) : (
-                  <MovimientoRow key={`m-${e.data.id}`} mov={e.data} cajon={cajon} onEditar={() => editar(e.data.created_at, e.data.id)} />
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      </div>
+      </details>
 
       {alPie}
 
@@ -856,56 +815,3 @@ function CobroRow({ payment, cajon, onEditar }: { payment: CajaPayment; cajon: C
 }
 
 // ── Modales ──────────────────────────────────────────────────────
-
-
-
-// ── El cajón (spec 211 · R1) ─────────────────────────────────────
-
-/**
- * Lo que tiene que haber en el cajón si se cuenta ahora, con su cuenta línea
- * por línea. Los números salen de `desglose_esperado_caja` (base): el total es
- * exactamente el que firma el cierre.
- */
-function CajonCard({ stats }: { stats: CajaLiveStats | null }) {
-  if (!stats) {
-    return <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy />;
-  }
-  const d = stats.desglose_esperado;
-  type Linea = { label: string; sub?: string; cents: number; signo: "+" | "−" | "" };
-  const todas: Linea[] = [
-    { label: d.apertura_cents ? "Fondo que quedó del cierre anterior" : "Arranca en", cents: d.apertura_cents, signo: "" },
-    { label: "Cobrado por la caja", sub: "Efectivo que no tiene que rendir ningún mozo", cents: d.efectivo_cents, signo: "+" },
-    { label: "Rendiciones de los mozos", cents: d.rendiciones_cents ?? 0, signo: "+" },
-    { label: "Ingresos", cents: d.ingresos_cents, signo: "+" },
-    { label: "Sangrías", cents: d.sangrias_cents, signo: "−" },
-    { label: "Propinas que se pagaron del cajón", cents: d.propinas_pagadas_cents, signo: "−" },
-  ];
-  const lineas = todas.filter((l, i) => i === 0 || l.cents !== 0);
-
-  return (
-    <section aria-labelledby="cajon-titulo" className="rounded-2xl p-5 ring-1 ring-border/70" style={{ background: "var(--brand-soft, #F4F4F5)" }}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h3 id="cajon-titulo" className="text-[0.95rem] font-semibold">El cajón</h3>
-          <p className="text-xs text-foreground/70">Lo que tiene que haber si lo contás ahora.</p>
-        </div>
-        <p className="text-right">
-          <span className="block text-3xl font-bold tracking-tight tabular-nums">{formatCurrency(stats.expected_cash_cents)}</span>
-          <span className="text-xs text-foreground/70">{TXT.deberiaHaber}</span>
-        </p>
-      </div>
-      <dl className="mt-3 divide-y divide-foreground/10 text-sm">
-        {lineas.map((l) => (
-          <div key={l.label} className="flex items-baseline justify-between gap-3 py-1.5">
-            <dt className="text-foreground/80">
-              {l.signo && `${l.signo} `}
-              {l.label}
-              {l.sub && <span className="block text-xs text-foreground/60">{l.sub}</span>}
-            </dt>
-            <dd className="font-semibold tabular-nums">{formatCurrency(l.cents)}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}

@@ -25,7 +25,7 @@ export type PasosDelTurno = {
 };
 
 /** «la caja Principal», «la caja Bar»; «la Caja Salón» si el nombre ya la dice. */
-function nombreDeCaja(nombre: string): string {
+export function nombreDeCaja(nombre: string): string {
   const n = nombre.trim();
   return /^caja\b/i.test(n) ? `la ${n}` : `la caja ${n}`;
 }
@@ -98,3 +98,43 @@ export function pasosDelTurno(
 
   return { mesas: pasoMesas, rendiciones: pasoRend, cajas: pasoCajas, proximo };
 }
+
+/**
+ * Spec 217 · D1 — el paso que se muestra al entrar: el que falta. Contar y
+ * cerrar viven los dos en el paso 3.
+ */
+export function pasoAbierto(proximo: ProximoPasoTurno): 1 | 2 | 3 {
+  if (proximo.kind === "cobrar") return 1;
+  if (proximo.kind === "rendir") return 2;
+  return 3;
+}
+
+/** «Ana», «Ana y Beto», «Ana, Beto y Caro». */
+function nombres(lista: string[]): string {
+  return lista.length <= 1 ? (lista[0] ?? "") : `${lista.slice(0, -1).join(", ")} y ${lista[lista.length - 1]}`;
+}
+
+/**
+ * Spec 217 · D4 — por qué todavía no se puede contar esta caja, o `null`.
+ *
+ * Las mismas reglas que valida `cerrar_caja_tx`: ninguna caja cierra con mesas
+ * abiertas, y cada caja cierra cuando sus mozos están resueltos (los de otra
+ * caja no la frenan). El botón apagado tiene que decir esto: nunca un botón
+ * apagado sin decir qué falta.
+ */
+export function porQueNoSeCuenta(
+  cajaId: string,
+  input: {
+    cuentas_abiertas: { table_label: string }[];
+    saldos: { mozo_name: string; caja_id: string; resuelto: boolean }[];
+  },
+): string | null {
+  const razones: string[] = [];
+  const mesas = input.cuentas_abiertas;
+  if (mesas.length === 1) razones.push(`Falta cobrar la mesa ${mesas[0].table_label}`);
+  else if (mesas.length > 1) razones.push(`Faltan cobrar ${mesas.length} mesas`);
+  const sinRendir = input.saldos.filter((s) => s.caja_id === cajaId && !s.resuelto).map((s) => s.mozo_name);
+  if (sinRendir.length) razones.push(`Falta rendir a ${nombres(sinRendir)}`);
+  return razones.length ? razones.join(" · ") : null;
+}
+
